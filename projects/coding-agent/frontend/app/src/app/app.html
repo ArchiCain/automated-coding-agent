@@ -1,0 +1,15 @@
+<app-header
+  (menuClick)="onMenuClick()"
+/>
+
+<app-nav-drawer
+  [isOpen]="navDrawerOpen()"
+  (closed)="onNavDrawerClosed()"
+/>
+
+<main class="main-content">
+  <router-outlet />
+</main>
+
+<app-command-runner-drawer />
+<app-chatbot-widget />

@@ -1,0 +1,110 @@
+@if (hasDock()) {
+  <div class="task-dock" [class.expanded]="expandedId()">
+    <!-- Expanded View -->
+    @if (expandedExecution(); as execution) {
+      <div class="expanded-view">
+        <div class="expanded-header">
+          <div class="header-left">
+            <button mat-icon-button (click)="collapse()" matTooltip="Collapse">
+              <mat-icon>expand_more</mat-icon>
+            </button>
+            <span class="task-name">{{ execution.task }}</span>
+            @if (execution.args && execution.args.length > 0) {
+              <span class="task-args">{{ execution.args!.join(' ') }}</span>
+            }
+          </div>
+          <div class="header-right">
+            <span class="status" [ngClass]="statusClass()">
+              @if (statusIcon() === 'spinner') {
+                <mat-spinner diameter="16"></mat-spinner>
+              } @else {
+                <mat-icon>{{ statusIcon() }}</mat-icon>
+              }
+              {{ getStatusLabel(execution.status) }}
+            </span>
+            @if (isRunning(execution)) {
+              <button mat-icon-button (click)="stop(execution, $event)" matTooltip="Stop task">
+                <mat-icon>stop</mat-icon>
+              </button>
+            }
+            <button mat-icon-button (click)="dismissOrStop(execution, $event)" matTooltip="Close">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        </div>
+        <div class="output-container">
+          <pre
+            #outputContainer
+            class="output"
+            (scroll)="onScroll($event)"
+          >{{ formatOutput(execution.output) }}</pre>
+          @if (userScrolledUp()) {
+            <button
+              class="scroll-to-bottom"
+              mat-mini-fab
+              color="primary"
+              (click)="resumeAutoScroll()"
+              matTooltip="Scroll to bottom"
+            >
+              <mat-icon>arrow_downward</mat-icon>
+            </button>
+          }
+        </div>
+      </div>
+    } @else {
+      <!-- Collapsed List -->
+      <div class="collapsed-list">
+        <div class="list-header">
+          <span class="title">Tasks</span>
+          @if (runningCount() > 0) {
+            <span class="running-badge">{{ runningCount() }} running</span>
+          }
+          <button
+            mat-icon-button
+            (click)="clearCompleted()"
+            matTooltip="Clear completed"
+            [disabled]="!completed().length"
+          >
+            <mat-icon>delete_sweep</mat-icon>
+          </button>
+        </div>
+        <div class="execution-list">
+          @for (execution of executions(); track execution.id) {
+            <div
+              class="execution-item"
+              [class.running]="isRunning(execution)"
+              [class.completed]="execution.status === 'completed'"
+              [class.failed]="execution.status === 'failed'"
+              [class.cancelled]="execution.status === 'cancelled'"
+              (click)="expand(execution)"
+            >
+              <div class="item-left">
+                @if (isRunning(execution)) {
+                  <mat-spinner diameter="16"></mat-spinner>
+                } @else if (execution.status === 'completed') {
+                  <mat-icon class="status-icon completed">check_circle</mat-icon>
+                } @else if (execution.status === 'failed') {
+                  <mat-icon class="status-icon failed">error</mat-icon>
+                } @else if (execution.status === 'cancelled') {
+                  <mat-icon class="status-icon cancelled">cancel</mat-icon>
+                }
+                <span class="task-name">{{ execution.task }}</span>
+              </div>
+              <div class="item-right">
+                <span class="time">{{ getRelativeTime(execution.startedAt) }}</span>
+                @if (isRunning(execution)) {
+                  <button mat-icon-button (click)="stop(execution, $event)" matTooltip="Stop task">
+                    <mat-icon>stop</mat-icon>
+                  </button>
+                }
+                <button mat-icon-button (click)="dismissOrStop(execution, $event)" matTooltip="Close">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}

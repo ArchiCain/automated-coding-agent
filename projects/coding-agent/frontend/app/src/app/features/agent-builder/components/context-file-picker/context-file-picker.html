@@ -1,0 +1,61 @@
+<div class="file-picker">
+  <div class="picker-header" (click)="toggleExpanded()">
+    <span class="section-label">Knowledge Files</span>
+    <span class="file-count">{{ selectedFiles.length }} selected</span>
+    <mat-icon class="expand-icon">{{ expanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
+  </div>
+
+  <!-- Selected files chips -->
+  @if (selectedFiles.length > 0) {
+    <div class="selected-chips">
+      @for (file of selectedFiles; track file) {
+        <span class="file-chip">
+          <mat-icon class="chip-icon">description</mat-icon>
+          {{ file }}
+          <button class="chip-remove" (click)="removeFile(file)">
+            <mat-icon>close</mat-icon>
+          </button>
+        </span>
+      }
+    </div>
+  }
+
+  @if (expanded()) {
+    <!-- Browser -->
+    <div class="file-browser">
+      <div class="browser-nav">
+        <button mat-icon-button (click)="navigateUp()" [disabled]="currentPath() === '.'">
+          <mat-icon>arrow_upward</mat-icon>
+        </button>
+        <span class="current-path">{{ currentPath() }}</span>
+      </div>
+
+      <div class="entry-list">
+        @if (loading()) {
+          <div class="loading-hint">Loading...</div>
+        }
+
+        @for (entry of entries(); track entry.path) {
+          <div
+            class="entry-item"
+            [class.is-dir]="entry.type === 'directory'"
+            [class.is-selected]="isSelected(entry.path)"
+            (click)="onEntryClick(entry)"
+          >
+            <mat-icon class="entry-icon">
+              {{ entry.type === 'directory' ? 'folder' : 'description' }}
+            </mat-icon>
+            <span class="entry-name">{{ entry.name }}</span>
+            @if (entry.type === 'file' && isSelected(entry.path)) {
+              <mat-icon class="check-icon">check_circle</mat-icon>
+            }
+          </div>
+        }
+
+        @if (!loading() && entries().length === 0) {
+          <div class="empty-hint">Empty directory</div>
+        }
+      </div>
+    </div>
+  }
+</div>

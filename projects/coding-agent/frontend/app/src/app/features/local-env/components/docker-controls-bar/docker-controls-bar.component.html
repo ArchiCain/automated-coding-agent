@@ -1,0 +1,68 @@
+<div class="docker-controls-bar" [class.compact]="compact()" [class.inline]="inline()">
+  <button
+    mat-stroked-button
+    [disabled]="anyRunning()"
+    (click)="stopAll()"
+    [matTooltip]="compact() ? 'Stop All' : ''"
+  >
+    @if (stopping()) {
+      <mat-spinner diameter="16"></mat-spinner>
+    } @else {
+      <mat-icon>stop</mat-icon>
+    }
+    @if (!compact()) {
+      <span>Stop All</span>
+    }
+  </button>
+
+  <button
+    mat-stroked-button
+    [disabled]="anyRunning()"
+    (click)="startAll()"
+    [matTooltip]="compact() ? 'Start All' : ''"
+  >
+    @if (starting()) {
+      <mat-spinner diameter="16"></mat-spinner>
+    } @else {
+      <mat-icon>play_arrow</mat-icon>
+    }
+    @if (!compact()) {
+      <span>Start All</span>
+    }
+  </button>
+
+  <button
+    mat-stroked-button
+    [disabled]="anyRunning()"
+    (click)="buildRestart()"
+    [matTooltip]="compact() ? 'Purge & Restart' : ''"
+  >
+    @if (building()) {
+      <mat-spinner diameter="16"></mat-spinner>
+    } @else {
+      <mat-icon>refresh</mat-icon>
+    }
+    @if (!compact()) {
+      <span>Purge & Restart</span>
+    }
+  </button>
+
+  @if (showTearDown()) {
+    <button
+      mat-stroked-button
+      class="teardown-btn"
+      [disabled]="anyRunning()"
+      (click)="tearDown()"
+      [matTooltip]="compact() ? 'Tear Down' : ''"
+    >
+      @if (tearingDown()) {
+        <mat-spinner diameter="16"></mat-spinner>
+      } @else {
+        <mat-icon>delete_outline</mat-icon>
+      }
+      @if (!compact()) {
+        <span>Tear Down</span>
+      }
+    </button>
+  }
+</div>

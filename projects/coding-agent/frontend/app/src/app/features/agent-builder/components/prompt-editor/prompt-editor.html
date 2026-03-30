@@ -1,0 +1,79 @@
+<div class="prompt-editor">
+  <div class="prompt-header">
+    <span class="section-label">Prompt File</span>
+    <button mat-icon-button (click)="startCreate()" [disabled]="creating()">
+      <mat-icon>add</mat-icon>
+    </button>
+  </div>
+
+  @if (!editing()) {
+    <!-- Prompt list / selector -->
+    <div class="prompt-list">
+      @if (loading()) {
+        <div class="loading-hint">Loading prompts...</div>
+      }
+
+      @for (prompt of prompts(); track prompt.filename) {
+        <div
+          class="prompt-item"
+          [class.selected]="prompt.filename === selectedFile"
+          (click)="selectPrompt(prompt.filename)"
+        >
+          <div class="prompt-item-info">
+            <span class="prompt-name">{{ prompt.name }}</span>
+            <span class="prompt-filename">{{ prompt.filename }}</span>
+          </div>
+          <button
+            mat-icon-button
+            class="edit-btn"
+            (click)="openEditor(prompt.filename); $event.stopPropagation()"
+          >
+            <mat-icon>edit</mat-icon>
+          </button>
+        </div>
+      }
+
+      @if (!loading() && prompts().length === 0) {
+        <div class="empty-hint">
+          No prompt files found. Click + to create one.
+        </div>
+      }
+    </div>
+  }
+
+  @if (editing()) {
+    <!-- Editor view -->
+    <div class="editor-view">
+      @if (creating()) {
+        <input
+          class="filename-input"
+          placeholder="my-prompt.md"
+          [value]="newFilename()"
+          (input)="onFilenameChange($any($event.target).value)"
+        />
+      } @else {
+        <div class="editing-file">{{ selectedFile }}</div>
+      }
+
+      <textarea
+        class="content-editor"
+        [value]="editorContent()"
+        (input)="onContentChange($any($event.target).value)"
+        placeholder="Write your prompt in markdown..."
+        rows="12"
+      ></textarea>
+
+      <div class="editor-actions">
+        <button mat-button (click)="cancelEdit()">Cancel</button>
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="save()"
+          [disabled]="saving() || (creating() && !newFilename())"
+        >
+          {{ saving() ? 'Saving...' : 'Save' }}
+        </button>
+      </div>
+    </div>
+  }
+</div>

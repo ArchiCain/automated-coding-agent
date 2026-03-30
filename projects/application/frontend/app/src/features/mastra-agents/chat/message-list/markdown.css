@@ -1,0 +1,15 @@
+/* Markdown Renderer Styles */
+
+/* General markdown content styling - code highlighting now handled by react-syntax-highlighter */
+.markdown-content {
+  line-height: 1.6;
+}
+
+/* Ensure proper spacing for elements */
+.markdown-content > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-content > *:last-child {
+  margin-bottom: 0;
+}

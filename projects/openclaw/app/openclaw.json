@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "gateway": {
+    "port": 18789,
+    "bind": "0.0.0.0",
+    "auth": {
+      "token": { "source": "env", "id": "OPENCLAW_AUTH_TOKEN" }
+    }
+  },
+  "providers": {
+    "default": "anthropic",
+    "anthropic": {
+      "apiKey": { "source": "env", "id": "ANTHROPIC_API_KEY" }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-6",
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxSpawnDepth": 2,
+        "maxChildrenPerAgent": 8,
+        "maxConcurrent": 4,
+        "runTimeoutSeconds": 1800
+      }
+    }
+  },
+  "hooks": {
+    "enabled": true,
+    "token": { "source": "env", "id": "OPENCLAW_WEBHOOK_SECRET" },
+    "mappings": {
+      "github": {
+        "match": { "source": "github" },
+        "agentId": "default"
+      }
+    }
+  },
+  "cron": [
+    {
+      "id": "monitor-ci",
+      "schedule": "*/5 * * * *",
+      "message": "Run rlm-monitor: check CI status on all open implementation PRs and handle failures"
+    },
+    {
+      "id": "e2e-check",
+      "schedule": "*/10 * * * *",
+      "message": "Run rlm-e2e-tester: check for merged implementation PRs needing E2E validation"
+    },
+    {
+      "id": "catchup-scan",
+      "schedule": "*/15 * * * *",
+      "message": "Run rlm-execute catchup: scan backlog for approved plans with unexecuted tasks"
+    }
+  ],
+  "skills": {
+    "load": {
+      "extraDirs": ["./skills"]
+    }
+  },
+  "plugins": {
+    "entries": {
+      "acpx": {
+        "enabled": true
+      }
+    }
+  },
+  "acp": {
+    "defaultAgent": "claude-code"
+  }
+}

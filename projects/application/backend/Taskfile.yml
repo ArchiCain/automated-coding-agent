@@ -1,0 +1,154 @@
+version: '3'
+
+tasks:
+  # Local Development Tasks
+  local:install:
+    desc: Install dependencies
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - echo "Installing dependencies..."
+      - npm install
+      - echo "Dependencies installed"
+
+  local:start:
+    desc: Start Backend Service locally
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml up --build -d backend
+      - echo "Backend Service started at http://localhost:${BACKEND_PORT}"
+
+  local:stop:
+    desc: Stop Backend Service locally
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml stop backend
+
+  local:restart:
+    desc: Restart Backend Service locally (rebuild and start)
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml stop backend
+      - docker compose -f infrastructure/docker/compose.yml up --build -d backend
+      - echo "Backend Service restarted at http://localhost:${BACKEND_PORT}"
+
+  local:logs:
+    desc: Show Backend Service logs
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml logs -f backend
+
+  local:health:
+    desc: Test Backend Service health endpoint
+    cmds:
+      - curl -f http://localhost:${BACKEND_PORT}/health || echo "Health check failed"
+
+  local:build:
+    desc: Build Docker image for local development
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml build backend
+
+  local:shell:
+    desc: Get a shell inside the running Backend Service container
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml exec backend sh
+
+  local:run:
+    desc: Run Backend Service locally outside of Docker
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run start:dev
+
+  # Testing Tasks
+  local:test:
+    desc: Run tests for the Backend Service
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm test
+
+  local:test:watch:
+    desc: Run tests in watch mode
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:watch
+
+  local:test:integration:
+    desc: Run integration tests (requires backend stack running)
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:integration
+
+  local:test:e2e:
+    desc: Run e2e tests for the Backend Service
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:e2e
+
+  local:lint:
+    desc: Lint the Backend Service code
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run lint
+
+  local:format:
+    desc: Format the Backend Service code
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run format
+
+  local:clean:
+    desc: Clean build artifacts and node_modules
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - rm -rf dist node_modules
+
+  # Database Migration Tasks
+  local:migration:generate:
+    desc: Generate a new migration from entity changes
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Error: Migration name required"
+          echo "Usage: task backend:local:migration:generate -- MigrationName"
+          exit 1
+        fi
+        npm run migration:generate -- src/packages/typeorm-database-client/migrations/{{.CLI_ARGS}}
+
+  local:migration:create:
+    desc: Create an empty migration file
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Error: Migration name required"
+          echo "Usage: task backend:local:migration:create -- MigrationName"
+          exit 1
+        fi
+        npm run migration:create -- src/packages/typeorm-database-client/migrations/{{.CLI_ARGS}}
+
+  local:migration:run:
+    desc: Run pending migrations
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run migration:run
+
+  local:migration:revert:
+    desc: Revert the last migration
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run migration:revert
+
+  local:migration:show:
+    desc: Show migration status
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run migration:show

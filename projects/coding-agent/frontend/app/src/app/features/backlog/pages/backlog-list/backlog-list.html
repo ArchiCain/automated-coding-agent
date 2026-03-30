@@ -1,0 +1,89 @@
+<!-- Slide-over for viewing plan files -->
+<app-slide-over
+  [isOpen]="!!viewingPlan()"
+  [title]="viewingPlan()?.name + ' - plan.md'"
+  [content]="documentContent()"
+  [loading]="documentLoading()"
+  (closed)="closeDocumentView()"
+></app-slide-over>
+
+<div class="backlog-page">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-content">
+      <div class="header-title">
+        <mat-icon class="header-icon">assignment</mat-icon>
+        <h1>Backlog</h1>
+      </div>
+      <p class="header-description">
+        Ready plans waiting to be executed. Toggle off to send back to brainstorming.
+      </p>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="page-content">
+    @if (loading()) {
+      <div class="loading-state">
+        <mat-spinner diameter="40"></mat-spinner>
+        <span>Loading backlog...</span>
+      </div>
+    } @else if (error()) {
+      <div class="error-state">
+        <mat-icon>error</mat-icon>
+        <span>{{ error() }}</span>
+        <button mat-stroked-button (click)="loadPlans()">Retry</button>
+      </div>
+    } @else if (plans().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">
+          <mat-icon>assignment_turned_in</mat-icon>
+        </div>
+        <h2>No plans in backlog</h2>
+        <p>Mark plans as "Ready" in Brainstorm to add them here for execution</p>
+      </div>
+    } @else {
+      <div class="plans-grid">
+        @for (plan of plans(); track trackByPlanId($index, plan)) {
+          <div
+            class="plan-card"
+            [class.opening]="openingPlanId() === plan.id"
+          >
+            <div class="plan-card-header">
+              <mat-icon class="status-circle">check_circle</mat-icon>
+              <span class="plan-name">{{ plan.name }}</span>
+            </div>
+
+            <div class="card-meta">
+              <button class="file-pill" (click)="viewPlanFile(plan)">
+                <mat-icon>description</mat-icon>
+                <span>plan.md</span>
+              </button>
+            </div>
+
+            <div class="card-divider"></div>
+
+            <div class="plan-card-footer">
+              <div class="ready-toggle">
+                <mat-slide-toggle
+                  [checked]="true"
+                  (change)="togglePlanReady(plan, $event.checked)"
+                ></mat-slide-toggle>
+                <span class="ready-label">Ready</span>
+              </div>
+              @if (plan.taskCount > 0) {
+                <button
+                  mat-stroked-button
+                  class="tasks-btn"
+                  (click)="viewTasks(plan)"
+                >
+                  Get Started
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,60 @@
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  z-index: 1000;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.app-title {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agents-button {
+  transition: background-color 0.2s;
+
+  &.has-running {
+    mat-icon {
+      color: #1976d2;
+    }
+  }
+
+  &:hover {
+    background-color: rgba(25, 118, 210, 0.08);
+  }
+}
+
+::ng-deep .mat-badge-content {
+  font-size: 10px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+}

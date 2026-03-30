@@ -1,0 +1,127 @@
+version: '3'
+
+tasks:
+  # Local Development Tasks
+  local:install:
+    desc: Install dependencies
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - echo "Installing dependencies..."
+      - npm install
+      - echo "Dependencies installed"
+
+  local:start:
+    desc: Start Frontend Service locally in Docker
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml up --build -d frontend
+      - echo "Frontend Service started at http://localhost:${FRONTEND_PORT}"
+
+  local:stop:
+    desc: Stop Frontend Service locally
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml stop frontend
+
+  local:restart:
+    desc: Restart Frontend Service locally (rebuild and start)
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml stop frontend
+      - docker compose -f infrastructure/docker/compose.yml up --build -d frontend
+      - echo "Frontend Service restarted at http://localhost:${FRONTEND_PORT}"
+
+  local:logs:
+    desc: Show Frontend Service logs
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml logs -f frontend
+
+  local:health:
+    desc: Test Frontend Service health endpoint
+    cmds:
+      - curl -f http://localhost:${FRONTEND_PORT}/health || echo "Health check failed"
+
+  local:build:
+    desc: Build Docker image for local development
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml build frontend
+
+  local:shell:
+    desc: Get a shell inside the running Frontend Service container
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml exec frontend sh
+
+  local:run:
+    desc: Run Frontend Service locally outside of Docker
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run dev
+
+  # Testing Tasks
+  local:lint:
+    desc: Lint the Frontend code
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run lint
+
+  local:type-check:
+    desc: Run TypeScript type checking
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run type-check
+
+  local:clean:
+    desc: Clean build artifacts and node_modules
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - rm -rf dist node_modules
+
+  local:test:
+    desc: Run unit tests (mocked, no backend required)
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test
+
+  local:test:watch:
+    desc: Run unit tests in watch mode
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:watch
+
+  local:test:coverage:
+    desc: Run unit tests with coverage report
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:coverage
+
+  local:test:ui:
+    desc: Run unit tests with Vitest UI
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:ui
+
+  local:test:integration:
+    desc: Run integration tests (requires backend at localhost:8085)
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - echo "Integration tests require all services running. If not started, run 'task start-local' first."
+      - npm run test:integration
+
+  local:test:integration:watch:
+    desc: Run integration tests in watch mode
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - echo "Integration tests require all services running. If not started, run 'task start-local' first."
+      - npm run test:integration:watch

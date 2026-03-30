@@ -1,0 +1,12 @@
+version: '3'
+
+includes:
+  docker:
+    taskfile: ./docker/Taskfile.yml
+    dir: ./docker
+  terraform:
+    taskfile: ./terraform/Taskfile.yml
+    dir: ./terraform
+  k8s:
+    taskfile: ./k8s/Taskfile.yml
+    dir: ./k8s

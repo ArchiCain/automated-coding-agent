@@ -1,0 +1,59 @@
+site_name: Automated Repo
+site_description: Project documentation
+site_url: ""
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: deep purple
+    accent: amber
+  features:
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Home: index.md
+
+  - Getting Started:
+    - Prerequisites & Nix: getting-started/prerequisites.md
+    - Environment Setup: getting-started/environment-setup.md
+
+  - Projects:
+    - Overview: projects/overview.md
+    - Application:
+      - Backend: projects/application/backend.md
+      - Frontend: projects/application/frontend.md
+      - Database: projects/application/database.md
+      - Keycloak: projects/application/keycloak.md
+      - E2E Tests: projects/application/e2e.md
+    - Coding Agent:
+      - Backend: projects/coding-agent/backend.md
+      - Frontend: projects/coding-agent/frontend.md
+      - Backlog System: projects/coding-agent/backlog.md
+    - OpenClaw:
+      - Overview: projects/openclaw/overview.md
+
+  - Infrastructure:
+    - Overview: infrastructure/overview.md
+    - Terraform: infrastructure/terraform.md
+    - Kubernetes: infrastructure/kubernetes.md
+    - Networking: infrastructure/networking.md
+    - Docker Compose: infrastructure/docker-compose.md
+    - CI/CD: infrastructure/cicd.md
+
+  - Development:
+    - Taskfile Conventions: development/taskfile.md
+    - Local Workflow: development/local-workflow.md
+    - Testing: development/testing.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true

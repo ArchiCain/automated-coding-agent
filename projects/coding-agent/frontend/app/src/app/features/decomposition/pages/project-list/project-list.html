@@ -1,0 +1,131 @@
+<!-- Slide-over for viewing task files -->
+<app-slide-over
+  [isOpen]="!!viewingProject()"
+  [title]="viewingProject()?.name + ' - plan.md'"
+  [content]="documentContent()"
+  [loading]="documentLoading()"
+  (closed)="closeDocumentView()"
+></app-slide-over>
+
+<div class="decomposition-page">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-content">
+      <button mat-icon-button class="back-btn" (click)="goBack()">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <div class="header-text">
+        <div class="header-title">
+          <mat-icon class="header-icon">account_tree</mat-icon>
+          <h1>Projects</h1>
+        </div>
+        <p class="header-description">
+          Projects for plan {{ planId() }}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="page-content">
+    @if (loading()) {
+      <div class="loading-state">
+        <mat-spinner diameter="40"></mat-spinner>
+        <span>Loading projects...</span>
+      </div>
+    } @else if (error()) {
+      <div class="error-state">
+        <mat-icon>error</mat-icon>
+        <span>{{ error() }}</span>
+        <button mat-stroked-button (click)="loadProjects()">Retry</button>
+      </div>
+    } @else if (projects().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">
+          <mat-icon>folder_open</mat-icon>
+        </div>
+        <h2>No projects yet</h2>
+        <p>This plan hasn't been decomposed into projects yet. Go back and click "Decomp" on the plan.</p>
+      </div>
+    } @else {
+      <div class="tasks-grid">
+        @for (project of projects(); track trackByPath($index, project)) {
+          <div
+            class="task-card"
+            [class.opening]="openingProjectId() === project.path"
+            [class.decomposed]="project.hasChildren"
+          >
+            <div class="task-card-header">
+              <mat-icon class="status-circle">radio_button_unchecked</mat-icon>
+              <span class="task-name">{{ project.name }}</span>
+            </div>
+
+            <div class="card-meta">
+              <button class="file-pill" (click)="viewTaskFile(project)">
+                <mat-icon>description</mat-icon>
+                <span>plan.md</span>
+              </button>
+              @if (project.hasChildren) {
+                <span class="locked-badge">
+                  <mat-icon>lock</mat-icon>
+                  Locked
+                </span>
+              }
+            </div>
+
+            <div class="card-divider"></div>
+
+            <div class="task-card-footer">
+              <div class="ready-toggle">
+                <mat-slide-toggle
+                  [checked]="isProjectReady(project)"
+                  [disabled]="project.hasChildren"
+                  (change)="toggleProjectReady(project, $event.checked)"
+                ></mat-slide-toggle>
+                <span class="ready-label">Ready</span>
+              </div>
+              <div class="action-buttons">
+                @if (project.hasChildren && project.featuresCount && project.featuresCount > 0) {
+                  <button
+                    mat-icon-button
+                    class="reset-btn"
+                    [disabled]="resettingProjectId() === project.path"
+                    (click)="resetProject(project)"
+                    title="Reset decomposition"
+                  >
+                    @if (resettingProjectId() === project.path) {
+                      <mat-spinner diameter="16"></mat-spinner>
+                    } @else {
+                      <mat-icon>refresh</mat-icon>
+                    }
+                  </button>
+                  <button
+                    mat-stroked-button
+                    class="tasks-btn"
+                    (click)="viewTasks(project)"
+                  >
+                    View Features
+                  </button>
+                } @else {
+                  <button
+                    mat-stroked-button
+                    class="decomp-btn"
+                    [disabled]="openingProjectId() === project.path"
+                    (click)="decomposeProject(project)"
+                  >
+                    @if (openingProjectId() === project.path) {
+                      <mat-spinner diameter="16" class="btn-spinner"></mat-spinner>
+                    } @else {
+                      <mat-icon>call_split</mat-icon>
+                    }
+                    Decomp
+                  </button>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,27 @@
+# Node.js dependencies and build artifacts
+**/node_modules
+**/dist
+**/build
+**/.npm
+**/package-lock.json
+**/.pnp*
+**/.cache
+**/coverage
+**/logs
+**/*.log
+npm-debug.log*
+.pnpm-debug.log*
+
+# Development files
+**/.git
+**/.gitignore
+**/.github
+**/.vscode
+**/.idea
+**/.DS_Store
+**/README.md
+**/LICENSE
+**/.editorconfig
+**/docker-compose*
+**/Dockerfile*
+**/.dockerignore

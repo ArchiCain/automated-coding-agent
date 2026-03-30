@@ -1,0 +1,80 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install E2E test dependencies
+    dir: projects/e2e/app
+    cmds:
+      - npm install
+      - npx playwright install chromium
+
+  test:
+    desc: Run all E2E tests (requires services running)
+    deps: [install]
+    dir: projects/e2e/app
+    cmds:
+      - npm test
+
+  test:headed:
+    desc: Run E2E tests with visible browser
+    dir: projects/e2e/app
+    cmds:
+      - npm run test:headed
+
+  test:debug:
+    desc: Run E2E tests in debug mode with inspector
+    dir: projects/e2e/app
+    cmds:
+      - npm run test:debug
+
+  test:ui:
+    desc: Run E2E tests with Playwright UI mode
+    deps: [install]
+    dir: projects/e2e/app
+    cmds:
+      - npm run test:ui
+
+  test:trace:
+    desc: Run E2E tests with full trace capture (timeline viewer)
+    deps: [install]
+    dir: projects/e2e/app
+    cmds:
+      - npm run test:trace
+      - echo ""
+      - echo "Tests complete! View traces with task e2e:show-trace"
+
+  test:specific:
+    desc: "Run specific E2E test file (usage: task e2e:test:specific -- auth/login.spec.ts)"
+    deps: [install]
+    dir: projects/e2e/app
+    cmds:
+      - npm test {{.CLI_ARGS}}
+
+  show-trace:
+    desc: "Open trace viewer for a specific test (usage: task e2e:show-trace -- path/to/trace.zip)"
+    dir: projects/e2e/app
+    cmds:
+      - |
+        if [ -n "{{.CLI_ARGS}}" ]; then
+          npx playwright show-trace {{.CLI_ARGS}}
+        else
+          echo "Available trace files:"
+          echo ""
+          find test-results -name "trace.zip" -exec echo "  {}" \;
+          echo ""
+          echo "Usage: task e2e:show-trace -- test-results/auth-login-Login-Workflow-xxx/trace.zip"
+        fi
+
+  list-traces:
+    desc: List all available trace files from recent test runs
+    dir: projects/e2e/app
+    cmds:
+      - echo "Recent test traces:"
+      - echo ""
+      - find test-results -name "trace.zip" 2>/dev/null | sort -r | head -20 || echo "No traces found. Run 'task e2e:test:trace' first."
+
+  report:
+    desc: Show last test run HTML report
+    dir: projects/e2e/app
+    cmds:
+      - npm run report

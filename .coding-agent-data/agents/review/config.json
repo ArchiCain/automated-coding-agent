@@ -1,0 +1,15 @@
+{
+  "id": "1dd4c26a-4efe-416f-81be-1739f70c0524",
+  "slug": "review",
+  "name": "Review",
+  "description": "Reviews completed task implementations for correctness, standards, and acceptance criteria",
+  "knowledgeFiles": [],
+  "cwd": ".",
+  "defaultModel": "claude-opus-4-6",
+  "provider": "claude-code",
+  "icon": "check-circle",
+  "color": "#22c55e",
+  "pages": [],
+  "createdAt": "2026-03-06T04:00:00.000Z",
+  "updatedAt": "2026-03-06T04:00:00.000Z"
+}

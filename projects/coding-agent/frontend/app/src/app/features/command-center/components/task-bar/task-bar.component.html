@@ -1,0 +1,56 @@
+<div class="task-bar">
+  <mat-form-field class="task-input" appearance="outline">
+    <mat-label>Run Task</mat-label>
+    <input
+      matInput
+      [value]="taskInput()"
+      (input)="onTaskInput($event)"
+      [matAutocomplete]="auto"
+      placeholder="Search tasks..."
+    />
+    <mat-autocomplete
+      #auto="matAutocomplete"
+      (optionSelected)="onTaskSelected($event.option.value)"
+      [displayWith]="displayFn"
+    >
+      @for (task of filteredTasks(); track task.name) {
+        <mat-option [value]="task">
+          <div class="task-option">
+            <span class="task-name">{{ task.name }}</span>
+            @if (task.desc) {
+              <span class="task-desc">{{ task.desc }}</span>
+            }
+          </div>
+        </mat-option>
+      }
+    </mat-autocomplete>
+    @if (taskInput()) {
+      <button matSuffix mat-icon-button (click)="clearInput()">
+        <mat-icon>close</mat-icon>
+      </button>
+    }
+  </mat-form-field>
+
+  @if (selectedTask()) {
+    <mat-form-field class="args-input" appearance="outline">
+      <mat-label>Args</mat-label>
+      <input
+        matInput
+        [value]="argsInput()"
+        (input)="argsInput.set($any($event.target).value)"
+        placeholder="--flag value"
+      />
+    </mat-form-field>
+  }
+
+  <button
+    mat-flat-button
+    color="primary"
+    class="run-btn"
+    [disabled]="!taskInput() || isRunning()"
+    (click)="runTask()"
+  >
+    <mat-icon>play_arrow</mat-icon>
+    Run
+  </button>
+</div>

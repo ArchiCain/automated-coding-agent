@@ -1,0 +1,32 @@
+[
+  {
+    "sessionId": "d-e271f3",
+    "planId": "p-3be341",
+    "decompType": "plan-to-projects",
+    "created": "2026-01-25T00:55:20.097Z",
+    "updated": "2026-01-25T00:55:21.910Z",
+    "agentSessionId": "7a8b5bd1-4977-477f-97ad-5d1ab83a4c98"
+  },
+  {
+    "sessionId": "d-b07249",
+    "planId": "p-3be341",
+    "decompType": "plan-to-projects",
+    "created": "2026-01-25T02:09:02.124Z",
+    "updated": "2026-01-25T02:09:52.150Z",
+    "agentSessionId": "78cf5e09-8e07-4408-a3fe-439bb6a410f8"
+  },
+  {
+    "sessionId": "d-e87bc0",
+    "planId": "p-3be341",
+    "decompType": "plan-to-projects",
+    "created": "2026-01-25T02:33:05.272Z",
+    "updated": "2026-01-25T02:33:05.272Z"
+  },
+  {
+    "sessionId": "d-ff0d52",
+    "planId": "p-3be341",
+    "decompType": "plan-to-projects",
+    "created": "2026-01-25T02:34:36.712Z",
+    "updated": "2026-01-25T02:34:36.712Z"
+  }
+]

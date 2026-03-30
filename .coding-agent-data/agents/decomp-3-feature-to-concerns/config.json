@@ -1,0 +1,15 @@
+{
+  "id": "63ccb28a-19e4-4783-8565-eac74203799f",
+  "slug": "decomp-3-feature-to-concerns",
+  "name": "Decomp 3 - Feature to Concerns",
+  "description": "Decomposes a feature task into concern-level tasks (atomic implementation units)",
+  "knowledgeFiles": [],
+  "cwd": ".",
+  "defaultModel": "claude-opus-4-6",
+  "provider": "claude-code",
+  "icon": "psychology",
+  "color": "#4ecdc4",
+  "pages": [],
+  "createdAt": "2026-03-06T04:00:00.000Z",
+  "updatedAt": "2026-03-06T04:50:44.513Z"
+}

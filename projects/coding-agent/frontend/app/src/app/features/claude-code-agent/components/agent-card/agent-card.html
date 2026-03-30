@@ -1,0 +1,371 @@
+<!-- Card Mode -->
+@if (!isInteractive) {
+  <div
+    class="agent-card"
+    [class.active]="isActive"
+    [class.completed]="isCompleted"
+    [class.failed]="isFailed"
+    [class.idle]="isIdle"
+  >
+    <!-- Header: Icon + Name + Type Badge -->
+    <div class="agent-header">
+      <div class="agent-icon-container" [style.--agent-color]="agent.type.color || '#1976d2'">
+        <mat-icon class="agent-icon">{{ agent.icon }}</mat-icon>
+        @if (isActive) {
+          <div class="active-indicator"></div>
+        }
+      </div>
+      <div class="agent-header-info">
+        <h3 class="agent-name">{{ agent.name }}</h3>
+        <span class="agent-type-badge" [style.--badge-color]="agent.type.color || '#1976d2'">
+          {{ agent.type.name | uppercase }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Description -->
+    <p class="agent-description">{{ agent.description }}</p>
+
+    <!-- Activity indicator (when active) -->
+    @if (hasActivity && agent.activity) {
+      <div class="agent-activity">
+        <div class="activity-indicator">
+          <mat-spinner diameter="16"></mat-spinner>
+          <mat-icon class="activity-icon">{{ activityIcon }}</mat-icon>
+        </div>
+        <span class="activity-text">{{ agent.activity.description }}</span>
+        <span class="activity-duration">{{ runDuration }}</span>
+      </div>
+    }
+
+    <!-- Documents section -->
+    @if (agent.documents.length > 0) {
+      <div class="agent-documents">
+        <div class="documents-list">
+          @for (doc of visibleDocuments; track doc.id) {
+            <button
+              class="document-chip"
+              [class.prompt]="doc.type === 'prompt'"
+              [class.output]="doc.type === 'output'"
+              [class.attachment]="doc.type === 'attachment'"
+              (click)="onViewDocument(doc, $event)"
+            >
+              <mat-icon>{{ getDocumentIcon(doc) }}</mat-icon>
+              <span>{{ getFileName(doc.path) }}</span>
+            </button>
+          }
+          @if (hiddenDocumentCount > 0) {
+            <button class="document-chip more-chip" (click)="toggleDocuments()">
+              <mat-icon>add</mat-icon>
+              <span>{{ hiddenDocumentCount }} more</span>
+            </button>
+          }
+          @if (documentsExpanded() && agent.documents.length > 3) {
+            <button class="document-chip collapse-chip" (click)="toggleDocuments()">
+              <mat-icon>remove</mat-icon>
+              <span>Show less</span>
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Actions footer -->
+    <div class="agent-actions">
+      <div class="status-indicator" [class]="'status-' + agent.status">
+        @if (isActive) {
+          <mat-spinner diameter="14"></mat-spinner>
+        } @else {
+          <mat-icon class="status-icon">{{ statusIcon }}</mat-icon>
+        }
+        <span class="status-text">{{ agent.status | titlecase }}</span>
+      </div>
+
+      <div class="action-buttons">
+        <button
+          mat-flat-button
+          class="action-btn open-btn"
+          (click)="openInteractive()"
+          [color]="isIdle ? 'primary' : undefined"
+        >
+          @if (isIdle) {
+            <ng-container>
+              <mat-icon>play_arrow</mat-icon>
+              Start
+            </ng-container>
+          } @else {
+            <ng-container>
+              <mat-icon>open_in_full</mat-icon>
+              Open
+            </ng-container>
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Interactive Mode -->
+@if (isInteractive) {
+  <div class="agent-interactive" [class.active]="isActive" [class.processing]="processing()">
+    <!-- Header -->
+    <div class="interactive-header">
+      <div class="header-left">
+        @if (!hideBackButton) {
+          <button mat-icon-button (click)="closeInteractive()" class="back-btn">
+            <mat-icon>arrow_back</mat-icon>
+          </button>
+        }
+        <div class="header-info">
+          <h3>{{ agent.name }}</h3>
+          <span class="type-badge" [style.--badge-color]="agent.type.color || '#1976d2'">
+            {{ agent.type.name }}
+          </span>
+        </div>
+        @if (!session() && !processing()) {
+          <button class="header-start-btn" [style.--agent-color]="agent.type.color || '#4caf50'" (click)="startWithMessage('Begin execution')">
+            <mat-icon>play_arrow</mat-icon>
+            Start
+          </button>
+        }
+      </div>
+      <div class="header-actions">
+        <!-- Session status indicator -->
+        @if (session() && processing()) {
+          <span class="processing-indicator">
+            <mat-spinner diameter="16"></mat-spinner>
+            Processing...
+          </span>
+          <button
+            mat-icon-button
+            class="stop-btn"
+            (click)="stopSession()"
+            matTooltip="Stop session"
+          >
+            <mat-icon>stop</mat-icon>
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="interactive-body">
+      <!-- Left Panel: Configuration -->
+      <div class="config-panel" [class.collapsed]="!configExpanded()">
+        <div class="config-header" (click)="toggleConfig()">
+          <mat-icon>{{ configExpanded() ? 'chevron_left' : 'chevron_right' }}</mat-icon>
+          @if (configExpanded()) {
+            <span>Configuration</span>
+          }
+        </div>
+
+        @if (configExpanded()) {
+          <div class="config-content">
+            <!-- Model Selection -->
+            <div class="config-group">
+              <label>Model</label>
+              <mat-form-field appearance="outline" class="config-field">
+                <mat-select
+                  [ngModel]="editConfig().model"
+                  (ngModelChange)="updateModel($event)"
+                  [disabled]="!canEdit"
+                >
+                  @for (model of availableModels; track model.id) {
+                    <mat-option [value]="model.id">{{ model.name }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </div>
+
+            <!-- Working Directory -->
+            <div class="config-group">
+              <label>Working Directory</label>
+              <mat-form-field appearance="outline" class="config-field">
+                <input
+                  matInput
+                  [ngModel]="editConfig().cwd"
+                  (ngModelChange)="updateCwd($event)"
+                  [disabled]="!canEdit"
+                  placeholder="/path/to/project"
+                />
+              </mat-form-field>
+            </div>
+
+            <!-- Prompt File -->
+            <div class="config-group">
+              <label>Prompt File</label>
+              @if (editConfig().promptFile) {
+                <button
+                  class="config-file-chip prompt clickable"
+                  (click)="viewFile(editConfig().promptFile!, 'prompt')"
+                >
+                  <mat-icon>description</mat-icon>
+                  <span>{{ getFileName(editConfig().promptFile!) }}</span>
+                </button>
+              } @else {
+                <span class="no-file">None</span>
+              }
+            </div>
+
+            <!-- Context Files -->
+            <div class="config-group">
+              <label>Context Files</label>
+              <div class="config-files-list">
+                @for (file of editConfig().contextFiles; track file) {
+                  <div class="config-file-chip clickable" (click)="viewFile(file, 'context')">
+                    <mat-icon>insert_drive_file</mat-icon>
+                    <span>{{ getFileName(file) }}</span>
+                    @if (canEdit) {
+                      <button class="remove-btn" (click)="removeContextFile(file); $event.stopPropagation()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    }
+                  </div>
+                }
+                @if (editConfig().contextFiles.length === 0) {
+                  <span class="no-file">None</span>
+                }
+              </div>
+            </div>
+
+            <!-- Attachments -->
+            <div class="config-group">
+              <label>Attachments</label>
+              <div class="config-files-list">
+                @for (att of editConfig().attachments; track att.id) {
+                  <div class="config-file-chip attachment clickable" (click)="viewDocument.emit(att)">
+                    <mat-icon>{{ att.type === 'attachment' ? 'attach_file' : 'insert_drive_file' }}</mat-icon>
+                    <span>{{ att.name }}</span>
+                    @if (canEdit) {
+                      <button class="remove-btn" (click)="removeAttachment(att.id); $event.stopPropagation()">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    }
+                  </div>
+                }
+                @for (att of pendingAttachments(); track att.id) {
+                  <div class="config-file-chip pending">
+                    <mat-icon>{{ att.type === 'image' ? 'image' : 'description' }}</mat-icon>
+                    <span>{{ att.name }}</span>
+                    <button class="remove-btn" (click)="removePendingAttachment(att.id)">
+                      <mat-icon>close</mat-icon>
+                    </button>
+                  </div>
+                }
+                @if (canEdit) {
+                  <label class="add-file-btn">
+                    <mat-icon>add</mat-icon>
+                    <span>Add</span>
+                    <input
+                      type="file"
+                      accept=".md,.txt,.json,.png,.jpg,.jpeg,.gif,.webp"
+                      multiple
+                      (change)="onFileSelect($event)"
+                    />
+                  </label>
+                }
+                @if (editConfig().attachments.length === 0 && pendingAttachments().length === 0 && !canEdit) {
+                  <span class="no-file">None</span>
+                }
+              </div>
+            </div>
+
+            <!-- Session Info (when running) -->
+            @if (session(); as sess) {
+              <div class="config-group session-info">
+                <label>Session</label>
+                <div class="session-details">
+                  <code>{{ sess.sessionId.slice(0, 8) }}</code>
+                  <span class="session-duration">{{ runDuration }}</span>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Right Panel: Terminal -->
+      <div class="terminal-panel">
+        <!-- Error Banner -->
+        @if (error()) {
+          <div class="error-banner">
+            <mat-icon>error</mat-icon>
+            <span>{{ error() }}</span>
+            <button mat-icon-button (click)="error.set(null)">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        }
+
+        <!-- Terminal Output -->
+        <div class="terminal-output" #outputContainer>
+          @if (!session() && sessionOutput().length === 0) {
+            <!-- Pre-session state -->
+            <div class="pre-session">
+              <div class="pre-session-icon" [style.--agent-color]="agent.type.color || '#1976d2'">
+                <mat-icon>{{ agent.icon }}</mat-icon>
+              </div>
+              <h3>{{ agent.name }}</h3>
+              <p>{{ agent.instructions || agent.description }}</p>
+            </div>
+          } @else {
+            @if (sessionOutput().length > 0) {
+              <app-transcript-renderer [transcript]="sessionOutput()"></app-transcript-renderer>
+            } @else if (processing()) {
+              <div class="starting-session">
+                <mat-spinner diameter="24"></mat-spinner>
+                <span>Starting session...</span>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Input Area -->
+        <div class="terminal-input-area">
+          <div class="input-row">
+            <textarea
+              #messageInput
+              class="message-input"
+              [placeholder]="session() ? 'Type a message...' : 'Type to start the agent...'"
+              [ngModel]="messageText()"
+              (ngModelChange)="messageText.set($event)"
+              (keydown)="onInputKeydown($event)"
+              [disabled]="processing()"
+              rows="1"
+            ></textarea>
+            @if (processing()) {
+              <button
+                class="stop-btn-input"
+                (click)="stopSession()"
+                matTooltip="Stop"
+              >
+                <mat-icon>stop</mat-icon>
+              </button>
+            } @else {
+              <button
+                class="send-btn"
+                (click)="session() ? sendMessage() : startAgent()"
+                [disabled]="!messageText().trim()"
+              >
+                <mat-icon>{{ session() ? 'send' : 'play_arrow' }}</mat-icon>
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="terminal-status-bar">
+          @if (processing()) {
+            <span class="status processing">
+              <mat-spinner diameter="12"></mat-spinner>
+              Processing...
+            </span>
+          } @else if (session()) {
+            <span class="status ready">Ready for input</span>
+          } @else {
+            <span class="status idle">Enter a message to start</span>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+}

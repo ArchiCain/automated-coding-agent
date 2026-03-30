@@ -1,0 +1,386 @@
+.playground-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px); // Account for header
+  background: #1e1e1e;
+}
+
+.loading-session {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex: 1;
+  color: #888;
+  font-size: 0.9375rem;
+}
+
+// Session Header
+.session-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  flex-shrink: 0;
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-id-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.session-label {
+  font-size: 0.75rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.session-id {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #d4d4d4;
+}
+
+.session-status {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: capitalize;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #888;
+
+  &.status-active {
+    background: rgba(25, 118, 210, 0.2);
+    color: #64b5f6;
+  }
+
+  &.status-paused {
+    background: rgba(255, 152, 0, 0.2);
+    color: #ffb74d;
+  }
+
+  &.status-completed {
+    background: rgba(76, 175, 80, 0.2);
+    color: #81c784;
+  }
+
+  &.status-failed {
+    background: rgba(244, 67, 54, 0.2);
+    color: #e57373;
+  }
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: #888;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  &.prompt-link {
+    color: #64b5f6;
+    cursor: pointer;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.session-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  button {
+    color: #ccc;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  }
+}
+
+// Chat Container
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; // Important for flex scrolling
+
+  &.no-session {
+    .chat-output {
+      justify-content: center;
+    }
+  }
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(244, 67, 54, 0.15);
+  color: #ff6b6b;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  span {
+    flex: 1;
+  }
+
+  button {
+    color: #ff6b6b;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
+.chat-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+// New Session View
+.new-session-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  max-width: 500px;
+  margin: 0 auto;
+
+  .welcome-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(25, 118, 210, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+
+    mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: #64b5f6;
+    }
+  }
+
+  h2 {
+    margin: 0 0 8px 0;
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: #d4d4d4;
+  }
+
+  p {
+    margin: 0 0 24px 0;
+    color: #888;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .working-dir-field {
+    width: 100%;
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      text-align: left;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 16px;
+      background: #2d2d2d;
+      border: 1px solid #3d3d3d;
+      border-radius: 8px;
+      color: #d4d4d4;
+      font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+      font-size: 0.875rem;
+
+      &:focus {
+        outline: none;
+        border-color: #1976d2;
+      }
+
+      &::placeholder {
+        color: #666;
+      }
+    }
+  }
+}
+
+.empty-output {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: #666;
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 12px;
+    color: #444;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+}
+
+.output-line {
+  color: #d4d4d4;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 2px 0;
+
+  &.processing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #888;
+
+    mat-spinner {
+      ::ng-deep circle {
+        stroke: #888;
+      }
+    }
+  }
+}
+
+// Chat Input Area
+.chat-input-area {
+  padding: 16px 20px;
+  background: #2d2d2d;
+  border-top: 1px solid #3d3d3d;
+  flex-shrink: 0;
+}
+
+.input-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+
+  textarea {
+    flex: 1;
+    padding: 12px 16px;
+    background: #1e1e1e;
+    border: 1px solid #3d3d3d;
+    border-radius: 12px;
+    color: #d4d4d4;
+    font-family: inherit;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    resize: none;
+    min-height: 48px;
+    max-height: 200px;
+
+    &:focus {
+      outline: none;
+      border-color: #1976d2;
+    }
+
+    &::placeholder {
+      color: #666;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+    }
+  }
+
+  .send-button {
+    flex-shrink: 0;
+
+    &:disabled {
+      background: #444 !important;
+      color: #666 !important;
+    }
+  }
+}
+
+.input-hints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 0 4px;
+
+  .hint {
+    font-size: 0.75rem;
+    color: #666;
+  }
+
+  .auto-scroll-btn {
+    color: #666;
+    font-size: 0.75rem;
+
+    &.active {
+      color: #64b5f6;
+    }
+
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+      margin-right: 4px;
+    }
+  }
+}

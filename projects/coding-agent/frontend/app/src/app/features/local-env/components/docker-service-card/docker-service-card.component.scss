@@ -1,0 +1,180 @@
+.service-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  }
+
+  &.state-running {
+    border-left: 3px solid #4caf50;
+  }
+
+  &.state-stopped,
+  &.state-unknown {
+    border-left: 3px solid rgba(0, 0, 0, 0.15);
+  }
+
+  &.state-error {
+    border-left: 3px solid #c62828;
+  }
+
+  &.state-starting {
+    border-left: 3px solid #ff9800;
+  }
+}
+
+// Card header
+.svc-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  &.state-running {
+    background: #4caf50;
+    box-shadow: 0 0 6px rgba(76, 175, 80, 0.5);
+  }
+
+  &.state-stopped,
+  &.state-unknown {
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  &.state-error {
+    background: #c62828;
+  }
+
+  &.state-starting {
+    background: #ff9800;
+    animation: pulse 1s ease-in-out infinite;
+  }
+}
+
+.service-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.87);
+  flex: 1;
+}
+
+.health-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+
+  &.health-ok {
+    color: #4caf50;
+  }
+
+  &.health-fail {
+    color: #c62828;
+  }
+}
+
+// Meta row (port + status)
+.svc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+// Port badge
+.service-port {
+  font-size: 0.8125rem;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  color: #1976d2;
+  background: rgba(25, 118, 210, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.status-text {
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Card action buttons
+.service-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  color: rgba(0, 0, 0, 0.6);
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  mat-spinner {
+    margin: auto;
+  }
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.87);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  &.action-start {
+    background: rgba(46, 125, 50, 0.1);
+    color: #2e7d32;
+
+    &:hover:not(:disabled) {
+      background: rgba(46, 125, 50, 0.2);
+    }
+  }
+
+  &.action-stop {
+    background: rgba(198, 40, 40, 0.08);
+    color: #c62828;
+
+    &:hover:not(:disabled) {
+      background: rgba(198, 40, 40, 0.15);
+    }
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

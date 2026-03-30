@@ -1,0 +1,49 @@
+version: '3'
+
+tasks:
+  start:
+    desc: Start all local services (database, backend, keycloak, frontend, pgweb)
+    cmds:
+      - echo "Starting all local services..."
+      - docker compose -f compose.yml up -d
+      - echo "All services are running!"
+
+  start:build:
+    desc: Start all local services with rebuild
+    cmds:
+      - echo "Building and starting all local services..."
+      - docker compose -f compose.yml up -d --build
+      - echo "All services are running!"
+
+  stop:
+    desc: Stop all local services gracefully
+    cmds:
+      - echo "Stopping all services..."
+      - docker compose -f compose.yml stop
+      - echo "All services stopped"
+
+  purge:
+    desc: Complete teardown of all local services (removes volumes)
+    cmds:
+      - echo "Performing complete teardown..."
+      - docker compose -f compose.yml down --volumes --remove-orphans || echo "Some cleanup may have failed - this is expected"
+      - docker system prune -f
+
+  purge-and-restart:
+    desc: Complete teardown and fresh restart of all services
+    cmds:
+      - task: purge
+      - echo "Rebuilding and starting fresh..."
+      - docker compose -f compose.yml build --no-cache
+      - task: start
+      - echo "Fresh restart complete!"
+
+  logs:
+    desc: Show logs from all services
+    cmds:
+      - docker compose -f compose.yml logs -f
+
+  status:
+    desc: Check status of all services
+    cmds:
+      - docker compose -f compose.yml ps

@@ -1,0 +1,161 @@
+name: Deploy to Mac Mini
+
+on:
+  push:
+    branches:
+      - mac-mini
+
+env:
+  REGISTRY: mac-mini:30500
+  IMAGE_TAG: ${{ github.sha }}
+  DEPLOY_ENV: mac-mini
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Configure Docker for insecure registry
+        run: |
+          sudo tee /etc/docker/daemon.json << 'EOF'
+          {
+            "insecure-registries": ["mac-mini:30500"]
+          }
+          EOF
+          sudo systemctl restart docker
+
+      - name: Set up Helm and Helmfile
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          HELMFILE_VERSION=$(curl -sI https://github.com/helmfile/helmfile/releases/latest | grep -i location | sed 's/.*tag\///' | tr -d '\r\n')
+          curl -fsSL "https://github.com/helmfile/helmfile/releases/download/${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION#v}_linux_amd64.tar.gz" \
+            | tar xz -C /usr/local/bin helmfile
+          helm plugin install https://github.com/databus23/helm-diff
+
+      - name: Write kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_MAC_MINI }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Write env file
+        run: |
+          echo "${{ secrets.ENV_FILE_MAC_MINI }}" > .env
+          echo "" >> .env
+          echo "REGISTRY=mac-mini:30500" >> .env
+          echo "IMAGE_TAG=${{ github.sha }}" >> .env
+
+      - name: Deploy registry
+        working-directory: infrastructure/k8s
+        run: |
+          set -a && source ../../.env && set +a
+          helmfile -e mac-mini -l name=registry apply
+
+      - name: Wait for registry
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://mac-mini:30500/v2/ > /dev/null 2>&1; then
+              echo "Registry is reachable"
+              exit 0
+            fi
+            echo "Waiting for registry... ($i/30)"
+            sleep 2
+          done
+          echo "Registry not reachable" && exit 1
+
+      - name: Build and push backend
+        run: |
+          docker build \
+            -t $REGISTRY/backend:$IMAGE_TAG \
+            -t $REGISTRY/backend:latest \
+            -f projects/application/backend/dockerfiles/prod.Dockerfile \
+            projects/application/backend
+          docker push $REGISTRY/backend:$IMAGE_TAG
+          docker push $REGISTRY/backend:latest
+
+      - name: Build and push frontend
+        run: |
+          docker build \
+            -t $REGISTRY/frontend:$IMAGE_TAG \
+            -t $REGISTRY/frontend:latest \
+            --build-arg VITE_BACKEND_URL="${VITE_BACKEND_URL:-/api}" \
+            -f projects/application/frontend/dockerfiles/prod.Dockerfile \
+            projects/application/frontend
+          docker push $REGISTRY/frontend:$IMAGE_TAG
+          docker push $REGISTRY/frontend:latest
+
+      - name: Build and push keycloak
+        run: |
+          docker build \
+            -t $REGISTRY/keycloak:$IMAGE_TAG \
+            -t $REGISTRY/keycloak:latest \
+            -f projects/application/keycloak/dockerfiles/Dockerfile \
+            projects/application/keycloak
+          docker push $REGISTRY/keycloak:$IMAGE_TAG
+          docker push $REGISTRY/keycloak:latest
+
+      - name: Build and push coding-agent-backend
+        run: |
+          docker build \
+            -t $REGISTRY/coding-agent-backend:$IMAGE_TAG \
+            -t $REGISTRY/coding-agent-backend:latest \
+            -f projects/coding-agent/backend/dockerfiles/prod.Dockerfile \
+            projects/coding-agent/backend
+          docker push $REGISTRY/coding-agent-backend:$IMAGE_TAG
+          docker push $REGISTRY/coding-agent-backend:latest
+
+      - name: Build and push coding-agent-frontend
+        run: |
+          docker build \
+            -t $REGISTRY/coding-agent-frontend:$IMAGE_TAG \
+            -t $REGISTRY/coding-agent-frontend:latest \
+            -f projects/coding-agent/frontend/dockerfiles/prod.Dockerfile \
+            projects/coding-agent/frontend
+          docker push $REGISTRY/coding-agent-frontend:$IMAGE_TAG
+          docker push $REGISTRY/coding-agent-frontend:latest
+
+      - name: Build and push openclaw-gateway
+        run: |
+          docker build \
+            -t $REGISTRY/openclaw-gateway:$IMAGE_TAG \
+            -t $REGISTRY/openclaw-gateway:latest \
+            -f projects/openclaw/dockerfiles/prod.Dockerfile \
+            projects/openclaw
+          docker push $REGISTRY/openclaw-gateway:$IMAGE_TAG
+          docker push $REGISTRY/openclaw-gateway:latest
+
+      - name: Deploy with Helmfile
+        working-directory: infrastructure/k8s
+        run: |
+          set -a && source ../../.env && set +a
+          helmfile -e mac-mini apply
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/backend -n app --timeout=120s
+          kubectl rollout status deployment/frontend -n app --timeout=120s
+          kubectl rollout status deployment/keycloak -n app --timeout=120s
+          kubectl rollout status deployment/coding-agent-backend -n coding-agent --timeout=180s
+          kubectl rollout status deployment/coding-agent-frontend -n coding-agent --timeout=120s
+          kubectl rollout status deployment/openclaw-gateway -n openclaw --timeout=180s
+          echo ""
+          echo "=== App Namespace ==="
+          kubectl get pods -n app
+          kubectl get ingress -n app
+          echo ""
+          echo "=== Coding Agent Namespace ==="
+          kubectl get pods -n coding-agent
+          kubectl get ingress -n coding-agent
+          echo ""
+          echo "=== OpenClaw Namespace ==="
+          kubectl get pods -n openclaw
+          kubectl get ingress -n openclaw

@@ -1,0 +1,258 @@
+@if (loading()) {
+  <div class="loading-container">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>Loading session...</span>
+  </div>
+} @else if (error() && !activeAgent()) {
+  <div class="error-container">
+    <mat-icon>error</mat-icon>
+    <span>{{ error() }}</span>
+    <button mat-stroked-button (click)="goBack()">Back to Backlog</button>
+  </div>
+} @else {
+  <!-- Slide-over for viewing documents -->
+  <app-slide-over
+    [isOpen]="!!viewingDocument()"
+    [title]="viewingDocument()?.name || getFileName(viewingDocument()?.path || '')"
+    [content]="documentContent()"
+    [loading]="documentLoading()"
+    (closed)="closeDocumentView()"
+  ></app-slide-over>
+
+  <div class="session-page" [class.agent-open]="agentPanelOpen()">
+    <!-- Header -->
+    <header class="session-header">
+      <div class="header-left">
+        <mat-icon class="session-icon">account_tree</mat-icon>
+        <nav class="breadcrumb">
+          @for (crumb of breadcrumbs(); track crumb.id; let last = $last) {
+            @if (!last) {
+              <button class="breadcrumb-item" (click)="navigateToCrumb(crumb)">
+                {{ crumb.name }}
+              </button>
+              <mat-icon class="breadcrumb-separator">chevron_right</mat-icon>
+            } @else {
+              <span class="breadcrumb-current">{{ crumb.name }}</span>
+            }
+          }
+        </nav>
+      </div>
+    </header>
+
+    <!-- Split view -->
+    <div class="split-view">
+      <!-- Left: Source viewer / Tasks list -->
+      <div class="source-panel">
+        <!-- View mode tabs -->
+        <div class="panel-header">
+          <div class="tab-buttons">
+            <button
+              class="tab-btn"
+              [class.active]="viewMode() === 'source'"
+              (click)="setViewMode('source')"
+            >
+              <mat-icon>description</mat-icon>
+              <span>Source</span>
+            </button>
+            <button
+              class="tab-btn"
+              [class.active]="viewMode() === 'tasks'"
+              (click)="setViewMode('tasks')"
+            >
+              <mat-icon>list</mat-icon>
+              <span>{{ currentLevel() === 'projects' ? 'Projects' : currentLevel() === 'features' ? 'Features' : 'Tasks' }}</span>
+              @if (tasks().length > 0) {
+                <span class="task-count">{{ tasks().length }}</span>
+              }
+            </button>
+          </div>
+          @if (viewMode() === 'source' && sourceLoading()) {
+            <mat-spinner diameter="16" class="panel-loading"></mat-spinner>
+          }
+          @if (viewMode() === 'tasks' && tasksLoading()) {
+            <mat-spinner diameter="16" class="panel-loading"></mat-spinner>
+          }
+        </div>
+
+        <div class="panel-content">
+          @if (viewMode() === 'source') {
+            <!-- Source content -->
+            @if (sourceLoading() && !sourceContent()) {
+              <div class="content-loading-state">
+                <mat-spinner diameter="32"></mat-spinner>
+              </div>
+            } @else {
+              <markdown [data]="sourceContent()"></markdown>
+            }
+          } @else {
+            <!-- Tasks list -->
+            @if (tasks().length === 0) {
+              <div class="empty-tasks">
+                <mat-icon>hourglass_empty</mat-icon>
+                <p>No tasks at this level.</p>
+              </div>
+            } @else if (currentLevel() === 'concerns' && taskTiers().length > 0) {
+              <!-- Tree view for concerns grouped by dependency tier -->
+              <div class="tier-tree">
+                @for (tierGroup of taskTiers(); track tierGroup.tier; let first = $first; let last = $last) {
+                  <div class="tier-group">
+                    <!-- Connector from previous tier -->
+                    @if (!first) {
+                      <div class="tier-connector">
+                        <div class="connector-line"></div>
+                        <mat-icon class="connector-arrow">arrow_downward</mat-icon>
+                        <div class="connector-line"></div>
+                      </div>
+                    }
+                    <!-- Tier label -->
+                    <div class="tier-label">
+                      <span class="tier-badge">Tier {{ tierGroup.tier }}</span>
+                      @if (tierGroup.tasks.length > 1) {
+                        <span class="tier-hint">parallel</span>
+                      }
+                    </div>
+                    <!-- Cards in this tier -->
+                    <div class="tier-cards">
+                      @for (task of tierGroup.tasks; track task.slug) {
+                        <div class="task-card" [class.active-task]="activeTaskForAgent()?.slug === task.slug" [class.blocked]="!isExecutionEnabled(task)">
+                          <div class="task-card-header">
+                            @if (task.status === 'completed' || task.status === 'review_passed') {
+                              <mat-icon class="status-circle completed">check_circle</mat-icon>
+                            } @else if (task.status === 'executing') {
+                              <mat-icon class="status-circle executing">play_circle</mat-icon>
+                            } @else if (task.status === 'review_failed') {
+                              <mat-icon class="status-circle failed">cancel</mat-icon>
+                            } @else if (!isExecutionEnabled(task)) {
+                              <mat-icon class="status-circle blocked">lock</mat-icon>
+                            } @else {
+                              <mat-icon class="status-circle">radio_button_unchecked</mat-icon>
+                            }
+                            <span class="task-name">{{ task.name }}</span>
+                          </div>
+
+                          <div class="card-meta">
+                            <button class="file-pill" (click)="openTaskFile(task)">
+                              <mat-icon>description</mat-icon>
+                              <span>task.md</span>
+                            </button>
+                            @if (task.dependsOn?.length) {
+                              <span class="depends-on-badge">
+                                <mat-icon>link</mat-icon>
+                                {{ task.dependsOn?.join(', ') }}
+                              </span>
+                            }
+                          </div>
+
+                          <div class="card-divider"></div>
+
+                          <div class="task-card-footer">
+                            @if (getBlockingDeps(task).length > 0) {
+                              <div class="dependency-info">
+                                <mat-icon class="dep-icon">lock</mat-icon>
+                                <span>Blocked by: {{ getBlockingDeps(task).join(', ') }}</span>
+                              </div>
+                            }
+                            <div class="agent-buttons">
+                              <button
+                                class="agent-btn execution-agent-btn"
+                                [class.disabled]="!isExecutionEnabled(task)"
+                                [disabled]="!isExecutionEnabled(task)"
+                                (click)="openExecutionAgent(task)"
+                                title="Open Execution Agent"
+                              >
+                                <mat-icon>play_circle</mat-icon>
+                                <span>Execute</span>
+                              </button>
+                              <button
+                                class="agent-btn review-agent-btn"
+                                [class.disabled]="!isReviewerEnabled(task)"
+                                [disabled]="!isReviewerEnabled(task)"
+                                (click)="openReviewAgent(task)"
+                                title="Open Review Agent"
+                              >
+                                <mat-icon>rate_review</mat-icon>
+                                <span>Review</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <!-- Flat list for projects/features -->
+              <div class="tasks-list">
+                @for (task of tasks(); track task.slug) {
+                  <div class="task-item">
+                    <div class="task-card" [class.active-task]="activeTaskForAgent()?.slug === task.slug">
+                      <div class="task-card-header">
+                        @if (task.status === 'completed' || task.status === 'review_passed') {
+                          <mat-icon class="status-circle completed">check_circle</mat-icon>
+                        } @else if (task.status === 'executing') {
+                          <mat-icon class="status-circle executing">play_circle</mat-icon>
+                        } @else if (task.status === 'review_failed') {
+                          <mat-icon class="status-circle failed">cancel</mat-icon>
+                        } @else {
+                          <mat-icon class="status-circle">radio_button_unchecked</mat-icon>
+                        }
+                        <span class="task-name">{{ task.name }}</span>
+                      </div>
+
+                      <div class="card-meta">
+                        <button class="file-pill" (click)="openTaskFile(task)">
+                          <mat-icon>description</mat-icon>
+                          <span>plan.md</span>
+                        </button>
+                        @if (task.hasChildren) {
+                          <span class="children-badge">
+                            <mat-icon>account_tree</mat-icon>
+                            {{ task.childCount }} {{ currentLevel() === 'projects' ? 'features' : 'concerns' }}
+                          </span>
+                        }
+                      </div>
+
+                      <div class="card-divider"></div>
+
+                      <div class="task-card-footer">
+                        @if (task.hasChildren) {
+                          <button
+                            mat-stroked-button
+                            class="tasks-btn"
+                            (click)="viewTask(task)"
+                          >
+                            <mat-icon>arrow_forward</mat-icon>
+                            {{ currentLevel() === 'projects' ? 'View Features' : 'View Concerns' }}
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      </div>
+
+      <!-- Right: Agent panel (slides in when an agent button is clicked) -->
+      @if (agentPanelOpen() && activeAgent()) {
+        <div class="agent-panel">
+          <app-agent-card
+            #agentCard
+            [agent]="activeAgent()!"
+            [initialMode]="'interactive'"
+            [hideBackButton]="false"
+            [startConfigCollapsed]="true"
+            [conversational]="true"
+            (agentChange)="onAgentChange($event)"
+            (viewDocument)="onViewDocument($event)"
+            (sessionStarted)="onSessionStarted($event)"
+            (close)="closeAgentPanel()"
+          ></app-agent-card>
+        </div>
+      }
+    </div>
+  </div>
+}

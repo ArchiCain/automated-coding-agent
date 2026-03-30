@@ -1,0 +1,338 @@
+<div class="editor-page">
+  <div class="page-header">
+    <button mat-icon-button (click)="cancel()">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <h1>{{ isEdit() ? 'Edit Agent' : 'New Agent' }}</h1>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <mat-spinner diameter="32"></mat-spinner>
+      <span>Loading agent...</span>
+    </div>
+  }
+
+  @if (!loading()) {
+    <div class="editor-form">
+      <!-- Basic info -->
+      <section class="form-section">
+        <h2>Basic Info</h2>
+        <div class="form-row">
+          <label class="form-label">Name</label>
+          <input
+            class="form-input"
+            placeholder="My Agent"
+            [value]="name()"
+            (input)="name.set($any($event.target).value)"
+          />
+        </div>
+        <div class="form-row">
+          <label class="form-label">Description</label>
+          <textarea
+            class="form-input form-textarea"
+            placeholder="What does this agent do?"
+            rows="2"
+            [value]="description()"
+            (input)="description.set($any($event.target).value)"
+          ></textarea>
+        </div>
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label class="form-label">Icon</label>
+            <div class="icon-picker-wrapper">
+              <button class="icon-picker-btn" (click)="toggleIconDropdown()">
+                <mat-icon class="icon-picker-preview" [style.color]="color()">{{ icon() }}</mat-icon>
+                <span class="icon-picker-label">{{ getIconLabel(icon()) }}</span>
+                <mat-icon class="icon-picker-chevron">{{ iconDropdownOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+              </button>
+              @if (iconDropdownOpen()) {
+                <div class="icon-picker-dropdown">
+                  <div class="icon-picker-search">
+                    <mat-icon>search</mat-icon>
+                    <input
+                      class="icon-search-input"
+                      placeholder="Search icons..."
+                      [value]="iconSearch()"
+                      (input)="iconSearch.set($any($event.target).value)"
+                    />
+                  </div>
+                  <div class="icon-picker-list">
+                    @for (ic of filteredIcons(); track ic.id) {
+                      <div
+                        class="icon-picker-option"
+                        [class.selected]="ic.id === icon()"
+                        (click)="selectIcon(ic.id)"
+                      >
+                        <mat-icon class="option-icon">{{ ic.id }}</mat-icon>
+                        <span class="option-label">{{ ic.label }}</span>
+                        @if (ic.id === icon()) {
+                          <mat-icon class="option-check">check</mat-icon>
+                        }
+                      </div>
+                    }
+                    @if (filteredIcons().length === 0) {
+                      <div class="icon-picker-empty">No icons match "{{ iconSearch() }}"</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Color</label>
+            <div class="color-pick">
+              <input
+                type="color"
+                class="color-input"
+                [value]="color()"
+                (input)="color.set($any($event.target).value)"
+              />
+              <span class="color-value">{{ color() }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Instructions -->
+      <section class="form-section">
+        <div class="section-header-row">
+          <h2>Instructions</h2>
+          <div class="mode-toggle">
+            <button
+              class="mode-btn"
+              [class.active]="instructionsMode() === 'manual'"
+              (click)="setInstructionsMode('manual')"
+              matTooltip="Edit markdown directly"
+            >
+              <mat-icon>edit</mat-icon>
+              Edit
+            </button>
+            <button
+              class="mode-btn"
+              [class.active]="instructionsMode() === 'agent'"
+              (click)="setInstructionsMode('agent')"
+              matTooltip="Preview + AI assistant"
+            >
+              <mat-icon>smart_toy</mat-icon>
+              Agent
+            </button>
+          </div>
+        </div>
+
+        @if (instructionsMode() === 'manual') {
+          <textarea
+            class="form-input form-textarea instructions-textarea"
+            placeholder="Enter agent instructions in markdown..."
+            rows="14"
+            [value]="instructions()"
+            (input)="instructions.set($any($event.target).value)"
+          ></textarea>
+        } @else {
+          <div class="instructions-agent-view">
+            <div class="instructions-preview">
+              <div class="preview-header">
+                <mat-icon>visibility</mat-icon>
+                <span>Preview</span>
+              </div>
+              <div class="preview-content">
+                @if (instructions()) {
+                  <markdown [data]="instructions()"></markdown>
+                } @else {
+                  <p class="empty-preview">No instructions yet. Use the agent below to generate them.</p>
+                }
+              </div>
+            </div>
+            <div class="instructions-agent-panel">
+              <app-chatbot-panel
+                [scope]="instructionsAgentScope()"
+                [messageContext]="instructionsMessageContext()"
+                (viewDocument)="onInstructionsAgentViewDocument($event)"
+                (turnComplete)="onInstructionsTurnComplete()"
+              />
+            </div>
+          </div>
+        }
+      </section>
+
+      <!-- Knowledge & Working Directory -->
+      <section class="form-section">
+        <h2>Knowledge</h2>
+
+        <!-- Knowledge files as icon cards -->
+        <div class="knowledge-surface">
+          @if (knowledgeFiles().length === 0) {
+            <div class="knowledge-empty">
+              <mat-icon>folder_open</mat-icon>
+              <span>No knowledge files selected</span>
+            </div>
+          }
+          @if (knowledgeFiles().length > 0) {
+            <div class="knowledge-cards">
+              @for (file of knowledgeFiles(); track file) {
+                <div class="knowledge-card" [matTooltip]="file" (click)="onViewKnowledgeFile(file)">
+                  <mat-icon class="card-file-icon">{{ getFileIcon(file) }}</mat-icon>
+                  <span class="card-filename">{{ getFileName(file) }}</span>
+                  <button class="card-remove" (click)="removeKnowledgeFile(file); $event.stopPropagation()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+          <button class="add-files-btn" (click)="toggleFileBrowser()">
+            <mat-icon>{{ fileBrowserOpen() ? 'expand_less' : 'add' }}</mat-icon>
+            {{ fileBrowserOpen() ? 'Close browser' : 'Add files' }}
+          </button>
+        </div>
+
+        @if (fileBrowserOpen()) {
+          <div class="file-browser">
+            <div class="browser-nav">
+              <button mat-icon-button (click)="fileBrowserUp()" [disabled]="fileBrowserPath() === '.'">
+                <mat-icon>arrow_upward</mat-icon>
+              </button>
+              <span class="browser-path">{{ fileBrowserPath() }}</span>
+            </div>
+            <div class="browser-entries">
+              @if (fileBrowserLoading()) {
+                <div class="browser-loading">Loading...</div>
+              }
+              @for (entry of fileBrowserEntries(); track entry.path) {
+                <div
+                  class="browser-entry"
+                  [class.is-dir]="entry.type === 'directory'"
+                  [class.is-selected]="isFileSelected(entry.path)"
+                  (click)="onFileBrowserClick(entry)"
+                >
+                  <mat-icon class="entry-icon">
+                    {{ entry.type === 'directory' ? 'folder' : getFileIcon(entry.path) }}
+                  </mat-icon>
+                  <span class="entry-name">{{ entry.name }}</span>
+                  @if (entry.type === 'file' && isFileSelected(entry.path)) {
+                    <mat-icon class="entry-check">check_circle</mat-icon>
+                  }
+                </div>
+              }
+              @if (!fileBrowserLoading() && fileBrowserEntries().length === 0) {
+                <div class="browser-empty">Empty directory</div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Working Directory -->
+        <div class="form-row" style="margin-top: 16px">
+          <label class="form-label">Working Directory</label>
+          <div class="cwd-select">
+            <button class="cwd-display" (click)="toggleCwdBrowser()">
+              <mat-icon class="cwd-icon">folder</mat-icon>
+              <span class="cwd-path">{{ cwd() }}</span>
+              <mat-icon class="cwd-chevron">{{ cwdBrowserOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+            </button>
+          </div>
+          @if (cwdBrowserOpen()) {
+            <div class="file-browser cwd-browser">
+              <div class="browser-nav">
+                <button mat-icon-button (click)="cwdBrowserUp()" [disabled]="cwdBrowserPath() === '.'">
+                  <mat-icon>arrow_upward</mat-icon>
+                </button>
+                <span class="browser-path">{{ cwdBrowserPath() }}</span>
+                <button class="select-cwd-btn" (click)="selectCwd(cwdBrowserPath())">
+                  Select this
+                </button>
+              </div>
+              <div class="browser-entries">
+                @if (cwdBrowserLoading()) {
+                  <div class="browser-loading">Loading...</div>
+                }
+                @for (entry of cwdBrowserEntries(); track entry.path) {
+                  <div class="browser-entry is-dir" (click)="onCwdEntryClick(entry)">
+                    <mat-icon class="entry-icon">folder</mat-icon>
+                    <span class="entry-name">{{ entry.name }}</span>
+                  </div>
+                }
+                @if (!cwdBrowserLoading() && cwdBrowserEntries().length === 0) {
+                  <div class="browser-empty">No subdirectories</div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+
+      <!-- Pages -->
+      <section class="form-section">
+        <h2>Pages</h2>
+        <p class="form-hint">Select which pages this agent should appear on.</p>
+        <div class="pages-select-wrapper">
+          <button class="pages-select-btn" (click)="togglePagesDropdown()">
+            <span class="pages-label">{{ pagesLabel }}</span>
+            <mat-icon>{{ pagesDropdownOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </button>
+          @if (pagesDropdownOpen()) {
+            <div class="pages-dropdown">
+              @for (page of availablePages; track page.path) {
+                <label class="pages-option" [class.selected]="isPageSelected(page.path)">
+                  <input
+                    type="checkbox"
+                    [checked]="isPageSelected(page.path)"
+                    (change)="togglePage(page.path)"
+                  />
+                  <span class="option-label">{{ page.label }}</span>
+                  @if (isPageSelected(page.path)) {
+                    <mat-icon class="option-check">check</mat-icon>
+                  }
+                </label>
+              }
+            </div>
+          }
+        </div>
+      </section>
+
+      <!-- Provider & Model -->
+      <section class="form-section">
+        <h2>Provider & Model</h2>
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label class="form-label">Provider</label>
+            <select class="form-input" [ngModel]="provider()" (ngModelChange)="provider.set($event)">
+              @for (p of providers; track p.id) {
+                <option [ngValue]="p.id">{{ p.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Default Model</label>
+            <select class="form-input" [ngModel]="defaultModel()" (ngModelChange)="defaultModel.set($event)">
+              @for (m of models; track m.id) {
+                <option [ngValue]="m.id">{{ m.name }} — {{ m.description }}</option>
+              }
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div class="form-actions">
+        <button mat-button (click)="cancel()">Cancel</button>
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="save()"
+          [disabled]="saving() || !name()"
+        >
+          {{ saving() ? 'Saving...' : (isEdit() ? 'Save Changes' : 'Create Agent') }}
+        </button>
+      </div>
+    </div>
+  }
+</div>
+
+<app-slide-over
+  [title]="slideOverTitle()"
+  [content]="slideOverContent()"
+  [loading]="slideOverLoading()"
+  [isOpen]="slideOverOpen()"
+  (closed)="onSlideOverClosed()"
+/>

@@ -1,0 +1,27 @@
+replicaCount: 1
+
+image:
+  repository: docs
+  tag: latest
+  pullPolicy: Always
+
+service:
+  port: 8080
+
+ingress:
+  enabled: true
+  host: ""
+  tls: false
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "25m"
+  limits:
+    memory: "128Mi"
+    cpu: "100m"
+
+healthCheck:
+  path: /
+  initialDelaySeconds: 5
+  periodSeconds: 10

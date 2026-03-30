@@ -1,0 +1,12 @@
+<div class="services-grid">
+  @for (service of services(); track service.id) {
+    <app-docker-service-card
+      [service]="service"
+      [status]="getStatus(service.id)"
+      [envId]="envId()"
+      [taskPrefix]="taskPrefix()"
+      (onAction)="handleAction($event)"
+      (onLogsRequested)="handleLogsRequested($event)"
+    />
+  }
+</div>

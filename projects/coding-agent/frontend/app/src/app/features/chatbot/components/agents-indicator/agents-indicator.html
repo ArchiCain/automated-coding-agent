@@ -1,0 +1,128 @@
+<!-- Agents button in header -->
+<button
+  mat-icon-button
+  class="agents-button"
+  [class.has-running]="sessionManager.activeCount() > 0"
+  [matBadge]="sessionManager.activeCount() > 0 ? sessionManager.activeCount() : null"
+  matBadgeSize="small"
+  matBadgeColor="primary"
+  matTooltip="Agent Sessions"
+  (click)="togglePanel()"
+>
+  <mat-icon>smart_toy</mat-icon>
+</button>
+
+<!-- Dropdown panel -->
+@if (panelOpen()) {
+  <div class="agents-panel-backdrop" (click)="closePanel()"></div>
+  <div class="agents-panel">
+    <div class="panel-header">
+      <span class="panel-title">Agent Sessions</span>
+    </div>
+
+    @if (!hasAnySessions()) {
+      <div class="empty-state">
+        <mat-icon>smart_toy</mat-icon>
+        <span>No sessions yet</span>
+      </div>
+    } @else {
+      <div class="session-list">
+        <!-- Running -->
+        @if (runningSessions().length > 0) {
+          <div class="section-header">
+            <span class="section-dot running"></span>
+            <span class="section-label">Running</span>
+            <span class="section-count">{{ runningSessions().length }}</span>
+          </div>
+          @for (session of runningSessions(); track session.metadata.sessionId) {
+            <div class="session-item clickable" (click)="openSession(session)">
+              <div class="agent-icon-wrapper">
+                <mat-icon class="agent-icon" [style.color]="getAgentColor(session)">
+                  {{ getAgentIcon(session) }}
+                </mat-icon>
+                <span class="status-dot running"></span>
+              </div>
+              <div class="session-details">
+                <div class="session-top-row">
+                  <span class="session-name">{{ session.metadata.agentName || 'Agent' }}</span>
+                  <span class="session-time">{{ getElapsedTime(session) }}</span>
+                </div>
+                <div class="session-bottom-row">
+                  @if (getPageLabel(session)) {
+                    <span class="page-badge">{{ getPageLabel(session) }}</span>
+                  }
+                  <span class="status-label running">Running</span>
+                </div>
+              </div>
+            </div>
+          }
+        }
+
+        <!-- Waiting / Idle -->
+        @if (waitingSessions().length > 0) {
+          <div class="section-header">
+            <span class="section-dot waiting"></span>
+            <span class="section-label">Waiting for input</span>
+            <span class="section-count">{{ waitingSessions().length }}</span>
+          </div>
+          @for (session of waitingSessions(); track session.metadata.sessionId) {
+            <div class="session-item clickable" (click)="openSession(session)">
+              <div class="agent-icon-wrapper">
+                <mat-icon class="agent-icon" [style.color]="getAgentColor(session)">
+                  {{ getAgentIcon(session) }}
+                </mat-icon>
+                <span class="status-dot waiting"></span>
+              </div>
+              <div class="session-details">
+                <div class="session-top-row">
+                  <span class="session-name">{{ session.metadata.agentName || 'Agent' }}</span>
+                  <span class="session-time">{{ getElapsedTime(session) }}</span>
+                </div>
+                <div class="session-bottom-row">
+                  @if (getPageLabel(session)) {
+                    <span class="page-badge">{{ getPageLabel(session) }}</span>
+                  }
+                  <span class="status-label waiting">Idle</span>
+                </div>
+              </div>
+            </div>
+          }
+        }
+
+        <!-- Completed / Failed -->
+        @if (finishedSessions().length > 0) {
+          <div class="section-header">
+            <span class="section-dot completed"></span>
+            <span class="section-label">Completed</span>
+            <span class="section-count">{{ finishedSessions().length }}</span>
+            <button class="clear-link" (click)="clearCompleted(); $event.stopPropagation()">Clear</button>
+          </div>
+          @for (session of finishedSessions(); track session.metadata.sessionId) {
+            <div class="session-item" [class.failed]="session.metadata.status === 'failed'">
+              <div class="agent-icon-wrapper">
+                <mat-icon class="agent-icon" [style.color]="getAgentColor(session)">
+                  {{ getAgentIcon(session) }}
+                </mat-icon>
+                <span class="status-dot" [class.completed]="session.metadata.status === 'completed'" [class.failed]="session.metadata.status === 'failed'"></span>
+              </div>
+              <div class="session-details">
+                <div class="session-top-row">
+                  <span class="session-name">{{ session.metadata.agentName || 'Agent' }}</span>
+                  <span class="session-time">{{ getElapsedTime(session) }}</span>
+                </div>
+                <div class="session-bottom-row">
+                  @if (getPageLabel(session)) {
+                    <span class="page-badge">{{ getPageLabel(session) }}</span>
+                  }
+                  <span class="status-label" [class.failed]="session.metadata.status === 'failed'">
+                    {{ getStatusLabel(session.metadata.status) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          }
+        }
+      </div>
+    }
+  </div>
+}

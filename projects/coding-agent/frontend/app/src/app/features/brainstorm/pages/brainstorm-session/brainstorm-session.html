@@ -1,0 +1,103 @@
+@if (loading()) {
+  <div class="loading-container">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>Loading session...</span>
+  </div>
+} @else if (error() && !session()) {
+  <div class="error-container">
+    <mat-icon>error</mat-icon>
+    <span>{{ error() }}</span>
+    <button mat-stroked-button (click)="goBack()">Back to Sessions</button>
+  </div>
+} @else if (agent()) {
+  <!-- Slide-over for viewing documents -->
+  <app-slide-over
+    [isOpen]="!!viewingDocument()"
+    [title]="viewingDocument()?.name || getFileName(viewingDocument()?.path || '')"
+    [content]="documentContent()"
+    [loading]="documentLoading()"
+    (closed)="closeDocumentView()"
+  ></app-slide-over>
+
+  <div class="session-page">
+    <!-- Header -->
+    <header class="session-header">
+      <div class="header-left">
+        <button mat-icon-button (click)="goBack()" class="back-btn">
+          <mat-icon>arrow_back</mat-icon>
+        </button>
+        <mat-icon class="session-icon">lightbulb</mat-icon>
+        @if (editingName()) {
+          <input
+            type="text"
+            class="name-input"
+            [ngModel]="editedName()"
+            (ngModelChange)="editedName.set($event)"
+            (keydown)="onNameKeydown($event)"
+            (blur)="saveName()"
+            autofocus
+          />
+        } @else {
+          <h1 class="session-name" (click)="startEditingName()">
+            {{ sessionName }}
+            <mat-icon class="edit-icon">edit</mat-icon>
+          </h1>
+        }
+      </div>
+      <div class="header-right">
+        <button
+          mat-stroked-button
+          class="decomp-btn"
+          (click)="decomposePlan()"
+          [disabled]="decomposing()"
+        >
+          @if (decomposing()) {
+            <mat-spinner diameter="16" class="btn-spinner"></mat-spinner>
+          } @else {
+            <mat-icon>call_split</mat-icon>
+          }
+          Decompose
+        </button>
+        <span class="session-badge">BRAINSTORMING</span>
+      </div>
+    </header>
+
+    <!-- Split view -->
+    <div class="split-view">
+      <!-- Left: Plan viewer (larger) -->
+      <div class="plan-panel">
+        <div class="panel-header">
+          <mat-icon>description</mat-icon>
+          <span>plan.md</span>
+          @if (planLoading()) {
+            <mat-spinner diameter="16" class="plan-loading"></mat-spinner>
+          }
+        </div>
+
+        <div class="plan-content">
+          @if (planLoading() && !planContent()) {
+            <div class="plan-loading-state">
+              <mat-spinner diameter="32"></mat-spinner>
+            </div>
+          } @else {
+            <markdown [data]="planContent()"></markdown>
+          }
+        </div>
+      </div>
+
+      <!-- Right: Agent card in interactive mode (smaller) -->
+      <div class="agent-panel">
+        <app-agent-card
+          [agent]="agent()!"
+          [initialMode]="'interactive'"
+          [hideBackButton]="true"
+          [startConfigCollapsed]="true"
+          (agentChange)="onAgentChange($event)"
+          (viewDocument)="onViewDocument($event)"
+          (sessionStarted)="onSessionStarted($event)"
+          (close)="goBack()"
+        ></app-agent-card>
+      </div>
+    </div>
+  </div>
+}

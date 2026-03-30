@@ -1,0 +1,51 @@
+<div class="command-center-dashboard">
+  <header class="dashboard-header">
+    <div class="header-left">
+      <h1>Command Center</h1>
+      <span class="subtitle">Base Repository Control</span>
+    </div>
+    <div class="header-right">
+      <app-branch-controls />
+    </div>
+  </header>
+
+  <section class="task-section">
+    <app-task-bar />
+  </section>
+
+  <mat-divider />
+
+  <section class="docker-section">
+    <h2>Local Environment</h2>
+
+    <div class="docker-content">
+      <!-- Environment info bar (shared component) -->
+      @if (currentBranch()) {
+        <app-environment-info-bar
+          [branch]="currentBranch()"
+          [showGitStatus]="true"
+          [gitStatus]="gitStatus()"
+        />
+      }
+
+      <!-- Docker controls bar (shared component) -->
+      <app-docker-controls-bar
+        [envId]="envId"
+        (onOperationComplete)="onDockerOperationComplete()"
+      />
+
+      @if (dockerLoading()) {
+        <div class="loading-container">
+          <mat-spinner diameter="32"></mat-spinner>
+          <span>Loading docker status...</span>
+        </div>
+      } @else {
+        <app-docker-services-grid
+          [services]="services"
+          [statusMap]="dockerStatusMap()"
+          [envId]="envId"
+        />
+      }
+    </div>
+  </section>
+</div>

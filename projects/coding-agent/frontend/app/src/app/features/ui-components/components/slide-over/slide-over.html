@@ -1,0 +1,25 @@
+@if (isOpen) {
+  <div class="slide-over-backdrop" [class.bottom-mode]="position === 'bottom'" (click)="onBackdropClick($event)">
+    <div class="slide-over-panel" [class.bottom-panel]="position === 'bottom'">
+      <div class="slide-over-header">
+        <h2>{{ title }}</h2>
+        <button mat-icon-button (click)="close()" class="close-button">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+      <div class="slide-over-content">
+        @if (loading) {
+          <div class="loading">
+            <mat-spinner diameter="40"></mat-spinner>
+          </div>
+        } @else if (codeLanguage) {
+          <pre class="code-output" [innerHTML]="highlightedCodeHtml"></pre>
+        } @else if (raw) {
+          <pre class="raw-output" [innerHTML]="colorizedHtml"></pre>
+        } @else {
+          <markdown [data]="content"></markdown>
+        }
+      </div>
+    </div>
+  </div>
+}

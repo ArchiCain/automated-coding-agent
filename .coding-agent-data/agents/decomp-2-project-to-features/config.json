@@ -1,0 +1,15 @@
+{
+  "id": "9ea498a2-eda3-49af-8021-855dced0d8ff",
+  "slug": "decomp-2-project-to-features",
+  "name": "Decomp 2 - Project to Features",
+  "description": "Decomposes a project task into feature-level tasks",
+  "knowledgeFiles": [],
+  "cwd": ".",
+  "defaultModel": "claude-opus-4-6",
+  "provider": "claude-code",
+  "icon": "psychology",
+  "color": "#4ecdc4",
+  "pages": [],
+  "createdAt": "2026-03-06T04:00:00.000Z",
+  "updatedAt": "2026-03-06T04:50:28.889Z"
+}

@@ -1,0 +1,186 @@
+@if (loading()) {
+  <div class="loading-container">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>Loading session...</span>
+  </div>
+} @else if (error() && !session()) {
+  <div class="error-container">
+    <mat-icon>error</mat-icon>
+    <span>{{ error() }}</span>
+    <button mat-stroked-button (click)="goBack()">Back to Decomposition</button>
+  </div>
+} @else if (agent()) {
+  <!-- Slide-over for viewing documents -->
+  <app-slide-over
+    [isOpen]="!!viewingDocument()"
+    [title]="viewingDocument()?.name || getFileName(viewingDocument()?.path || '')"
+    [content]="documentContent()"
+    [loading]="documentLoading()"
+    (closed)="closeDocumentView()"
+  ></app-slide-over>
+
+  <div class="session-page">
+    <!-- Header -->
+    <header class="session-header">
+      <div class="header-left">
+        <mat-icon class="session-icon">account_tree</mat-icon>
+        <nav class="breadcrumb">
+          <button class="breadcrumb-item" (click)="goToBrainstorm()">
+            Brainstorm
+          </button>
+          <mat-icon class="breadcrumb-separator">chevron_right</mat-icon>
+          @for (crumb of breadcrumbs(); track crumb.id; let last = $last) {
+            @if (!last) {
+              <button class="breadcrumb-item" (click)="navigateToCrumb(crumb)">
+                {{ crumb.name }}
+              </button>
+              <mat-icon class="breadcrumb-separator">chevron_right</mat-icon>
+            } @else {
+              <span class="breadcrumb-current">{{ crumb.name }}</span>
+            }
+          }
+        </nav>
+        <span class="session-badge">{{ decompTypeName | uppercase }}</span>
+        @if (isPlanLocked()) {
+          <span class="auto-badge">
+            <mat-spinner diameter="14"></mat-spinner>
+            Auto-Decomp Running
+          </span>
+        }
+      </div>
+      @if (canStart()) {
+        <button
+          mat-flat-button
+          color="primary"
+          class="start-btn"
+          (click)="startDecomposition()"
+        >
+          <mat-icon>play_arrow</mat-icon>
+          Start Decomposition
+        </button>
+      }
+    </header>
+
+    <!-- Split view -->
+    <div class="split-view">
+      <!-- Left: Source viewer / Tasks tree -->
+      <div class="source-panel">
+        <!-- View mode tabs -->
+        <div class="panel-header">
+          <div class="tab-buttons">
+            <button
+              class="tab-btn"
+              [class.active]="viewMode() === 'source'"
+              (click)="setViewMode('source')"
+            >
+              <mat-icon>description</mat-icon>
+              <span>Source</span>
+            </button>
+            <button
+              class="tab-btn"
+              [class.active]="viewMode() === 'tasks'"
+              (click)="setViewMode('tasks')"
+            >
+              <mat-icon>account_tree</mat-icon>
+              <span>{{ isConcernsSession() ? 'Concerns' : decompTypeName === 'Plan to Projects' ? 'Projects' : 'Features' }}</span>
+              @if (tasksTree().length > 0) {
+                <span class="task-count">{{ tasksTree().length }}</span>
+              }
+            </button>
+          </div>
+          @if (viewMode() === 'source' && sourceLoading()) {
+            <mat-spinner diameter="16" class="panel-loading"></mat-spinner>
+          }
+          @if (viewMode() === 'tasks' && tasksLoading()) {
+            <mat-spinner diameter="16" class="panel-loading"></mat-spinner>
+          }
+        </div>
+
+        <div class="panel-content">
+          @if (viewMode() === 'source') {
+            <!-- Source content -->
+            @if (sourceLoading() && !sourceContent()) {
+              <div class="content-loading-state">
+                <mat-spinner diameter="32"></mat-spinner>
+              </div>
+            } @else {
+              <markdown [data]="sourceContent()"></markdown>
+            }
+          } @else {
+            <!-- Tasks tree -->
+            @if (tasksTree().length === 0) {
+              <div class="empty-tasks">
+                <mat-icon>hourglass_empty</mat-icon>
+                <p>No items yet. Start the decomposition to create them.</p>
+              </div>
+            } @else {
+              <div class="tasks-tree">
+                @for (task of tasksTree(); track task.slug) {
+                  <ng-container *ngTemplateOutlet="taskNode; context: { task: task }"></ng-container>
+                }
+              </div>
+            }
+          }
+        </div>
+      </div>
+
+      <!-- Right: Agent card in interactive mode -->
+      <div class="agent-panel">
+        <app-agent-card
+          #agentCard
+          [agent]="agent()!"
+          [initialMode]="'interactive'"
+          [hideBackButton]="true"
+          [startConfigCollapsed]="true"
+          (agentChange)="onAgentChange($event)"
+          (viewDocument)="onViewDocument($event)"
+          (sessionStarted)="onSessionStarted($event)"
+          (close)="goBack()"
+        ></app-agent-card>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Task node template for recursive rendering -->
+<ng-template #taskNode let-task="task">
+  <div class="task-item" [style.--depth]="task.depth">
+    <div class="task-card">
+      <div class="task-card-header">
+        <mat-icon class="status-circle">radio_button_unchecked</mat-icon>
+        <span class="task-name">{{ task.name }}</span>
+      </div>
+
+      <div class="card-meta">
+        <button class="file-pill" (click)="openTask(task)">
+          <mat-icon>description</mat-icon>
+          <span>{{ task.children && task.children.length > 0 ? 'plan.md' : 'task.md' }}</span>
+        </button>
+      </div>
+
+      <div class="card-divider"></div>
+
+      <div class="task-card-footer">
+        @if (task.children && task.children.length > 0) {
+          <button
+            mat-stroked-button
+            class="tasks-btn"
+            (click)="viewTaskChildren(task)"
+          >
+            {{ decompTypeName === 'Plan to Projects' ? 'View Features' : 'View Concerns' }}
+          </button>
+        } @else if (!isConcernsSession()) {
+          <button
+            mat-stroked-button
+            class="decomp-btn"
+            [disabled]="isPlanLocked()"
+            (click)="decomposeTask(task)"
+          >
+            <mat-icon>call_split</mat-icon>
+            Decomp
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+</ng-template>

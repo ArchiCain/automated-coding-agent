@@ -1,0 +1,28 @@
+version: '3'
+
+tasks:
+  init:
+    desc: Initialize Terraform for K3s infrastructure
+    cmds:
+      - terraform init
+
+  plan:
+    desc: Plan K3s infrastructure changes
+    cmds:
+      - terraform plan
+
+  apply:
+    desc: Apply K3s infrastructure (creates EC2 + K3s)
+    cmds:
+      - terraform apply
+
+  destroy:
+    desc: Destroy K3s infrastructure
+    cmds:
+      - echo "WARNING - This will destroy the K3s server and all deployed services!"
+      - terraform destroy
+
+  output:
+    desc: Show K3s infrastructure outputs (IP, URLs)
+    cmds:
+      - terraform output

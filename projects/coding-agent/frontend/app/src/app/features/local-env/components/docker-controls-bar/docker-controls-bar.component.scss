@@ -1,0 +1,70 @@
+.docker-controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 8px !important;
+    min-height: 34px !important;
+    padding: 0 12px !important;
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    mat-spinner {
+      margin: 0;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+    }
+  }
+
+  .teardown-btn {
+    color: #c62828 !important;
+    border-color: rgba(198, 40, 40, 0.4) !important;
+
+    &:hover:not(:disabled) {
+      background-color: rgba(198, 40, 40, 0.08) !important;
+    }
+
+    &:disabled {
+      color: rgba(0, 0, 0, 0.38) !important;
+      border-color: rgba(0, 0, 0, 0.12) !important;
+    }
+  }
+
+  &.compact {
+    gap: 4px;
+    padding: 8px 12px;
+
+    button {
+      min-width: 36px;
+      padding: 0 8px !important;
+
+      mat-icon {
+        margin: 0;
+      }
+    }
+  }
+
+  &.inline {
+    background: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
+  }
+}

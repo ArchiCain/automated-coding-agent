@@ -1,0 +1,96 @@
+.agent-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-left: 3px solid #7c4dff;
+  border-radius: 8px;
+  padding: 16px;
+  transition: box-shadow 0.2s;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.agent-icon {
+  font-size: 28px;
+  width: 28px;
+  height: 28px;
+}
+
+.card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+}
+
+.agent-provider {
+  font-size: 11px;
+  color: #999;
+}
+
+.agent-description {
+  font-size: 13px;
+  color: #666;
+  margin: 0 0 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #999;
+}
+
+.meta-icon {
+  font-size: 14px;
+  width: 14px;
+  height: 14px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: -8px;
+
+  button {
+    color: #666;
+
+    &:hover {
+      color: #333;
+    }
+  }
+
+  .delete-btn {
+    margin-left: auto;
+
+    &:hover {
+      color: #f44336;
+    }
+  }
+}

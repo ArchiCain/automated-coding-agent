@@ -1,0 +1,21 @@
+<h2 mat-dialog-title [class.danger-title]="data.isDanger">
+  @if (data.isDanger) {
+    <mat-icon>warning</mat-icon>
+  }
+  {{ data.title }}
+</h2>
+<mat-dialog-content>
+  <p>{{ data.message }}</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()">
+    {{ data.cancelLabel || 'Cancel' }}
+  </button>
+  <button
+    mat-flat-button
+    [color]="data.isDanger ? 'warn' : 'primary'"
+    (click)="onConfirm()"
+  >
+    {{ data.confirmLabel || 'Confirm' }}
+  </button>
+</mat-dialog-actions>

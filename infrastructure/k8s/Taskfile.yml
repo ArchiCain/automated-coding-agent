@@ -1,0 +1,39 @@
+version: '3'
+
+tasks:
+  diff:
+    desc: Show what would change in the cluster
+    cmds:
+      - helmfile -e ${DEPLOY_ENV:-dev} diff
+
+  apply:
+    desc: Deploy all services to the cluster
+    cmds:
+      - helmfile -e ${DEPLOY_ENV:-dev} apply
+
+  sync:
+    desc: Sync all services (force apply without diff)
+    cmds:
+      - helmfile -e ${DEPLOY_ENV:-dev} sync
+
+  destroy:
+    desc: Remove all deployed services from the cluster
+    cmds:
+      - echo "WARNING - This will remove all services from the cluster!"
+      - helmfile -e ${DEPLOY_ENV:-dev} destroy
+
+  status:
+    desc: Show deployed pod and ingress status
+    cmds:
+      - echo "=== Application (${NAMESPACE:-app}) ==="
+      - kubectl get pods -n ${NAMESPACE:-app}
+      - kubectl get ingress -n ${NAMESPACE:-app}
+      - echo ""
+      - echo "=== Coding Agent (${CODING_AGENT_NAMESPACE:-coding-agent}) ==="
+      - kubectl get pods -n ${CODING_AGENT_NAMESPACE:-coding-agent}
+      - kubectl get ingress -n ${CODING_AGENT_NAMESPACE:-coding-agent}
+
+  logs:
+    desc: Show logs for a service (usage - task infra:k8s:logs -- backend)
+    cmds:
+      - kubectl logs -f -l app={{.CLI_ARGS}} --all-namespaces

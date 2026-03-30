@@ -1,0 +1,79 @@
+<div class="service-card" [ngClass]="stateClass()">
+  <div class="svc-header">
+    <div class="status-dot" [ngClass]="stateClass()"></div>
+    <span class="service-name">{{ service().name }}</span>
+    <!-- Health indicator icon -->
+    @if (healthStatus() === 'healthy') {
+      <mat-icon class="health-icon health-ok">check_circle</mat-icon>
+    } @else if (healthStatus() === 'unhealthy') {
+      <mat-icon class="health-icon health-fail">cancel</mat-icon>
+    }
+  </div>
+
+  <div class="svc-meta">
+    @if (service().port) {
+      <code class="service-port">:{{ service().port }}</code>
+    }
+  </div>
+
+  <div class="service-actions">
+    <!-- Start -->
+    <button
+      class="action-btn action-start"
+      [disabled]="anyActionRunning() || isRunningState()"
+      (click)="start()"
+      matTooltip="Start"
+    >
+      @if (isStarting()) {
+        <mat-spinner diameter="14"></mat-spinner>
+      } @else {
+        <mat-icon>play_arrow</mat-icon>
+      }
+    </button>
+
+    <!-- Stop -->
+    <button
+      class="action-btn action-stop"
+      [disabled]="anyActionRunning() || !isRunningState()"
+      (click)="stop()"
+      matTooltip="Stop"
+    >
+      @if (isStopping()) {
+        <mat-spinner diameter="14"></mat-spinner>
+      } @else {
+        <mat-icon>stop</mat-icon>
+      }
+    </button>
+
+    <!-- Build & Restart -->
+    <button
+      class="action-btn"
+      [disabled]="anyActionRunning()"
+      (click)="buildAndRestart()"
+      matTooltip="Build & Restart"
+    >
+      @if (isRestarting()) {
+        <mat-spinner diameter="14"></mat-spinner>
+      } @else {
+        <mat-icon>refresh</mat-icon>
+      }
+    </button>
+
+    <!-- Open in Browser (only if service has a browserUrl) -->
+    @if (service().browserUrl) {
+      <button
+        class="action-btn"
+        [disabled]="state() !== 'running'"
+        (click)="openInBrowser()"
+        matTooltip="Open in Browser"
+      >
+        <mat-icon>open_in_new</mat-icon>
+      </button>
+    }
+
+    <!-- Logs -->
+    <button class="action-btn" (click)="viewLogs()" matTooltip="Logs">
+      <mat-icon>article</mat-icon>
+    </button>
+  </div>
+</div>

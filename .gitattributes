@@ -1,0 +1,27 @@
+# Ensure consistent line endings across all projects
+
+# Scripts should use Unix line endings
+*.sh text eol=lf
+gradlew text eol=lf
+**/gradlew text eol=lf
+
+# Windows batch files should use Windows line endings  
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files should not be processed
+*.jar binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+
+# Large files that should use LFS (if you add LFS later)
+# *.jar filter=lfs diff=lfs merge=lfs -text
+# *.zip filter=lfs diff=lfs merge=lfs -text

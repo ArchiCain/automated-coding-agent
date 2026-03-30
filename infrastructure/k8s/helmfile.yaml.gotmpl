@@ -1,0 +1,332 @@
+repositories:
+  - name: traefik
+    url: https://traefik.github.io/charts
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+
+environments:
+  mac-mini:
+    values:
+      - environments/mac-mini.yaml
+  dev:
+    values:
+      - environments/dev.yaml
+  prod:
+    values:
+      - environments/prod.yaml
+
+---
+
+releases:
+  # ===================================================================
+  # Cluster Services
+  # ===================================================================
+
+  # In-cluster container registry. Used instead of ECR/GHCR because for a
+  # single-node K3s setup there is no benefit to a managed registry — the only
+  # consumer is on the same node. Eliminates external dependencies and cost.
+  # To switch to ECR/GHCR later, just change the REGISTRY env var.
+  - name: registry
+    namespace: registry
+    chart: charts/registry
+    createNamespace: true
+    values:
+      - persistence:
+          enabled: {{ .Values | get "persistence" true }}
+          size: {{ env "REGISTRY_VOLUME_SIZE" | default "20Gi" }}
+
+  # CoreDNS for resolving service hostnames (*.mac-mini) via Tailscale Split DNS.
+  # All tailnet devices resolve app.mac-mini, api.mac-mini, etc. without /etc/hosts.
+  - name: dns
+    namespace: dns
+    chart: charts/dns
+    createNamespace: true
+    values:
+      - domain: {{ env "DNS_DOMAIN" | default "mac-mini" }}
+        tailscaleIP: {{ env "TAILSCALE_IP" | default "127.0.0.1" }}
+
+  - name: traefik
+    namespace: traefik
+    chart: traefik/traefik
+    version: "34.3.0"
+    createNamespace: true
+    values:
+      - ports:
+          web:
+            port: 8000
+            exposedPort: 80
+          websecure:
+            port: 8443
+            exposedPort: 443
+        ingressRoute:
+          dashboard:
+            enabled: {{ env "TRAEFIK_DASHBOARD" | default "false" }}
+        logs:
+          general:
+            level: {{ env "TRAEFIK_LOG_LEVEL" | default "INFO" }}
+
+  # ===================================================================
+  # Application Services (namespace: app)
+  # ===================================================================
+
+  - name: database
+    namespace: {{ env "NAMESPACE" | default "app" }}
+    chart: ../../projects/application/database/chart
+    createNamespace: true
+    values:
+      - image:
+          repository: {{ env "DATABASE_IMAGE" | default "pgvector/pgvector" }}
+          tag: {{ env "DATABASE_IMAGE_TAG" | default "pg16" }}
+        env:
+          POSTGRES_DB: {{ env "DATABASE_NAME" | default "postgres" }}
+          POSTGRES_USER: {{ env "DATABASE_USERNAME" | default "postgres" }}
+          POSTGRES_PASSWORD: {{ requiredEnv "DATABASE_PASSWORD" }}
+        persistence:
+          enabled: {{ .Values | get "persistence" true }}
+          size: {{ env "DATABASE_VOLUME_SIZE" | default "10Gi" }}
+        resources:
+          requests:
+            memory: {{ env "DATABASE_MEMORY_REQUEST" | default "256Mi" }}
+            cpu: {{ env "DATABASE_CPU_REQUEST" | default "100m" }}
+          limits:
+            memory: {{ env "DATABASE_MEMORY_LIMIT" | default "512Mi" }}
+            cpu: {{ env "DATABASE_CPU_LIMIT" | default "500m" }}
+
+  - name: backend
+    namespace: {{ env "NAMESPACE" | default "app" }}
+    chart: ../../projects/application/backend/chart
+    needs:
+      - {{ env "NAMESPACE" | default "app" }}/database
+    values:
+      - image:
+          repository: {{ env "BACKEND_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/backend") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        replicas: {{ env "BACKEND_REPLICAS" | default "1" }}
+        ingress:
+          enabled: true
+          host: {{ env "BACKEND_HOST" | default "api.localhost" }}
+          tls: {{ .Values | get "ingressTLS" false }}
+        env:
+          NODE_ENV: {{ env "NODE_ENV" | default "production" }}
+          PORT: {{ env "K8S_SERVICE_PORT" | default "8080" }}
+          SERVICE_NAME: {{ env "BACKEND_SERVICE_NAME" | default "backend" }}
+          DATABASE_HOST: {{ env "DATABASE_HOST" | default "database" }}
+          DATABASE_PORT: {{ env "DATABASE_K8S_PORT" | default "5432" }}
+          DATABASE_NAME: {{ env "DATABASE_NAME" | default "postgres" }}
+          DATABASE_USERNAME: {{ env "DATABASE_USERNAME" | default "postgres" }}
+          DATABASE_SSL: {{ env "DATABASE_SSL" | default "false" }}
+          KEYCLOAK_REALM: {{ env "KEYCLOAK_REALM" | default "application" }}
+          KEYCLOAK_CLIENT_ID: {{ env "KEYCLOAK_CLIENT_ID" | default "backend-service" }}
+          CORS_ORIGINS: {{ env "CORS_ORIGINS" | default "*" }}
+        secretEnv:
+          DATABASE_PASSWORD: {{ requiredEnv "DATABASE_PASSWORD" }}
+          KEYCLOAK_CLIENT_SECRET: {{ env "KEYCLOAK_CLIENT_SECRET" | default "backend-service-secret" }}
+          OPENAI_API_KEY: {{ env "OPENAI_API_KEY" | default "" }}
+          ANTHROPIC_API_KEY: {{ env "ANTHROPIC_API_KEY" | default "" }}
+          GOOGLE_GENERATIVE_AI_API_KEY: {{ env "GOOGLE_GENERATIVE_AI_API_KEY" | default "" }}
+        resources:
+          requests:
+            memory: {{ env "BACKEND_MEMORY_REQUEST" | default "256Mi" }}
+            cpu: {{ env "BACKEND_CPU_REQUEST" | default "100m" }}
+          limits:
+            memory: {{ env "BACKEND_MEMORY_LIMIT" | default "512Mi" }}
+            cpu: {{ env "BACKEND_CPU_LIMIT" | default "500m" }}
+
+  - name: keycloak
+    namespace: {{ env "NAMESPACE" | default "app" }}
+    chart: ../../projects/application/keycloak/chart
+    needs:
+      - {{ env "NAMESPACE" | default "app" }}/database
+    values:
+      - image:
+          repository: {{ env "KEYCLOAK_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/keycloak") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        ingress:
+          enabled: true
+          host: {{ env "KEYCLOAK_HOST" | default "auth.localhost" }}
+          tls: {{ .Values | get "ingressTLS" false }}
+        env:
+          KC_DB: {{ env "KC_DB" | default "postgres" }}
+          KC_DB_URL: {{ env "KC_DB_URL" | default (print "jdbc:postgresql://" (env "DATABASE_HOST" | default "database") ":" (env "DATABASE_K8S_PORT" | default "5432") "/" (env "DATABASE_NAME" | default "postgres") "?sslmode=disable") }}
+          KC_DB_SCHEMA: {{ env "KC_DB_SCHEMA" | default "keycloak" }}
+          KC_DB_USERNAME: {{ env "DATABASE_USERNAME" | default "postgres" }}
+          KC_REALM: {{ env "KEYCLOAK_REALM" | default "application" }}
+          KC_CLIENT_ID: {{ env "KEYCLOAK_CLIENT_ID" | default "backend-service" }}
+          KC_LOG_LEVEL: {{ env "KC_LOG_LEVEL" | default "INFO" }}
+          KC_TRANSACTION_XA_ENABLED: {{ env "KC_TRANSACTION_XA_ENABLED" | default "false" }}
+          KC_IMPORT_OVERWRITE: {{ env "KC_IMPORT_OVERWRITE" | default "true" }}
+          KEYCLOAK_ADMIN: {{ env "KEYCLOAK_ADMIN" | default "admin" }}
+        secretEnv:
+          KC_DB_PASSWORD: {{ requiredEnv "DATABASE_PASSWORD" }}
+          KEYCLOAK_ADMIN_PASSWORD: {{ requiredEnv "KEYCLOAK_ADMIN_PASSWORD" }}
+          KEYCLOAK_CLIENT_SECRET: {{ env "KEYCLOAK_CLIENT_SECRET" | default "backend-service-secret" }}
+        resources:
+          requests:
+            memory: {{ env "KEYCLOAK_MEMORY_REQUEST" | default "512Mi" }}
+            cpu: {{ env "KEYCLOAK_CPU_REQUEST" | default "200m" }}
+          limits:
+            memory: {{ env "KEYCLOAK_MEMORY_LIMIT" | default "1Gi" }}
+            cpu: {{ env "KEYCLOAK_CPU_LIMIT" | default "1000m" }}
+
+  - name: frontend
+    namespace: {{ env "NAMESPACE" | default "app" }}
+    chart: ../../projects/application/frontend/chart
+    needs:
+      - {{ env "NAMESPACE" | default "app" }}/backend
+      - {{ env "NAMESPACE" | default "app" }}/keycloak
+    values:
+      - image:
+          repository: {{ env "FRONTEND_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/frontend") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        replicas: {{ env "FRONTEND_REPLICAS" | default "1" }}
+        ingress:
+          enabled: true
+          host: {{ env "FRONTEND_HOST" | default "app.localhost" }}
+          tls: {{ .Values | get "ingressTLS" false }}
+        apiProxy:
+          enabled: true
+          backendService: {{ env "FRONTEND_API_PROXY_SERVICE" | default "backend" }}
+          backendPort: {{ env "FRONTEND_API_PROXY_PORT" | default "8080" }}
+        resources:
+          requests:
+            memory: {{ env "FRONTEND_MEMORY_REQUEST" | default "128Mi" }}
+            cpu: {{ env "FRONTEND_CPU_REQUEST" | default "50m" }}
+          limits:
+            memory: {{ env "FRONTEND_MEMORY_LIMIT" | default "256Mi" }}
+            cpu: {{ env "FRONTEND_CPU_LIMIT" | default "200m" }}
+
+  # ===================================================================
+  # Documentation (namespace: app)
+  # ===================================================================
+
+  - name: docs
+    namespace: {{ env "NAMESPACE" | default "app" }}
+    chart: ../../projects/docs/chart
+    createNamespace: true
+    values:
+      - image:
+          repository: {{ env "DOCS_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/docs") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        ingress:
+          enabled: true
+          host: {{ env "DOCS_HOST" | default "docs.localhost" }}
+          tls: {{ .Values | get "ingressTLS" false }}
+        resources:
+          requests:
+            memory: {{ env "DOCS_MEMORY_REQUEST" | default "64Mi" }}
+            cpu: {{ env "DOCS_CPU_REQUEST" | default "25m" }}
+          limits:
+            memory: {{ env "DOCS_MEMORY_LIMIT" | default "128Mi" }}
+            cpu: {{ env "DOCS_CPU_LIMIT" | default "100m" }}
+
+  # ===================================================================
+  # Coding Agent Services (namespace: coding-agent)
+  # ===================================================================
+
+  - name: coding-agent-backend
+    namespace: {{ env "CODING_AGENT_NAMESPACE" | default "coding-agent" }}
+    chart: ../../projects/coding-agent/backend/chart
+    createNamespace: true
+    values:
+      - image:
+          repository: {{ env "CODING_AGENT_BACKEND_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/coding-agent-backend") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        ingress:
+          enabled: true
+          host: {{ env "CODING_AGENT_BACKEND_HOST" | default "agent-api.localhost" }}
+          tls: {{ .Values | get "ingressTLS" false }}
+        env:
+          NODE_ENV: {{ env "NODE_ENV" | default "production" }}
+          PORT: {{ env "K8S_SERVICE_PORT" | default "8080" }}
+          SERVICE_NAME: {{ env "CODING_AGENT_BACKEND_SERVICE_NAME" | default "coding-agent-backend" }}
+          CODING_AGENT_CORS_ORIGINS: {{ env "CODING_AGENT_CORS_ORIGINS" | default "*" }}
+          CODING_AGENT_WORKSPACE_ROOT: {{ env "CODING_AGENT_WORKSPACE_ROOT" | default "/workspace" }}
+          REPO_ROOT: {{ env "REPO_ROOT" | default "/workspace" }}
+        secretEnv:
+          ANTHROPIC_API_KEY: {{ env "ANTHROPIC_API_KEY" | default "" }}
+          CLAUDE_CODE_OAUTH_TOKEN: {{ env "CLAUDE_CODE_OAUTH_TOKEN" | default "" }}
+          GITHUB_TOKEN: {{ env "GITHUB_TOKEN" | default "" }}
+        workspace:
+          enabled: true
+          size: {{ env "CODING_AGENT_WORKSPACE_SIZE" | default "50Gi" }}
+        resources:
+          requests:
+            memory: {{ env "CODING_AGENT_BACKEND_MEMORY_REQUEST" | default "512Mi" }}
+            cpu: {{ env "CODING_AGENT_BACKEND_CPU_REQUEST" | default "200m" }}
+          limits:
+            memory: {{ env "CODING_AGENT_BACKEND_MEMORY_LIMIT" | default "2Gi" }}
+            cpu: {{ env "CODING_AGENT_BACKEND_CPU_LIMIT" | default "2000m" }}
+
+  - name: coding-agent-frontend
+    namespace: {{ env "CODING_AGENT_NAMESPACE" | default "coding-agent" }}
+    chart: ../../projects/coding-agent/frontend/chart
+    needs:
+      - {{ env "CODING_AGENT_NAMESPACE" | default "coding-agent" }}/coding-agent-backend
+    values:
+      - image:
+          repository: {{ env "CODING_AGENT_FRONTEND_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/coding-agent-frontend") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        ingress:
+          enabled: true
+          host: {{ env "CODING_AGENT_FRONTEND_HOST" | default "agent.localhost" }}
+          tls: {{ .Values | get "ingressTLS" false }}
+        apiProxy:
+          enabled: true
+          backendService: {{ env "CODING_AGENT_FRONTEND_API_PROXY_SERVICE" | default "coding-agent-backend" }}
+          backendPort: {{ env "CODING_AGENT_FRONTEND_API_PROXY_PORT" | default "8080" }}
+        runtimeConfig:
+          enabled: true
+          apiUrl: {{ env "CODING_AGENT_FRONTEND_API_URL" | default "" }}
+          wsUrl: {{ env "CODING_AGENT_FRONTEND_WS_URL" | default "" }}
+          environment: {{ env "NODE_ENV" | default "production" }}
+        resources:
+          requests:
+            memory: {{ env "CODING_AGENT_FRONTEND_MEMORY_REQUEST" | default "128Mi" }}
+            cpu: {{ env "CODING_AGENT_FRONTEND_CPU_REQUEST" | default "50m" }}
+          limits:
+            memory: {{ env "CODING_AGENT_FRONTEND_MEMORY_LIMIT" | default "256Mi" }}
+            cpu: {{ env "CODING_AGENT_FRONTEND_CPU_LIMIT" | default "200m" }}
+
+  # ===================================================================
+  # OpenClaw Gateway (namespace: openclaw)
+  # ===================================================================
+
+  - name: openclaw-gateway
+    namespace: {{ env "OPENCLAW_NAMESPACE" | default "openclaw" }}
+    chart: ../../projects/openclaw/chart
+    installed: {{ ne .Environment.Name "prod" }}
+    createNamespace: true
+    values:
+      - image:
+          repository: {{ env "OPENCLAW_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/openclaw-gateway") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        ingress:
+          enabled: true
+          host: {{ env "OPENCLAW_HOST" | default "openclaw.localhost" }}
+          tls: {{ .Values | get "ingressTLS" false }}
+        env:
+          NODE_ENV: {{ env "NODE_ENV" | default "production" }}
+          # App service URLs for E2E testing (K8s DNS)
+          E2E_FRONTEND_URL: http://frontend.app.svc.cluster.local:8080
+          E2E_BACKEND_URL: http://backend.app.svc.cluster.local:8080
+          E2E_KEYCLOAK_URL: http://keycloak.app.svc.cluster.local:8080
+          # Also available via Traefik ingress hostnames
+          FRONTEND_HOST: {{ env "FRONTEND_HOST" | default "app.mac-mini" }}
+          BACKEND_HOST: {{ env "BACKEND_HOST" | default "api.mac-mini" }}
+          KEYCLOAK_HOST: {{ env "KEYCLOAK_HOST" | default "auth.mac-mini" }}
+        secretEnv:
+          ANTHROPIC_API_KEY: {{ env "ANTHROPIC_API_KEY" | default "" }}
+          CLAUDE_CODE_OAUTH_TOKEN: {{ env "CLAUDE_CODE_OAUTH_TOKEN" | default "" }}
+          GITHUB_TOKEN: {{ env "GITHUB_TOKEN" | default "" }}
+          OPENCLAW_WEBHOOK_SECRET: {{ env "OPENCLAW_WEBHOOK_SECRET" | default "" }}
+          OPENCLAW_AUTH_TOKEN: {{ env "OPENCLAW_AUTH_TOKEN" | default "" }}
+        workspace:
+          enabled: true
+          size: {{ env "OPENCLAW_WORKSPACE_SIZE" | default "50Gi" }}
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"

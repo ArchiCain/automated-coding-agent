@@ -1,0 +1,42 @@
+version: '3'
+
+tasks:
+  # Local Development Tasks
+  local:start:
+    desc: Start Keycloak service
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml up -d keycloak
+
+  local:stop:
+    desc: Stop Keycloak service
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml stop keycloak
+
+  local:restart:
+    desc: Restart Keycloak service (rebuild and restart)
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml stop keycloak
+      - docker compose -f infrastructure/docker/compose.yml up --build -d keycloak
+      - echo "Keycloak service restarted"
+
+  local:logs:
+    desc: View Keycloak logs
+    dir: '{{.TASKFILE_DIR}}/../..'
+    cmds:
+      - docker compose -f infrastructure/docker/compose.yml logs -f keycloak
+
+  local:export-realm:
+    desc: Export current realm configuration
+    cmds:
+      - docker exec ${COMPOSE_PROJECT_NAME:-projects}-keycloak /opt/keycloak/bin/kc.sh export --file /tmp/realm-export.json --realm application
+      - docker cp ${COMPOSE_PROJECT_NAME:-projects}-keycloak:/tmp/realm-export.json ./projects/keycloak/app/realm-config/realm-export.json
+      - echo "Realm configuration exported to ./projects/keycloak/app/realm-config/realm-export.json"
+
+  local:import-realm:
+    desc: Force reimport realm configuration
+    cmds:
+      - docker restart ${COMPOSE_PROJECT_NAME:-projects}-keycloak
+      - echo "Restarted Keycloak to reimport realm configuration"

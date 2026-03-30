@@ -1,0 +1,9 @@
+apiVersion: v2
+name: dns
+description: >
+  CoreDNS instance for resolving service hostnames (e.g., *.mac-mini) to the
+  node's Tailscale IP. Used with Tailscale Split DNS so all tailnet devices
+  can reach services by hostname without /etc/hosts entries.
+type: application
+version: 0.1.0
+appVersion: "1.12"

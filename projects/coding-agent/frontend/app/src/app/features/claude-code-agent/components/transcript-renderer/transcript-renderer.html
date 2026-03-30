@@ -1,0 +1,79 @@
+<div class="transcript">
+  @for (item of items(); track item.id) {
+    <div class="transcript-item" [class]="'type-' + item.type">
+      @switch (item.type) {
+        @case ('system-init') {
+          <div class="system-init">
+            <mat-icon>play_circle</mat-icon>
+            <span>{{ item.content }}</span>
+          </div>
+        }
+
+        @case ('assistant-text') {
+          <div class="assistant-text">
+            <div class="text-content">{{ item.content }}</div>
+          </div>
+        }
+
+        @case ('tool-use') {
+          <div class="tool-use" [class.expanded]="item.expanded">
+            <button
+              class="tool-header"
+              (click)="toggleExpand(item)"
+              [class.has-details]="hasDetails(item)"
+            >
+              <mat-icon class="tool-icon">{{ getToolIcon(item.toolName) }}</mat-icon>
+              <span class="tool-name">{{ item.content }}</span>
+              @if (hasDetails(item)) {
+                <mat-icon class="expand-icon">
+                  {{ item.expanded ? 'expand_less' : 'expand_more' }}
+                </mat-icon>
+              }
+            </button>
+            @if (item.expanded && item.details) {
+              <div class="tool-details">
+                <pre>{{ item.details }}</pre>
+              </div>
+            }
+          </div>
+        }
+
+        @case ('tool-result') {
+          <div class="tool-result" [class.expanded]="item.expanded">
+            <button
+              class="result-header"
+              (click)="toggleExpand(item)"
+              [class.has-details]="hasDetails(item)"
+            >
+              <mat-icon class="result-icon">output</mat-icon>
+              <span class="result-preview">{{ item.content }}</span>
+              @if (hasDetails(item)) {
+                <mat-icon class="expand-icon">
+                  {{ item.expanded ? 'expand_less' : 'expand_more' }}
+                </mat-icon>
+              }
+            </button>
+            @if (item.expanded && item.details) {
+              <div class="result-details">
+                <pre>{{ item.details }}</pre>
+              </div>
+            }
+          </div>
+        }
+
+        @case ('user-text') {
+          <div class="user-text">
+            <mat-icon>person</mat-icon>
+            <span>{{ item.content }}</span>
+          </div>
+        }
+
+        @default {
+          <div class="unknown">
+            <span>{{ item.content }}</span>
+          </div>
+        }
+      }
+    </div>
+  }
+</div>

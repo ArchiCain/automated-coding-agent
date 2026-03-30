@@ -1,0 +1,213 @@
+version: '3'
+
+dotenv: ['.env']
+
+includes:
+  backend: ./projects/application/backend/Taskfile.yml
+  frontend: ./projects/application/frontend/Taskfile.yml
+  database: ./projects/application/database/Taskfile.yml
+  keycloak: ./projects/application/keycloak/Taskfile.yml
+  e2e: ./projects/application/e2e/Taskfile.yml
+  coding-agent-backend: ./projects/coding-agent/backend/Taskfile.yml
+  coding-agent-frontend: ./projects/coding-agent/frontend/Taskfile.yml
+  openclaw: ./projects/openclaw/Taskfile.yml
+  docs: ./projects/docs/Taskfile.yml
+  infra:
+    taskfile: ./infrastructure/Taskfile.yml
+    dir: ./infrastructure
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # ===================================================================
+  # Local Development (Docker Compose) — delegates to infra:docker:*
+  # ===================================================================
+
+  start-local:
+    desc: Start all local services (database, backend, keycloak, frontend, pgweb)
+    cmds:
+      - task: infra:docker:start
+
+  start-local:build:
+    desc: Start all local services with rebuild
+    cmds:
+      - task: infra:docker:start:build
+
+  stop-local:
+    desc: Stop all local services gracefully
+    cmds:
+      - task: infra:docker:stop
+
+  purge-local:
+    desc: Complete teardown of all local services (removes volumes)
+    cmds:
+      - task: infra:docker:purge
+
+  purge-and-restart-local:
+    desc: Complete teardown and fresh restart of all services
+    cmds:
+      - task: infra:docker:purge-and-restart
+
+  logs-local:
+    desc: Show logs from all services
+    cmds:
+      - task: infra:docker:logs
+
+  status:
+    desc: Check status of all services
+    cmds:
+      - task: infra:docker:status
+
+  # ===================================================================
+  # Testing
+  # ===================================================================
+
+  run-all-tests:
+    desc: Run complete test suite (unit + integration + e2e)
+    cmds:
+      - echo "Running complete test suite..."
+      - echo ""
+      - echo "Running backend unit tests..."
+      - task: backend:local:test
+      - echo ""
+      - echo "Running frontend unit tests..."
+      - task: frontend:local:test
+      - echo ""
+      - echo "Running backend integration tests..."
+      - task: backend:local:test:integration
+      - echo ""
+      - echo "Running frontend integration tests..."
+      - task: frontend:local:test:integration
+      - echo ""
+      - echo "Running e2e tests..."
+      - task: e2e:test
+      - echo ""
+      - echo "All tests passed!"
+
+  # ===================================================================
+  # Infrastructure — delegates to infra:terraform:*
+  # ===================================================================
+
+  infra:init:
+    desc: Initialize Terraform for K3s infrastructure
+    cmds:
+      - task: infra:terraform:init
+
+  infra:plan:
+    desc: Plan K3s infrastructure changes
+    cmds:
+      - task: infra:terraform:plan
+
+  infra:apply:
+    desc: Apply K3s infrastructure (creates EC2 + K3s)
+    cmds:
+      - task: infra:terraform:apply
+
+  infra:destroy:
+    desc: Destroy K3s infrastructure
+    cmds:
+      - task: infra:terraform:destroy
+
+  infra:output:
+    desc: Show K3s infrastructure outputs (IP, URLs)
+    cmds:
+      - task: infra:terraform:output
+
+  # ===================================================================
+  # Build & Push (Container Images)
+  # ===================================================================
+  # Images are pushed to an in-cluster registry running on the K3s node.
+  # This is used instead of ECR/GHCR because for a single-node K3s setup
+  # there is no practical benefit to a managed registry — the only image
+  # consumer is on the same node. To switch to ECR/GHCR later, just
+  # change the REGISTRY env var.
+
+  build:all:
+    desc: Build and push all service images
+    cmds:
+      - task: build:backend
+      - task: build:frontend
+      - task: build:keycloak
+      - task: build:coding-agent-backend
+      - task: build:coding-agent-frontend
+      - task: build:openclaw
+      - task: build:docs
+
+  build:backend:
+    desc: Build and push backend image
+    cmds:
+      - docker build -t ${REGISTRY:-localhost:30500}/backend:${IMAGE_TAG:-latest} -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend
+      - docker push ${REGISTRY:-localhost:30500}/backend:${IMAGE_TAG:-latest}
+
+  build:frontend:
+    desc: Build and push frontend image
+    cmds:
+      - docker build -t ${REGISTRY:-localhost:30500}/frontend:${IMAGE_TAG:-latest} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend
+      - docker push ${REGISTRY:-localhost:30500}/frontend:${IMAGE_TAG:-latest}
+
+  build:keycloak:
+    desc: Build and push keycloak image
+    cmds:
+      - docker build -t ${REGISTRY:-localhost:30500}/keycloak:${IMAGE_TAG:-latest} -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak
+      - docker push ${REGISTRY:-localhost:30500}/keycloak:${IMAGE_TAG:-latest}
+
+  build:coding-agent-backend:
+    desc: Build and push coding-agent-backend image
+    cmds:
+      - docker build -t ${REGISTRY:-localhost:30500}/coding-agent-backend:${IMAGE_TAG:-latest} -f projects/coding-agent/backend/dockerfiles/prod.Dockerfile projects/coding-agent/backend
+      - docker push ${REGISTRY:-localhost:30500}/coding-agent-backend:${IMAGE_TAG:-latest}
+
+  build:coding-agent-frontend:
+    desc: Build and push coding-agent-frontend image
+    cmds:
+      - docker build -t ${REGISTRY:-localhost:30500}/coding-agent-frontend:${IMAGE_TAG:-latest} -f projects/coding-agent/frontend/dockerfiles/prod.Dockerfile projects/coding-agent/frontend
+      - docker push ${REGISTRY:-localhost:30500}/coding-agent-frontend:${IMAGE_TAG:-latest}
+
+  build:openclaw:
+    desc: Build and push openclaw-gateway image
+    cmds:
+      - docker build -t ${REGISTRY:-localhost:30500}/openclaw-gateway:${IMAGE_TAG:-latest} -f projects/openclaw/dockerfiles/prod.Dockerfile projects/openclaw
+      - docker push ${REGISTRY:-localhost:30500}/openclaw-gateway:${IMAGE_TAG:-latest}
+
+  build:docs:
+    desc: Build and push docs image
+    cmds:
+      - docker build -t ${REGISTRY:-localhost:30500}/docs:${IMAGE_TAG:-latest} -f projects/docs/dockerfiles/prod.Dockerfile projects/docs
+      - docker push ${REGISTRY:-localhost:30500}/docs:${IMAGE_TAG:-latest}
+
+  # ===================================================================
+  # Deployment — delegates to infra:k8s:*
+  # ===================================================================
+
+  deploy:diff:
+    desc: Show what would change in the cluster
+    cmds:
+      - task: infra:k8s:diff
+
+  deploy:apply:
+    desc: Deploy all services to the cluster
+    cmds:
+      - task: infra:k8s:apply
+
+  deploy:sync:
+    desc: Sync all services (force apply without diff)
+    cmds:
+      - task: infra:k8s:sync
+
+  deploy:destroy:
+    desc: Remove all deployed services from the cluster
+    cmds:
+      - task: infra:k8s:destroy
+
+  deploy:status:
+    desc: Show deployed release status
+    cmds:
+      - task: infra:k8s:status
+
+  deploy:logs:
+    desc: Show logs for a service (usage - task deploy:logs -- backend)
+    cmds:
+      - task: infra:k8s:logs

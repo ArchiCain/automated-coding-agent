@@ -1,0 +1,74 @@
+<!-- Agent panels (one per page agent, only the open one is rendered) -->
+@for (agent of pageAgents(); track agent.slug) {
+  @if (openAgentSlug() === agent.slug) {
+    <app-chatbot-panel
+      #agentPanel
+      class="panel-full-height"
+      [scope]="getScopeForAgent(agent)"
+      [resumedSessionId]="getResumedSessionId(agent.slug)"
+      [resumedTranscript]="getResumedTranscript(agent.slug)"
+      (minimize)="onAgentMinimize()"
+      (viewDocument)="onViewDocument($event)"
+      (sessionCreated)="onAgentSessionCreated(agent.slug, $event)"
+      (newSession)="onAgentNewSession(agent.slug)"
+    />
+  }
+}
+
+<!-- Agent test panel -->
+@if (agentTest.isActive() && agentTestPanelOpen()) {
+  <app-chatbot-panel
+    class="panel-full-height panel-agent-test"
+    [scope]="agentTest.testScope()!"
+    (minimize)="onAgentTestMinimize()"
+    (viewDocument)="onViewDocument($event)"
+    (sessionCreated)="onAgentTestSessionCreated($event)"
+  />
+}
+
+<!-- Bubble row -->
+<div class="bubble-row">
+  <!-- Agent test bubble -->
+  @if (agentTest.isActive()) {
+    <div class="agent-bubble-wrapper">
+      <button
+        mat-mini-fab
+        class="agent-bubble agent-test-bubble"
+        matTooltip="Agent Test"
+        matTooltipPosition="left"
+        (click)="toggleAgentTestPanel()"
+      >
+        <mat-icon>science</mat-icon>
+      </button>
+      <button
+        class="dismiss-btn"
+        (click)="dismissAgentTest(); $event.stopPropagation()"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  }
+
+  <!-- Page agent bubbles (rightmost = last in array, but row-reverse makes first rendered = rightmost) -->
+  @for (agent of pageAgents(); track agent.slug) {
+    <button
+      mat-mini-fab
+      class="agent-bubble"
+      [class.active]="openAgentSlug() === agent.slug"
+      [style.background]="agent.color || '#7c4dff'"
+      [matTooltip]="agent.name"
+      matTooltipPosition="left"
+      (click)="toggleAgentPanel(agent.slug)"
+    >
+      <mat-icon>{{ agent.icon || 'smart_toy' }}</mat-icon>
+    </button>
+  }
+</div>
+
+<app-slide-over
+  [title]="slideOverTitle()"
+  [content]="slideOverContent()"
+  [loading]="slideOverLoading()"
+  [isOpen]="slideOverOpen()"
+  (closed)="onSlideOverClosed()"
+/>

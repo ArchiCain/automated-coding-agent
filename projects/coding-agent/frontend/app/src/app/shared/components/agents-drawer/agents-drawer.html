@@ -1,0 +1,526 @@
+@if (isOpen) {
+  <div class="agents-drawer-backdrop" (click)="onBackdropClick()"></div>
+  <div class="agents-drawer">
+    <!-- List View -->
+    @if (viewMode() === 'list') {
+      <div class="drawer-header">
+        <div class="header-left">
+          <div class="header-title">
+            <mat-icon>smart_toy</mat-icon>
+            <span>Agent Sessions</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button mat-flat-button color="primary" class="new-session-btn" (click)="startNewSession()">
+            <mat-icon>add</mat-icon>
+            New Session
+          </button>
+          <button mat-icon-button (click)="close()" aria-label="Close sessions panel">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="drawer-tabs">
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'active'"
+          (click)="setActiveTab('active')"
+        >
+          Active
+          @if (activeSessions().length > 0) {
+            <span class="tab-badge active-badge">{{ activeSessions().length }}</span>
+          }
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'inactive'"
+          (click)="setActiveTab('inactive')"
+        >
+          Inactive
+          @if (inactiveSessions().length > 0) {
+            <span class="tab-badge">{{ inactiveSessions().length }}</span>
+          }
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'definitions'"
+          (click)="setActiveTab('definitions')"
+        >
+          Agents
+          @if (definitions().length > 0) {
+            <span class="tab-badge">{{ definitions().length }}</span>
+          }
+        </button>
+      </div>
+
+      <div class="drawer-content">
+        @if (loading()) {
+          <div class="loading-container">
+            <mat-spinner diameter="32"></mat-spinner>
+          </div>
+        } @else {
+          <!-- Active Sessions Tab -->
+          @if (activeTab() === 'active') {
+            @if (activeSessions().length > 0) {
+              <div class="sessions-list">
+                @for (session of activeSessions(); track session.sessionId) {
+                  <div
+                    class="session-card"
+                    [class.processing]="isProcessing(session.sessionId)"
+                    [class.waiting]="!isProcessing(session.sessionId)"
+                    (click)="viewSession(session)"
+                  >
+                    <div class="session-card-main">
+                      <div class="session-card-header">
+                        <div class="session-id-row">
+                          <div class="session-status-indicator">
+                            @if (isProcessing(session.sessionId)) {
+                              <mat-spinner diameter="16" class="running-spinner"></mat-spinner>
+                            } @else {
+                              <mat-icon class="waiting-icon">chat_bubble</mat-icon>
+                            }
+                          </div>
+                          <span class="session-title">{{ session.title || session.agentName || 'Session ' + session.sessionId.slice(0, 8) }}</span>
+                        </div>
+                        <span class="session-duration">{{ durations()[session.sessionId] }}</span>
+                      </div>
+                      @if (session.agentName) {
+                        <div class="session-agent-badge">{{ session.agentName }}</div>
+                      }
+                      <div class="session-cwd">{{ truncateCwd(session.cwd, 40) }}</div>
+                      <div class="session-card-footer">
+                        @if (!isProcessing(session.sessionId)) {
+                          <span class="session-status-label waiting">Waiting for input</span>
+                        } @else {
+                          <span class="session-status-label processing">Processing...</span>
+                        }
+                        <button
+                          mat-icon-button
+                          class="stop-btn"
+                          (click)="endSession(session, $event)"
+                          [disabled]="endingSession() === session.sessionId"
+                          aria-label="Stop session"
+                          title="Stop session"
+                        >
+                          @if (endingSession() === session.sessionId) {
+                            <mat-spinner diameter="14"></mat-spinner>
+                          } @else {
+                            <mat-icon>stop</mat-icon>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="empty-state">
+                <mat-icon>play_circle_outline</mat-icon>
+                <p class="empty-title">No active sessions</p>
+                <p class="empty-hint">Start a new session to begin working with an agent</p>
+                <button mat-stroked-button color="primary" (click)="startNewSession()">
+                  <mat-icon>add</mat-icon>
+                  Start Session
+                </button>
+              </div>
+            }
+          }
+
+          <!-- Inactive Sessions Tab -->
+          @if (activeTab() === 'inactive') {
+            @if (inactiveSessions().length > 0) {
+              <div class="sessions-list">
+                @for (session of inactiveSessions(); track session.sessionId) {
+                  <div
+                    class="session-card inactive"
+                    [class]="'status-' + session.status"
+                    (click)="viewSession(session)"
+                  >
+                    <div class="session-card-main">
+                      <div class="session-card-header">
+                        <div class="session-id-row">
+                          <div class="session-status-indicator">
+                            <mat-icon class="status-icon" [class]="'status-' + session.status">
+                              {{ getStatusIcon(session.status) }}
+                            </mat-icon>
+                          </div>
+                          <span class="session-title">{{ session.title || session.agentName || 'Session ' + session.sessionId.slice(0, 8) }}</span>
+                        </div>
+                        <span class="session-time">{{ formatTimeAgo(session.completedAt || session.lastActivityAt) }}</span>
+                      </div>
+                      @if (session.agentName) {
+                        <div class="session-agent-badge">{{ session.agentName }}</div>
+                      }
+                      <div class="session-cwd">{{ truncateCwd(session.cwd, 40) }}</div>
+                      <div class="session-card-footer">
+                        <span class="session-status-label" [class]="'status-' + session.status">
+                          {{ session.status }}
+                        </span>
+                        @if (session.status === 'paused') {
+                          <button
+                            mat-stroked-button
+                            color="primary"
+                            class="resume-btn"
+                            (click)="resumeSession(session, $event)"
+                            title="Resume session"
+                          >
+                            <mat-icon>play_arrow</mat-icon>
+                            Resume
+                          </button>
+                        } @else {
+                          <button
+                            mat-stroked-button
+                            class="view-btn"
+                            (click)="viewSession(session)"
+                            title="View session"
+                          >
+                            <mat-icon>visibility</mat-icon>
+                            View
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="empty-state">
+                <mat-icon>history</mat-icon>
+                <p class="empty-title">No session history</p>
+                <p class="empty-hint">Completed and paused sessions will appear here</p>
+              </div>
+            }
+          }
+
+          <!-- Agent Definitions Tab -->
+          @if (activeTab() === 'definitions') {
+            @if (definitionsLoading()) {
+              <div class="loading-container">
+                <mat-spinner diameter="32"></mat-spinner>
+              </div>
+            } @else if (definitions().length > 0) {
+              <div class="definitions-list">
+                @for (definition of definitions(); track definition.id) {
+                  <div class="definition-card" (click)="viewDefinition(definition)">
+                    <div class="definition-card-header">
+                      <div class="definition-icon">
+                        <mat-icon>{{ definition.icon }}</mat-icon>
+                      </div>
+                      <div class="definition-header-info">
+                        <div class="definition-name">{{ definition.name }}</div>
+                        <span class="definition-type-badge">{{ definition.category }}</span>
+                      </div>
+                    </div>
+                    <div class="definition-description">{{ definition.description }}</div>
+                    @if (definition.promptFile || definition.contextFiles.length > 0) {
+                      <div class="definition-files-row" (click)="$event.stopPropagation()">
+                        @if (definition.promptFile) {
+                          <button class="def-file-chip prompt" (click)="viewFileFromList(definition.promptFile, $event)">
+                            <mat-icon>description</mat-icon>
+                            <span>{{ getFileName(definition.promptFile) }}</span>
+                          </button>
+                        }
+                        @for (file of definition.contextFiles; track file) {
+                          <button class="def-file-chip" (click)="viewFileFromList(file, $event)">
+                            <mat-icon>insert_drive_file</mat-icon>
+                            <span>{{ getFileName(file) }}</span>
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="empty-state">
+                <mat-icon>extension</mat-icon>
+                <p class="empty-title">No agent definitions</p>
+                <p class="empty-hint">Agent definitions are loaded from .agents/definitions/</p>
+              </div>
+            }
+          }
+        }
+      </div>
+    }
+
+    <!-- Session Detail View -->
+    @if (viewMode() === 'session') {
+      <div class="drawer-header">
+        <div class="header-left">
+          <button mat-icon-button (click)="backToList()" aria-label="Back to sessions">
+            <mat-icon>arrow_back</mat-icon>
+          </button>
+          <div class="header-title">
+            @if (selectedSession(); as session) {
+              <span class="session-id-title">{{ session.sessionId.slice(0, 8) }}</span>
+              <span class="session-status-chip" [class]="'status-' + session.status">
+                {{ session.status }}
+              </span>
+            }
+          </div>
+        </div>
+        <div class="header-actions">
+          @if (selectedSession()?.status === 'active' && processingTurn()) {
+            <button mat-stroked-button (click)="stopSelectedSession()" class="stop-session-btn">
+              <mat-icon>stop</mat-icon>
+              Stop
+            </button>
+          }
+          <button mat-icon-button (click)="close()" aria-label="Close sessions panel">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="session-view">
+        @if (sessionLoading()) {
+          <div class="loading-container">
+            <mat-spinner diameter="32"></mat-spinner>
+          </div>
+        } @else {
+          <!-- Output Area -->
+          <div class="output-container" #outputContainer>
+            @if (sessionError()) {
+              <div class="error-banner">
+                <mat-icon>error</mat-icon>
+                <span>{{ sessionError() }}</span>
+              </div>
+            }
+            @for (line of sessionOutput(); track $index) {
+              <pre class="output-line">{{ line }}</pre>
+            } @empty {
+              <div class="empty-output">
+                <mat-icon>terminal</mat-icon>
+                <p>No output yet</p>
+              </div>
+            }
+          </div>
+
+          <!-- Chat Input -->
+          @if (selectedSession()?.status === 'active' || selectedSession()?.status === 'paused') {
+            <div class="chat-input-area">
+              <textarea
+                #chatInputEl
+                class="chat-input"
+                placeholder="Type a message..."
+                [ngModel]="chatInput()"
+                (ngModelChange)="chatInput.set($event)"
+                (keydown)="onInputKeydown($event)"
+                [disabled]="processingTurn()"
+                rows="2"
+              ></textarea>
+              <button
+                mat-flat-button
+                color="primary"
+                class="send-btn"
+                (click)="sendMessage()"
+                [disabled]="!chatInput().trim() || processingTurn()"
+              >
+                @if (processingTurn()) {
+                  <mat-spinner diameter="18"></mat-spinner>
+                } @else {
+                  <mat-icon>send</mat-icon>
+                }
+              </button>
+            </div>
+          } @else {
+            <div class="session-ended-bar">
+              <span>Session {{ selectedSession()?.status }}</span>
+            </div>
+          }
+        }
+      </div>
+    }
+
+    <!-- Agent Definition Detail View -->
+    @if (viewMode() === 'definition') {
+      <div class="drawer-header">
+        <div class="header-left">
+          <button mat-icon-button (click)="backFromDefinition()" aria-label="Back to agents">
+            <mat-icon>arrow_back</mat-icon>
+          </button>
+          <div class="header-title">
+            @if (selectedDefinition(); as def) {
+              <mat-icon>{{ def.icon }}</mat-icon>
+              <span>{{ def.name }}</span>
+            }
+          </div>
+        </div>
+        <div class="header-actions">
+          @if (definitionSession() && definitionProcessing()) {
+            <button mat-stroked-button (click)="stopDefinitionSession()" class="stop-session-btn">
+              <mat-icon>stop</mat-icon>
+              Stop
+            </button>
+          }
+          <button mat-icon-button (click)="close()" aria-label="Close">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="definition-session-view">
+        @if (selectedDefinition(); as def) {
+          <!-- Collapsible Info Section -->
+          <div class="definition-info-section" [class.collapsed]="infoCollapsed()">
+            <button class="info-toggle" (click)="toggleInfoSection()">
+              <mat-icon>{{ infoCollapsed() ? 'expand_more' : 'expand_less' }}</mat-icon>
+              <span>{{ def.name }} - {{ def.description }}</span>
+            </button>
+            @if (!infoCollapsed()) {
+              <div class="info-content">
+                <div class="definition-meta-row">
+                  @if (def.promptFile) {
+                    <button class="file-chip prompt-chip" (click)="viewDefinitionFile('prompt', def.promptFile)">
+                      <mat-icon>description</mat-icon>
+                      <span>{{ getFileName(def.promptFile) }}</span>
+                    </button>
+                  }
+                  @for (file of def.contextFiles; track file) {
+                    <button class="file-chip" (click)="viewDefinitionFile('context', file)">
+                      <mat-icon>insert_drive_file</mat-icon>
+                      <span>{{ getFileName(file) }}</span>
+                    </button>
+                  }
+                  <span class="category-badge">{{ def.category }}</span>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Terminal Wrapper - Centers the terminal box -->
+          <div class="terminal-wrapper">
+            <!-- Terminal Box - The "black box" agent container -->
+            <div class="terminal-box">
+              <!-- Terminal Output Area -->
+              <div class="terminal-output-container" #outputContainer>
+                @if (sessionError()) {
+                  <div class="error-banner">
+                    <mat-icon>error</mat-icon>
+                    <span>{{ sessionError() }}</span>
+                  </div>
+                }
+                @if (!definitionSession() && !definitionProcessing()) {
+                  <!-- Pre-session state -->
+                  <div class="pre-session-state">
+                    <div class="agent-icon">
+                      <mat-icon>{{ def.icon }}</mat-icon>
+                    </div>
+                    <h3>{{ def.name }}</h3>
+                    <p>{{ def.instructions || 'Start a conversation to begin.' }}</p>
+                  </div>
+                } @else {
+                  @for (line of sessionOutput(); track $index) {
+                    <pre class="output-line">{{ line }}</pre>
+                  } @empty {
+                    <div class="empty-output">
+                      <mat-spinner diameter="24"></mat-spinner>
+                      <p>Starting session...</p>
+                    </div>
+                  }
+                }
+              </div>
+
+              <!-- Terminal Input Area - Attached to terminal -->
+              <div class="terminal-input-area">
+                <!-- Attachment buttons -->
+                <div class="attach-buttons">
+                  <button
+                    class="attach-btn"
+                    (click)="fileInput.click()"
+                    [disabled]="definitionProcessing()"
+                    title="Attach file"
+                  >
+                    <mat-icon>attach_file</mat-icon>
+                  </button>
+                  <button
+                    class="attach-btn"
+                    (click)="imageInput.click()"
+                    [disabled]="definitionProcessing()"
+                    title="Attach image"
+                  >
+                    <mat-icon>image</mat-icon>
+                  </button>
+                </div>
+
+                <!-- Hidden file inputs -->
+                <input
+                  type="file"
+                  #fileInput
+                  class="hidden-input"
+                  multiple
+                  (change)="onFileSelect($event, 'file')"
+                />
+                <input
+                  type="file"
+                  #imageInput
+                  class="hidden-input"
+                  accept="image/*"
+                  multiple
+                  (change)="onFileSelect($event, 'image')"
+                />
+
+                <!-- Text input -->
+                <textarea
+                  #defChatInputEl
+                  class="terminal-input"
+                  [placeholder]="definitionSession() ? 'Type a message...' : 'Type to start a session...'"
+                  [ngModel]="definitionChatInput()"
+                  (ngModelChange)="definitionChatInput.set($event)"
+                  (keydown)="onDefinitionInputKeydown($event)"
+                  [disabled]="definitionProcessing()"
+                  rows="1"
+                ></textarea>
+
+                <!-- Send button -->
+                <button
+                  class="terminal-send-btn"
+                  (click)="sendDefinitionMessage()"
+                  [disabled]="!definitionChatInput().trim() || definitionProcessing()"
+                >
+                  @if (definitionProcessing()) {
+                    <mat-spinner diameter="18"></mat-spinner>
+                  } @else {
+                    <mat-icon>{{ definitionSession() ? 'send' : 'play_arrow' }}</mat-icon>
+                  }
+                </button>
+              </div>
+            </div>
+
+            <!-- Status bar below terminal -->
+            @if (definitionSession()) {
+              <div class="terminal-status-bar">
+                <div>
+                  @if (definitionProcessing()) {
+                    <span class="status-label processing">Processing...</span>
+                  } @else {
+                    <span class="status-label waiting">Waiting for input</span>
+                  }
+                </div>
+                <div>
+                  @if (definitionProcessing()) {
+                    <button class="stop-session-btn" (click)="stopDefinitionSession()">
+                      <mat-icon>stop</mat-icon>
+                      Stop
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
+
+<!-- File Slide Over (renders outside drawer, overlays everything) -->
+<app-file-slide-over
+  [isOpen]="viewingFile() !== null"
+  [fileName]="viewingFile()?.path ? getFileName(viewingFile()!.path) : ''"
+  [content]="definitionFileContent() || ''"
+  [loading]="definitionFileLoading()"
+  (closed)="closeFileView()"
+></app-file-slide-over>

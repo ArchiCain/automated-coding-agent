@@ -1,0 +1,110 @@
+<!-- Slide-over for viewing task files -->
+<app-slide-over
+  [isOpen]="!!viewingTask()"
+  [title]="viewingTask()?.name + ' - task.md'"
+  [content]="documentContent()"
+  [loading]="documentLoading()"
+  (closed)="closeDocumentView()"
+></app-slide-over>
+
+<div class="decomposition-page">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-content">
+      <div class="header-title">
+        <mat-icon class="header-icon">construction</mat-icon>
+        <h1>Feature to Concerns</h1>
+      </div>
+      <p class="header-description">
+        Select a feature task to decompose into implementation concerns
+      </p>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="page-content">
+    @if (loading()) {
+      <div class="loading-state">
+        <mat-spinner diameter="40"></mat-spinner>
+        <span>Loading feature tasks...</span>
+      </div>
+    } @else if (error()) {
+      <div class="error-state">
+        <mat-icon>error</mat-icon>
+        <span>{{ error() }}</span>
+        <button mat-stroked-button (click)="loadTasks()">Retry</button>
+      </div>
+    } @else if (tasks().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">
+          <mat-icon>folder_open</mat-icon>
+        </div>
+        <h2>No feature tasks available</h2>
+        <p>Decompose a project into features first using "Project to Features", then come back here to break them into concerns.</p>
+      </div>
+    } @else {
+      <div class="tasks-grid">
+        @for (task of tasks(); track trackByTaskId($index, task)) {
+          <div
+            class="task-card"
+            [class.opening]="openingTaskId() === task.id"
+            [class.decomposed]="task.hasBeenDecomposed"
+          >
+            <div class="task-card-header">
+              <mat-icon class="status-circle">radio_button_unchecked</mat-icon>
+              <span class="task-name">{{ task.name }}</span>
+            </div>
+
+            <div class="task-meta">
+              <span class="plan-badge">{{ task.planId }}</span>
+            </div>
+
+            <div class="card-meta">
+              <button class="file-pill" (click)="viewTaskFile(task)">
+                <mat-icon>description</mat-icon>
+                <span>task.md</span>
+              </button>
+            </div>
+
+            <div class="card-divider"></div>
+
+            <div class="task-card-footer">
+              <div class="ready-toggle">
+                <mat-slide-toggle
+                  [checked]="isTaskReady(task)"
+                  [disabled]="task.hasBeenDecomposed"
+                  (change)="toggleTaskReady(task, $event.checked)"
+                ></mat-slide-toggle>
+                <span class="ready-label">Ready</span>
+              </div>
+              @if (task.hasBeenDecomposed && task.childCount > 0) {
+                <!-- Concerns are the lowest level - show count but no further decomposition -->
+                <button
+                  mat-stroked-button
+                  class="tasks-btn"
+                  disabled
+                >
+                  View Concerns
+                </button>
+              } @else {
+                <button
+                  mat-stroked-button
+                  class="decomp-btn"
+                  [disabled]="openingTaskId() === task.id"
+                  (click)="openTask(task)"
+                >
+                  @if (openingTaskId() === task.id) {
+                    <mat-spinner diameter="16" class="btn-spinner"></mat-spinner>
+                  } @else {
+                    <mat-icon>call_split</mat-icon>
+                  }
+                  Decomp
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

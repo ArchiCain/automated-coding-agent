@@ -1,0 +1,126 @@
+.feature-detail-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.loading-state,
+.error-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 40px;
+  justify-content: center;
+  color: #666;
+}
+
+.error-state {
+  color: #f44336;
+}
+
+// Feature Header
+.feature-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+
+  h1 {
+    font-size: 24px;
+    font-weight: 500;
+    margin: 0;
+    color: #333;
+  }
+}
+
+.readme-link {
+  font-size: 11px;
+  color: #7c4dff;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// File Tree
+.file-tree {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 8px 0;
+  overflow: hidden;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+
+  &.active {
+    background: #e8eaf6;
+  }
+}
+
+.expand-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #999;
+  transition: transform 0.15s ease;
+
+  &.expanded {
+    transform: rotate(90deg);
+  }
+}
+
+.node-name {
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.file-name {
+  font-family: 'SF Mono', 'Consolas', monospace;
+  color: #555;
+}
+
+.file-row:hover .file-name {
+  color: #1976d2;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  color: #999;
+
+  mat-icon {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 8px;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}

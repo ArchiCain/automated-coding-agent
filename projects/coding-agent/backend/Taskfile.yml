@@ -1,0 +1,126 @@
+version: '3'
+
+tasks:
+  # Local Development Tasks (HOST execution - no Docker)
+  local:install:
+    desc: Install dependencies
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - echo "Installing dependencies..."
+      - npm install
+      - echo "Dependencies installed"
+
+  local:start:
+    desc: Start Coding Agent Backend locally (on host)
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - echo "Starting Coding Agent Backend on host at http://localhost:${PORT:-8086}..."
+      - PORT=${PORT:-8086} npm run start:dev
+
+  local:start:debug:
+    desc: Start Coding Agent Backend with debug mode
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run start:debug
+
+  local:start:prod:
+    desc: Start Coding Agent Backend in production mode
+    deps: [local:build]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run start:prod
+
+  local:build:
+    desc: Build the application
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run build
+
+  # Testing Tasks
+  local:test:
+    desc: Run unit tests
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm test
+
+  local:test:watch:
+    desc: Run tests in watch mode
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:watch
+
+  local:test:cov:
+    desc: Run tests with coverage
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:cov
+
+  local:test:integration:
+    desc: Run integration tests
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:integration
+
+  local:test:e2e:
+    desc: Run e2e tests
+    deps: [local:install]
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run test:e2e
+
+  # Code Quality Tasks
+  local:lint:
+    desc: Lint the code
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run lint
+
+  local:format:
+    desc: Format the code
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - npm run format
+
+  local:clean:
+    desc: Clean build artifacts and node_modules
+    dir: '{{.TASKFILE_DIR}}/app'
+    cmds:
+      - rm -rf dist node_modules
+
+  # Health Check
+  local:health:
+    desc: Test health endpoint
+    cmds:
+      - curl -f http://localhost:${CODING_AGENT_BACKEND_PORT:-1086}/health || echo "Health check failed"
+
+  # Remote Build & Deploy Tasks
+  # The Nix-based Dockerfile cannot be cross-compiled (arm64→amd64) due to QEMU seccomp
+  # limitations. These tasks build directly on the target K8s node via SSH.
+  # Requires: SSH access to K8S_NODE (e.g., K8S_NODE=mac-mini in .env)
+  remote:build:
+    desc: Build and push image on the remote K8s node
+    cmds:
+      - echo "Syncing project to ${K8S_NODE}..."
+      - rsync -av --exclude='node_modules' --exclude='dist' --exclude='.angular' {{.TASKFILE_DIR}}/ ${K8S_NODE}:/tmp/coding-agent-backend-build/
+      - echo "Building on ${K8S_NODE}..."
+      - ssh ${K8S_NODE} "sudo docker build -t localhost:30500/coding-agent-backend:${IMAGE_TAG:-latest} -f /tmp/coding-agent-backend-build/dockerfiles/prod.Dockerfile /tmp/coding-agent-backend-build/"
+      - echo "Pushing to registry..."
+      - ssh ${K8S_NODE} "sudo docker push localhost:30500/coding-agent-backend:${IMAGE_TAG:-latest}"
+      - echo "Done. Image pushed to localhost:30500/coding-agent-backend:${IMAGE_TAG:-latest}"
+
+  remote:deploy:
+    desc: Build, push, and deploy to K8s (full remote deploy)
+    cmds:
+      - task: remote:build
+      - echo "Deploying with helmfile..."
+      - cd {{.TASKFILE_DIR}}/../../.. && set -a && source .env && source .env.mac-mini && set +a && cd infrastructure/k8s && helmfile -e mac-mini -l name=coding-agent-backend apply
+      - kubectl rollout restart deployment/coding-agent-backend -n ${NAMESPACE:-app}
+      - kubectl rollout status deployment/coding-agent-backend -n ${NAMESPACE:-app} --timeout=120s
+      - echo "Deploy complete."

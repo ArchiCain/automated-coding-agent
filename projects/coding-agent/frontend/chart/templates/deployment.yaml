@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Release.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          {{- if .Values.env }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+          {{- end }}
+          {{- if or .Values.apiProxy.enabled .Values.runtimeConfig.enabled }}
+          volumeMounts:
+            {{- if .Values.apiProxy.enabled }}
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+            {{- end }}
+            {{- if .Values.runtimeConfig.enabled }}
+            - name: runtime-config
+              mountPath: /usr/share/nginx/html/assets/config.json
+              subPath: config.json
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.healthCheck.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.healthCheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthCheck.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.healthCheck.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if or .Values.apiProxy.enabled .Values.runtimeConfig.enabled }}
+      volumes:
+        {{- if .Values.apiProxy.enabled }}
+        - name: nginx-config
+          configMap:
+            name: {{ .Release.Name }}-nginx
+        {{- end }}
+        {{- if .Values.runtimeConfig.enabled }}
+        - name: runtime-config
+          configMap:
+            name: {{ .Release.Name }}-runtime-config
+        {{- end }}
+      {{- end }}
