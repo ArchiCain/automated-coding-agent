@@ -18,7 +18,6 @@
         devShells.default = pkgs.mkShell {
           buildInputs = [
             pkgs.nodejs_20
-            pkgs.nodejs_20.pkgs.npm
             pkgs.git
             pkgs.gh
             pkgs.docker-client
