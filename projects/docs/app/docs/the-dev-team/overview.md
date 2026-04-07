@@ -41,7 +41,7 @@ The outcome is a system where you can tell it "add a user profile page" and come
                                                 └─────────────┘
                                │
                        ┌───────▼────────┐
-                       │   Dashboard    │  ← projects/the-dev-team-dashboard
+                       │   Dashboard    │  ← projects/coding-agent/dashboard
                        │   (React+MUI)  │
                        └────────────────┘
 ```
@@ -51,6 +51,8 @@ The outcome is a system where you can tell it "add a user profile page" and come
 - Each task gets a **sandbox namespace** (`env-{task-id}`) deployed from the `full-stack` umbrella Helm chart.
 - Every session, event, and gate result is written to `.the-dev-team/history/` as JSONL.
 - The **dashboard** reads REST + WebSocket from the orchestrator for live visibility.
+
+Everything runs in Kubernetes — Minikube locally, K3s in production. The orchestrator and dashboard are deployed to the `coding-agent` namespace; sandbox environments get their own `env-{task-id}` namespaces.
 
 ## The nine roles
 
@@ -117,19 +119,19 @@ See [Safety Model](safety-model.md).
 ## Where things live on disk
 
 ```
-skills/                           ← Prompts (soul + SKILL.md files)
+skills/                           <- Prompts (soul + SKILL.md files)
 .the-dev-team/
 ├── config/
-│   └── the-dev-team.config.yml   ← Role-to-provider mapping, budgets
-├── state/                        ← Per-task working memory (ephemeral)
+│   └── the-dev-team.config.yml   <- Role-to-provider mapping, budgets
+├── state/                        <- Per-task working memory (ephemeral)
 │   └── {task-id}/
-├── history/                      ← Append-only record (synced to git)
+├── history/                      <- Append-only record (synced to git)
 │   ├── sessions/
 │   ├── tasks/
 │   ├── orchestrator/
 │   └── index.jsonl
 └── baselines/
-    └── performance.json          ← Baseline metrics for the performance gate
+    └── performance.json          <- Baseline metrics for the performance gate
 ```
 
 ## Where to go next

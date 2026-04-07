@@ -2,27 +2,26 @@
 
 ## Deployment stack
 
+Everything runs in Kubernetes — Minikube for local development, K3s for production. The same Helm charts and Helmfile configuration deploy to both, differing only in environment variables.
+
 ```
-Terraform ──→ EC2 / Mac Mini running K3s (production)
+Terraform ──> EC2 / Mac Mini running K3s (production)
                     │
                     │  Minikube (local development)
                     │
-Helmfile ──→ Helm charts ──→ Kubernetes cluster
+Helmfile ──> Helm charts ──> Kubernetes cluster
                     │
       ┌─────┬───────┼─────────────────┐
       │     │       │                 │
   Traefik  Registry  App services  THE Dev Team
-  (ingress)(images)  (app ns)      (the-dev-team ns + env-* sandboxes)
+  (ingress)(images)  (app ns)      (coding-agent ns + env-* sandboxes)
 ```
 
-- **Minikube** is the **primary local K8s target**. Everything runs in Kubernetes from day one, so local and production share the same topology (charts, namespaces, ingress). Use `task minikube:start` to get a cluster. See [Kubernetes](kubernetes.md).
-- **Docker Compose** is **deprecated** but retained as a fallback for environments that can't run Minikube (older machines, CI runners without virtualisation). See [Docker Compose](docker-compose.md).
+- **Minikube** is the local K8s target. Everything runs in Kubernetes from day one, so local and production share the same topology (charts, namespaces, ingress). Use `task up` to get a cluster with everything deployed.
 - **Terraform** provisions the production server — a single host running Ubuntu + K3s.
 - **Helmfile** orchestrates all Kubernetes resources via Helm charts.
 - **In-cluster Docker registry** stores container images at `localhost:30500` in both Minikube and K3s.
 - **Traefik** handles ingress routing (installed via Helm, not K3s's bundled version).
-
-The same Helmfile config deploys to any K3s or Minikube cluster, differing only in environment variables.
 
 ## The agent sandbox environment pattern
 
@@ -33,7 +32,7 @@ Two Helm charts support this:
 | Chart | Path | Purpose |
 |-------|------|---------|
 | `full-stack` | `infrastructure/k8s/charts/full-stack/` | Umbrella chart that deploys backend + frontend + database + keycloak into one namespace. Used for both the main `app` namespace and every `env-*` sandbox. |
-| `the-dev-team` | `infrastructure/k8s/charts/the-dev-team/` | The orchestrator's own deployment — ServiceAccount, RBAC, Secret, Deployment, and the dashboard. |
+| `the-dev-team` | `infrastructure/k8s/charts/the-dev-team/` | The orchestrator's own deployment — ServiceAccount, RBAC, Secret, Deployment. |
 
 The full-stack chart has two values files: `sandbox.yaml` (minimal resources, used for `env-*`) and `production.yaml` (production-sized, used for `app`). One chart, two personalities.
 
@@ -62,22 +61,28 @@ infrastructure/
 │       ├── full-stack/           # Umbrella chart for sandbox envs
 │       └── the-dev-team/         # Orchestrator RBAC + Secrets
 ├── agent-envs/
-│   └── Taskfile.yml              # env:* commands (create, destroy, health, logs…)
+│   └── Taskfile.yml              # env:* commands (create, destroy, health, logs...)
 ├── history/
 │   └── Taskfile.yml              # history:* commands (search, sync, cleanup)
 ├── minikube/
-│   └── Taskfile.yml              # minikube:* commands (start, stop, tunnel…)
+│   └── Taskfile.yml              # minikube:* commands (start, stop, tunnel...)
 ├── docker/
 │   ├── compose.yml               # Deprecated local stack
 │   └── Taskfile.yml
 └── Taskfile.yml                  # Delegates to sub-Taskfiles
 ```
 
-Helm charts for the **application services** live with their projects (`projects/application/*/chart/`). Infrastructure-level and cross-cutting charts live in `infrastructure/k8s/charts/`.
+Helm charts for the **application services** live with their projects (`projects/application/*/chart/`). The dashboard chart lives at `projects/coding-agent/dashboard/chart/`. Infrastructure-level and cross-cutting charts live in `infrastructure/k8s/charts/`.
 
 ## Build & deploy workflow
 
 ### 1. Start the cluster
+
+```bash
+task up                                # Minikube + build + deploy (all-in-one)
+```
+
+Or step by step:
 
 ```bash
 task minikube:start                    # Local K8s with ingress + registry addons
@@ -96,10 +101,10 @@ Images push to the in-cluster registry at `$REGISTRY` (defaults to `localhost:30
 ### 3. Deploy to the cluster
 
 ```bash
-DEPLOY_ENV=local task deploy:apply     # Deploy all services (application + the-dev-team)
+task deploy:apply                      # Deploy all services (application + coding-agent)
 task deploy:diff                       # Preview changes
 task deploy:status                     # Check pods across namespaces
-task deploy:logs -- backend            # Tail logs
+task logs -- backend                   # Tail logs
 ```
 
 ### 4. Create an agent sandbox
@@ -115,7 +120,7 @@ task env:destroy -- my-test            # Tear down
 | Environment | How secrets are managed |
 |-------------|------------------------|
 | Local dev | `.env` file (loaded by Taskfile's `dotenv`) |
-| K8s | Helm creates K8s Secrets from `secretEnv` values |
+| K8s | Helm creates K8s Secrets from `secretEnv` values; `task setup-secrets` for first-time setup |
 | CI/CD | GitHub Actions secrets map to the same env vars |
 | Agent pod | Dedicated `the-dev-team-agent-secrets` Secret with only Anthropic + GitHub credentials |
 

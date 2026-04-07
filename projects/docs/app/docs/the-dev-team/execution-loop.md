@@ -92,7 +92,7 @@ Build and unit tests run **before** deployment to fail fast on cheap checks. Onl
 - Run `performance` gate
 ```
 
-`task.touchesFrontend` is determined from the changed files (anything under `projects/application/frontend/` or `projects/the-dev-team-dashboard/`). It drives whether the designer runs and whether the three frontend-specific gates are in the sequence.
+`task.touchesFrontend` is determined from the changed files (anything under `projects/application/frontend/` or `projects/coding-agent/dashboard/`). It drives whether the designer runs and whether the three frontend-specific gates are in the sequence.
 
 ## Phase 5 — Review + Fix
 

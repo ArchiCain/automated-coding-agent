@@ -4,16 +4,16 @@ All deployable services live under `projects/`, organised into three groups with
 
 ```
 projects/
-├── application/                 # Main product (K8s namespace: app)
-│   ├── backend/                 # NestJS API
-│   ├── frontend/                # React SPA
-│   ├── database/                # PostgreSQL + pgvector
-│   ├── keycloak/                # Auth service
-│   └── e2e/                     # Playwright tests
-├── coding-agent/                # THE Dev Team orchestrator (K8s namespace: the-dev-team)
-│   └── backend/                 # NestJS orchestrator
-├── the-dev-team-dashboard/      # Observability dashboard (K8s namespace: the-dev-team)
-└── docs/                        # This documentation site
+├── application/         # Main product (K8s namespace: app)
+│   ├── backend/
+│   ├── frontend/
+│   ├── database/
+│   ├── keycloak/
+│   └── e2e/
+├── coding-agent/        # THE Dev Team (K8s namespace: coding-agent)
+│   ├── backend/         # Orchestrator
+│   └── dashboard/       # Observability dashboard
+└── docs/                # Documentation site
 ```
 
 Each project follows a consistent layout:
@@ -43,15 +43,15 @@ When a task runs, THE Dev Team deploys an entire copy of this stack into an ephe
 
 ## THE Dev Team
 
-The autonomous development system: an orchestrator, a dashboard, and a shared skills library. Deployed to the `the-dev-team` K8s namespace.
+The autonomous development system: an orchestrator, a dashboard, and a shared skills library. Both services are deployed to the `coding-agent` K8s namespace.
 
 | Project | Stack | Purpose |
 |---------|-------|---------|
 | [Orchestrator](coding-agent/backend.md) | NestJS 11 + Claude Code SDK | Task intake, agent pool, execution loop, validation gates, PR management |
-| [Dashboard](the-dev-team-dashboard.md) | React 19 + Vite + MUI 6 | Real-time observability into agents, tasks, environments, history |
+| [Dashboard](coding-agent/dashboard.md) | React 19 + Vite + MUI 6 | Real-time observability into agents, tasks, environments, history |
 | [Task State & History](coding-agent/backlog.md) | File-based + git | Per-task state, findings, session transcripts, searchable archive |
 
-The orchestrator lives in `projects/coding-agent/backend/` for historical reasons — the directory name predates the THE Dev Team rename. The runtime data directory is `.the-dev-team/` at the repo root, and the shared skills library is at `skills/`.
+The orchestrator and dashboard both live under `projects/coding-agent/`. The runtime data directory is `.the-dev-team/` at the repo root, and the shared skills library is at `skills/`.
 
 Read the [THE Dev Team Overview](../the-dev-team/overview.md) for the mental model before diving into individual services.
 

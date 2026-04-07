@@ -183,4 +183,4 @@ Tune the retention window by changing the cron argument in `scheduler.service.ts
 - [Orchestrator](backend.md)
 - [Execution Loop](../../the-dev-team/execution-loop.md)
 - [Validation Gates](../../the-dev-team/validation-gates.md)
-- [Dashboard](../the-dev-team-dashboard.md)
+- [Dashboard](dashboard.md)

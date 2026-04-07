@@ -20,21 +20,21 @@ tasks:
   local:start:
     desc: Start the dashboard locally in Docker
     deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
       - docker compose -f infrastructure/docker/compose.yml up --build -d dashboard
       - echo "Dashboard started at http://localhost:${DASHBOARD_PORT:-3002}"
 
   local:stop:
     desc: Stop the dashboard locally
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
       - docker compose -f infrastructure/docker/compose.yml stop dashboard
 
   local:restart:
     desc: Restart the dashboard locally (rebuild and start)
     deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
       - docker compose -f infrastructure/docker/compose.yml stop dashboard
       - docker compose -f infrastructure/docker/compose.yml up --build -d dashboard
@@ -42,7 +42,7 @@ tasks:
 
   local:logs:
     desc: Show dashboard logs
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
       - docker compose -f infrastructure/docker/compose.yml logs -f dashboard
 
@@ -59,7 +59,7 @@ tasks:
 
   local:shell:
     desc: Get a shell inside the running dashboard container
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
       - docker compose -f infrastructure/docker/compose.yml exec dashboard sh
 

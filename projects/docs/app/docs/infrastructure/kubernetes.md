@@ -4,7 +4,7 @@ All K8s resources are orchestrated by Helmfile. Each service has a Helm chart co
 
 ## Local cluster: Minikube
 
-Minikube is the **primary local Kubernetes target** for this repo. Everything — the main application stack, THE Dev Team orchestrator, and all agent sandbox environments — runs in Minikube when developing locally. Docker Compose is a deprecated fallback.
+Minikube is the **primary local Kubernetes target** for this repo. Everything — the main application stack, THE Dev Team orchestrator and dashboard, and all agent sandbox environments — runs in Minikube when developing locally. The same Helm charts deploy to K3s in production.
 
 ### Starting Minikube
 
@@ -12,7 +12,7 @@ Minikube is the **primary local Kubernetes target** for this repo. Everything �
 task minikube:start          # Start with ingress + registry + metrics-server addons
 task minikube:stop           # Stop without deleting state
 task minikube:delete         # Destroy the cluster entirely
-task minikube:dashboard      # Open the Minikube web UI
+task minikube:dashboard      # Open the Kubernetes web UI
 task minikube:tunnel         # Start tunnel for LoadBalancer services
 ```
 
@@ -72,10 +72,10 @@ ingressClassName: traefik
 | keycloak | app | `projects/application/keycloak/chart` | Auth service |
 | frontend | app | `projects/application/frontend/chart` | React SPA |
 | docs | app | `projects/docs/chart` | Documentation site |
-| the-dev-team | the-dev-team | `infrastructure/k8s/charts/the-dev-team` | Orchestrator RBAC, Secrets, Deployment |
-| the-dev-team-dashboard | the-dev-team | `projects/the-dev-team-dashboard/chart` | Dashboard SPA |
+| coding-agent-backend | coding-agent | `projects/coding-agent/backend/chart` | Orchestrator: RBAC, Secrets, Deployment |
+| the-dev-team-dashboard | coding-agent | `projects/coding-agent/dashboard/chart` | Dashboard SPA |
 
-The `the-dev-team` chart is the **orchestrator's own deployment** (ServiceAccount, ClusterRole, secrets, Deployment). It's separate from the agent sandbox environments, which use the `full-stack` umbrella chart.
+The `coding-agent-backend` release is the **orchestrator's own deployment** (ServiceAccount, ClusterRole, secrets, Deployment). It's separate from the agent sandbox environments, which use the `full-stack` umbrella chart.
 
 ## Sandbox namespaces (`env-*`)
 

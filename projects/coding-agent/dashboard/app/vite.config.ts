@@ -4,8 +4,8 @@ import react from "@vitejs/plugin-react";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env vars from repo root (4 levels up from app/)
-  const repoRoot = resolve(__dirname, "../../../..");
+  // Load env vars from repo root (5 levels up: app/ -> dashboard/ -> coding-agent/ -> projects/ -> repo root)
+  const repoRoot = resolve(__dirname, "../../../../..");
   const env = loadEnv(mode, repoRoot, "");
 
   const port = parseInt(

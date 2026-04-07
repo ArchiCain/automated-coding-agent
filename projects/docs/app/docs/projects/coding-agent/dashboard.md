@@ -2,7 +2,7 @@
 
 Real-time observability for THE Dev Team. A React + Material-UI SPA that consumes the orchestrator's REST API and WebSocket gateway to show what every agent is doing, the state of every sandbox environment, and a searchable archive of every task the system has ever run.
 
-Source: `projects/the-dev-team-dashboard/`.
+Source: `projects/coding-agent/dashboard/`.
 
 ## Purpose
 
@@ -33,7 +33,7 @@ It is explicitly not user-facing: it assumes you already trust the network it ru
 The dashboard follows the feature-based architecture used across the repo. All code lives inside `app/src/features/`:
 
 ```
-projects/the-dev-team-dashboard/
+projects/coding-agent/dashboard/
 ├── app/
 │   ├── src/
 │   │   ├── main.tsx
@@ -56,7 +56,7 @@ projects/the-dev-team-dashboard/
 ├── dockerfiles/
 │   ├── local.Dockerfile
 │   └── prod.Dockerfile
-├── chart/                          # Helm chart (deployed to the-dev-team namespace)
+├── chart/                          # Helm chart (deployed to coding-agent namespace)
 └── Taskfile.yml
 ```
 
@@ -130,32 +130,22 @@ The socket auto-reconnects with exponential backoff. The connection indicator in
 ## Common tasks
 
 ```bash
-task the-dev-team-dashboard:local:start    # Vite dev server (default :5173)
-task the-dev-team-dashboard:local:build    # Production bundle
-task the-dev-team-dashboard:local:test     # Vitest unit tests
-task the-dev-team-dashboard:local:lint     # ESLint
-task the-dev-team-dashboard:remote:build   # Build Docker image (Minikube)
-task the-dev-team-dashboard:remote:deploy  # Helm release into the-dev-team namespace
+task dashboard:local:run       # Vite dev server
+task dashboard:local:build     # Production bundle
+task dashboard:local:test      # Vitest unit tests
+task dashboard:local:lint      # ESLint
 ```
 
 ## Access URLs
 
-The dashboard is routed via the cluster ingress and uses the repo-wide `DEV_HOSTNAME` pattern so it works both on localhost and on a Tailscale machine name.
+The dashboard is deployed to the `coding-agent` K8s namespace and routed via the cluster ingress.
 
-| `DEV_HOSTNAME` | Dashboard URL |
-|----------------|---------------|
-| `localhost` (default) | `http://dashboard.the-dev-team.localhost` |
-| `shawns-macbook` (Tailscale) | `http://dashboard.the-dev-team.shawns-macbook` |
-| `mac-mini` (production) | `http://dashboard.the-dev-team.mac-mini` |
+| Environment | Dashboard URL |
+|-------------|---------------|
+| Local (Minikube) | `http://dashboard.localhost` |
+| Production (Mac Mini) | `http://dashboard.mac-mini` |
 
-The orchestrator URL it connects to is derived the same way:
-
-| `DEV_HOSTNAME` | Orchestrator URL |
-|----------------|------------------|
-| `localhost` | `http://the-dev-team.localhost` |
-| `shawns-macbook` | `http://the-dev-team.shawns-macbook` |
-
-See [Networking](../infrastructure/networking.md) for the hostname mechanism.
+The orchestrator API is at `http://agent-api.localhost` (local) or `http://agent-api.mac-mini` (production).
 
 ## Related reading
 

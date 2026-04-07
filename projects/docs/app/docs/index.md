@@ -12,7 +12,7 @@ Three project groups share infrastructure, tooling, and deployment patterns:
 | **THE Dev Team** | Autonomous development system | Orchestrator (NestJS), Dashboard (React + MUI), shared `skills/` library |
 | **Docs** | This documentation site | MkDocs Material |
 
-All services run on Kubernetes from day one. **Minikube** is the primary local target; Docker Compose is kept as a deprecated fallback. Production runs K3s.
+All services run on Kubernetes from day one. **Minikube** is the local target; **K3s** is the production target. Same topology, same charts.
 
 ## THE Dev Team in one minute
 
@@ -20,13 +20,13 @@ Instead of a single-agent gateway, THE Dev Team is a role-based orchestrator:
 
 - A task arrives (REST, GitHub issue, or a decomposed plan)
 - The orchestrator assigns an **agent slot**, creates an isolated git worktree and a sandbox K8s namespace (`env-{task-id}`)
-- It runs a **7-phase execution loop** (setup → implement → build+deploy → test → review+fix → submit → cleanup)
+- It runs a **7-phase execution loop** (setup -> implement -> build+deploy -> test -> review+fix -> submit -> cleanup)
 - Along the way it dispatches work to nine specialised **roles** (architect, implementer, reviewer, tester, designer, bugfixer, documentarian, monitor, devops) using prompts assembled from `skills/soul.md` plus role-specific `SKILL.md` files
 - Every phase runs through **validation gates** (build, unit tests, deployment, integration, log audit, e2e, accessibility, design review, performance)
 - When all gates pass, the agent opens a PR with evidence (tests, screenshots, metrics)
 - A **human** merges — the agent never pushes to `main`
 
-The [Dashboard](projects/the-dev-team-dashboard.md) gives you live visibility into every active task. The [Task State & History](projects/coding-agent/backlog.md) system records every session as JSONL transcripts and markdown summaries, synced to a protected git branch.
+The [Dashboard](projects/coding-agent/dashboard.md) gives you live visibility into every active task. The [Task State & History](projects/coding-agent/backlog.md) system records every session as JSONL transcripts and markdown summaries, synced to a protected git branch.
 
 Start here: [THE Dev Team Overview](the-dev-team/overview.md).
 
@@ -41,30 +41,28 @@ direnv allow
 cp .env.template .env
 # Edit .env with your credentials
 
-# 3. Start the local K8s cluster
-task minikube:start
+# 3. Set up K8s secrets (first time only)
+task setup-secrets
 
-# 4. Build and deploy the full stack
-task build:all
-task deploy:apply
+# 4. Start everything (Minikube + build + deploy)
+task up
 
-# 5. Start the orchestrator and dashboard
-task coding-agent-backend:local:start
-task the-dev-team-dashboard:local:start
+# 5. In a separate terminal, enable ingress access
+task minikube:tunnel
 ```
 
-Default local URLs (with `DEV_HOSTNAME=localhost`):
+Default local URLs:
 
 | Service | URL |
 |---------|-----|
+| Dashboard | http://dashboard.localhost |
+| Orchestrator API | http://agent-api.localhost |
 | Application frontend | http://app.localhost |
 | Application API | http://api.localhost |
 | Keycloak | http://auth.localhost |
-| THE Dev Team orchestrator | http://the-dev-team.localhost |
-| THE Dev Team dashboard | http://dashboard.the-dev-team.localhost |
 | Docs | http://docs.localhost |
 
-See [Environment Setup](getting-started/environment-setup.md) for the `DEV_HOSTNAME` override (used for Tailscale hostnames).
+See [Environment Setup](getting-started/environment-setup.md) for the full `.env` reference.
 
 ## Repo structure
 
@@ -77,9 +75,9 @@ automated-coding-agent/
 │   │   ├── database/             # PostgreSQL + pgvector
 │   │   ├── keycloak/             # Auth service
 │   │   └── e2e/                  # Playwright tests
-│   ├── coding-agent/
-│   │   └── backend/              # THE Dev Team orchestrator (NestJS)
-│   ├── the-dev-team-dashboard/   # Observability dashboard (React + MUI)
+│   ├── coding-agent/             # THE Dev Team
+│   │   ├── backend/              # Orchestrator (NestJS)
+│   │   └── dashboard/            # Observability dashboard (React + MUI)
 │   └── docs/                     # This documentation site
 ├── skills/                       # soul.md + 10 role skills
 ├── .the-dev-team/                # Runtime state, history, baselines, config

@@ -21,7 +21,7 @@ The local development stack is defined in `infrastructure/docker/compose.yml`. I
 Services that have been **removed** from compose and moved to Kubernetes-only:
 
 - `openclaw-gateway` — removed entirely (OpenClaw has been replaced by THE Dev Team)
-- `coding-agent-frontend` — the Angular UI has been replaced by the React-based [THE Dev Team Dashboard](../projects/the-dev-team-dashboard.md), which only runs in K8s
+- `coding-agent-frontend` — the Angular UI has been replaced by the React-based [THE Dev Team Dashboard](../projects/coding-agent/dashboard.md), which only runs in K8s
 - Agent sandbox environments (`env-*`) — K8s-only by design
 
 The `coding-agent-backend` (THE Dev Team orchestrator) is still present in Compose for local development of the orchestrator itself, but it cannot create sandbox namespaces when running under Compose.

@@ -4,6 +4,12 @@ Every active task gets its own Kubernetes namespace with a full copy of the appl
 
 The naming pattern is `env-{task-id}`, and every sandbox is labelled `managed-by=the-dev-team` so the orchestrator can list, inspect, and clean up its own namespaces.
 
+## Execution mode
+
+The orchestrator's `executionMode` defaults to `sandbox`. In sandbox mode, every task gets its own `env-{task-id}` namespace with a full application stack deployed from the `full-stack` umbrella chart.
+
+The `EXECUTION_MODE` environment variable in the K8s deployment overrides the config file value. In the Helmfile configuration, this defaults to `sandbox`.
+
 ## Why namespace-per-task
 
 - **Isolation** — two tasks can't step on each other's data, ports, or migrations
@@ -17,16 +23,16 @@ All services are deployed together from a single Helm chart: `infrastructure/k8s
 
 ```
 infrastructure/k8s/charts/full-stack/
-├── Chart.yaml                 ← dependencies: backend, frontend, database, keycloak
-├── values.yaml                ← defaults
+├── Chart.yaml                 <- dependencies: backend, frontend, database, keycloak
+├── values.yaml                <- defaults
 ├── templates/
 │   ├── _helpers.tpl
-│   ├── ingress.yaml           ← api.*, app.*, auth.* per namespace
-│   ├── init-job.yaml          ← TypeORM migrations + seed
+│   ├── ingress.yaml           <- api.*, app.*, auth.* per namespace
+│   ├── init-job.yaml          <- TypeORM migrations + seed
 │   └── keycloak-realm-job.yaml
 └── values/
-    ├── sandbox.yaml           ← Minimal resources for agent sandboxes
-    └── production.yaml        ← Production values for the main `app` namespace
+    ├── sandbox.yaml           <- Minimal resources for agent sandboxes
+    └── production.yaml        <- Production values for the main `app` namespace
 ```
 
 Key values (`sandbox.yaml`):
@@ -148,10 +154,8 @@ Agents invoke these via the `infrastructure` skill — they are **not allowed** 
 Minikube is the primary local K8s target. See [Kubernetes](../infrastructure/kubernetes.md) and [Infrastructure Overview](../infrastructure/overview.md). Quickstart:
 
 ```bash
-task minikube:start                    # Starts Minikube with ingress + registry addons
-eval $(minikube docker-env)            # Point Docker CLI at Minikube's daemon
-task build:all                         # Build all service images into the cluster registry
-task deploy:apply                      # Deploy the full stack to the `app` namespace
+task up                                # Starts Minikube, builds, and deploys everything
+task minikube:tunnel                   # In a separate terminal
 task env:create -- manual-test         # Create an extra sandbox for poking around
 ```
 

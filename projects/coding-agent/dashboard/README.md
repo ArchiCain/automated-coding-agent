@@ -5,7 +5,7 @@ React + Vite dashboard providing real-time observability for THE Dev Team autono
 ## Project Structure
 
 ```
-projects/the-dev-team-dashboard/
+projects/coding-agent/dashboard/
 ├── app/
 │   ├── src/
 │   │   ├── main.tsx

@@ -31,7 +31,7 @@ nav:
       - E2E Tests: projects/application/e2e.md
     - THE Dev Team:
       - Orchestrator: projects/coding-agent/backend.md
-      - Dashboard: projects/the-dev-team-dashboard.md
+      - Dashboard: projects/coding-agent/dashboard.md
       - Task State & History: projects/coding-agent/backlog.md
 
   - THE Dev Team:
