@@ -1,0 +1,19 @@
+serviceAccount:
+  name: the-dev-team-agent
+  namespace: the-dev-team
+
+restrictedNamespaces:
+  - default
+  - kube-system
+  - kube-public
+  - the-dev-team
+  - app
+  - staging
+  - monitoring
+  - traefik
+  - registry
+
+agentSecrets:
+  # Override these via --set or a secrets file — never commit real values
+  anthropicApiKey: ""
+  githubToken: ""

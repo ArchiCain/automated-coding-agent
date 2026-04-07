@@ -1,3 +1,6 @@
+# NOTE: Production deploys to main should only happen via merged PRs.
+# This workflow intentionally targets the mac-mini branch only.
+# Direct pushes to main do not trigger deployment — use a PR workflow instead.
 name: Deploy to Mac Mini
 
 on:
@@ -113,26 +116,6 @@ jobs:
           docker push $REGISTRY/coding-agent-backend:$IMAGE_TAG
           docker push $REGISTRY/coding-agent-backend:latest
 
-      - name: Build and push coding-agent-frontend
-        run: |
-          docker build \
-            -t $REGISTRY/coding-agent-frontend:$IMAGE_TAG \
-            -t $REGISTRY/coding-agent-frontend:latest \
-            -f projects/coding-agent/frontend/dockerfiles/prod.Dockerfile \
-            projects/coding-agent/frontend
-          docker push $REGISTRY/coding-agent-frontend:$IMAGE_TAG
-          docker push $REGISTRY/coding-agent-frontend:latest
-
-      - name: Build and push openclaw-gateway
-        run: |
-          docker build \
-            -t $REGISTRY/openclaw-gateway:$IMAGE_TAG \
-            -t $REGISTRY/openclaw-gateway:latest \
-            -f projects/openclaw/dockerfiles/prod.Dockerfile \
-            projects/openclaw
-          docker push $REGISTRY/openclaw-gateway:$IMAGE_TAG
-          docker push $REGISTRY/openclaw-gateway:latest
-
       - name: Deploy with Helmfile
         working-directory: infrastructure/k8s
         run: |
@@ -145,8 +128,6 @@ jobs:
           kubectl rollout status deployment/frontend -n app --timeout=120s
           kubectl rollout status deployment/keycloak -n app --timeout=120s
           kubectl rollout status deployment/coding-agent-backend -n coding-agent --timeout=180s
-          kubectl rollout status deployment/coding-agent-frontend -n coding-agent --timeout=120s
-          kubectl rollout status deployment/openclaw-gateway -n openclaw --timeout=180s
           echo ""
           echo "=== App Namespace ==="
           kubectl get pods -n app
@@ -155,7 +136,3 @@ jobs:
           echo "=== Coding Agent Namespace ==="
           kubectl get pods -n coding-agent
           kubectl get ingress -n coding-agent
-          echo ""
-          echo "=== OpenClaw Namespace ==="
-          kubectl get pods -n openclaw
-          kubectl get ingress -n openclaw

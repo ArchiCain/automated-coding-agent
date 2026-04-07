@@ -1,0 +1,15 @@
+# Workflow and Actions files require explicit approval from repo owner
+/.github/workflows/    @scain
+/.github/actions/      @scain
+
+# Protect GitHub config-as-code files
+/.github/CODEOWNERS    @scain
+
+# Protect infrastructure provisioning
+/infrastructure/terraform/  @scain
+
+# Protect the orchestrator's own config
+/infrastructure/k8s/charts/the-dev-team/  @scain
+
+# Protect security configuration
+/.github/CODEOWNERS    @scain

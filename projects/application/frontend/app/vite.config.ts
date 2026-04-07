@@ -38,8 +38,9 @@ export default defineConfig({
     },
   },
   server: {
+    // Listen on all interfaces so Tailscale devices can reach the dev server
+    host: '0.0.0.0',
     port: parseInt(process.env.PORT || '3000'),
-    host: true,
     proxy: {
       // Health check endpoint for development
       '/health': {

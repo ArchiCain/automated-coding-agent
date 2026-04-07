@@ -1,26 +1,35 @@
 # Local Workflow
 
-Day-to-day development patterns. For how the Docker Compose stack is structured, see [Docker Compose](../infrastructure/docker-compose.md).
+Day-to-day development patterns for the two main workflows in this repo:
 
-## Starting the stack
+1. **Working on application code** — backend, frontend, database, keycloak, docs
+2. **Running THE Dev Team locally** — orchestrator + dashboard + sandbox environments
+
+Both run on Minikube. Docker Compose still exists as a deprecated fallback but does not support agent sandboxes or the dashboard — see [Docker Compose](../infrastructure/docker-compose.md).
+
+## Starting the stack on Minikube
 
 ```bash
-task start-local          # Start all services
-task status               # Verify everything is healthy
+task minikube:start                 # Start local K8s cluster
+eval $(minikube docker-env)         # Point Docker CLI at Minikube
+task build:all                      # Build all images into the in-cluster registry
+task deploy:apply                   # Deploy everything via Helmfile
+task deploy:status                  # Verify all pods are healthy
 ```
 
-Services and their local URLs:
+Default service URLs (`DEV_HOSTNAME=localhost`):
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8085 |
-| Keycloak | http://localhost:8081 |
-| Keycloak Admin | http://localhost:8081/admin/ |
-| PGWeb | http://localhost:8082 |
-| Coding Agent Frontend | http://localhost:3001 |
-| Coding Agent Backend | http://localhost:8086 |
-| Docs | http://localhost:8083 |
+| Application frontend | http://app.localhost |
+| Application API | http://api.localhost |
+| Keycloak | http://auth.localhost |
+| Keycloak Admin | http://auth.localhost/admin/ |
+| Docs | http://docs.localhost |
+| THE Dev Team orchestrator | http://the-dev-team.localhost |
+| THE Dev Team dashboard | http://dashboard.the-dev-team.localhost |
+
+If you're running Minikube on a different machine from the one you're developing on, set `DEV_HOSTNAME` to that machine's Tailscale name — see [Environment Setup](../getting-started/environment-setup.md#tailscale-hostname-use-case).
 
 ## Login credentials
 
@@ -29,29 +38,125 @@ Services and their local URLs:
 | `admin` | `admin` | user, admin |
 | `testuser` | `password` | user |
 
-## Working on a service
+## Working on an application service
 
-Source code is volume-mounted, so changes are picked up automatically via hot reload. No rebuilds needed for code changes.
+Iterating on backend / frontend code has two modes:
+
+### Fast-feedback (run outside the cluster)
+
+Run the service directly against a Minikube-deployed database and Keycloak. Hot reload, debugger attached, no Docker rebuild cycle:
 
 ```bash
-task backend:local:logs       # Tail logs for one service
-task frontend:local:restart   # Restart if needed
-task backend:local:shell      # Shell into container
+task backend:local:start       # NestJS dev server on :8085 against Minikube DB/Keycloak
+task frontend:local:start      # Vite dev server on :5173 against Minikube API/Keycloak
 ```
+
+The backend reads `DATABASE_HOST_LOCAL=localhost` when running this way and connects to the Minikube database via `kubectl port-forward` (automated by the task).
+
+### In-cluster iteration
+
+Rebuild the image and re-deploy the service into Minikube:
+
+```bash
+task backend:remote:build      # Rebuild the image into Minikube's registry
+task backend:remote:deploy     # Roll out the new image
+task deploy:logs -- backend    # Tail logs
+```
+
+Use this for changes that depend on cluster-specific behaviour (ingress, service discovery, cron jobs).
+
+## Running THE Dev Team locally
+
+This is the end-to-end local workflow for the autonomous system.
+
+### 1. Make sure the main stack is up
+
+```bash
+task minikube:start
+eval $(minikube docker-env)
+task build:all
+task deploy:apply
+```
+
+This deploys the `app` namespace (application backend, frontend, database, keycloak, docs) **and** the `the-dev-team` namespace (orchestrator + dashboard).
+
+### 2. Verify everything is healthy
+
+```bash
+task deploy:status
+# Expect: all pods Running in app and the-dev-team namespaces
+```
+
+### 3. Open the dashboard
+
+```bash
+open http://dashboard.the-dev-team.localhost
+```
+
+You should see an empty overview with `maxConcurrent` idle agent slots (default 4).
+
+### 4. Submit a test task
+
+```bash
+curl -X POST http://the-dev-team.localhost/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Add /api/hello endpoint",
+    "description": "Add a GET /api/hello endpoint to the backend that returns { greeting: \"hello, world\" }. Add a unit test that verifies the shape.",
+    "source": "manual",
+    "touchesFrontend": false
+  }'
+```
+
+### 5. Watch it execute via the dashboard
+
+The dashboard immediately shows the new task in the **queued** column. Within seconds it moves to **implementing**. Click the card to open the live-stream view and watch the implementer write the code.
+
+Phase transitions visible on the dashboard:
+
+1. setting_up — worktree created
+2. implementing — architect + implementer running
+3. validating — build, unit-tests, deployment, and the rest of the gate sequence
+4. submitting — PR being opened
+5. completed — done
+
+Along the way, the **Environment Map** view shows a new sandbox (`env-{task-id}`) appear and turn healthy.
+
+### 6. Inspect afterwards
+
+```bash
+task history:task -- {task-id}          # Markdown summary
+task history:sessions -- {task-id}      # List session transcripts
+task history:search -- 'hello'          # Search all transcripts
+```
+
+Or use the dashboard's history browser.
+
+### Running just the orchestrator in dev mode
+
+If you're developing the orchestrator itself, you can run it outside the cluster for hot reload:
+
+```bash
+task coding-agent-backend:local:start
+```
+
+It will still create sandbox environments in Minikube (via `kubectl`), but the orchestrator process itself runs on your host. The dashboard is harder to run this way because it expects the orchestrator at `the-dev-team.{DEV_HOSTNAME}` — either update its dev config to point at `http://localhost:8086` or deploy the orchestrator into the cluster and only run the dashboard locally.
 
 ## Running tests
 
-Unit tests run on your host machine (not in Docker) and don't require the stack:
+Unit tests run on your host machine (in the Nix shell) and don't require the stack:
 
 ```bash
 task backend:local:test
 task frontend:local:test
+task coding-agent-backend:local:test
+task the-dev-team-dashboard:local:test
 ```
 
-Integration tests connect to the running stack:
+Integration tests connect to the running Minikube stack:
 
 ```bash
-task start-local                          # Stack must be running
+task deploy:apply                         # Stack must be running
 task backend:local:test:integration
 task frontend:local:test:integration
 ```
@@ -59,27 +164,44 @@ task frontend:local:test:integration
 E2E tests use Playwright against the full stack:
 
 ```bash
-task e2e:install    # One-time setup
-task e2e:test       # Run all E2E tests
+task e2e:install     # One-time setup
+task e2e:test        # Run all E2E tests against app.{DEV_HOSTNAME}
 ```
 
-## Rebuilding
-
-If you change a Dockerfile or `package.json`:
+## Rebuilding after Dockerfile / package.json changes
 
 ```bash
-task start-local:build        # Rebuild and restart
+eval $(minikube docker-env)
+task build:all                 # Rebuild everything
+task deploy:apply              # Roll out
 ```
 
 For a clean slate:
 
 ```bash
-task purge-and-restart-local  # Tear down volumes, rebuild, restart
+task minikube:delete
+task minikube:start
+# ...then build + deploy from scratch
 ```
 
-## Port conflicts
+## Port conflicts and troubleshooting
+
+Minikube's ingress runs on the host's port 80. If something else is using it:
 
 ```bash
-lsof -i :8085                 # Find what's using a port
-kill -9 $(lsof -t -i:8085)   # Kill it
+sudo lsof -i :80           # Find the culprit
+```
+
+If a sandbox namespace is stuck:
+
+```bash
+task env:list                       # See all sandboxes
+task env:status -- {task-id}        # Inspect one
+task env:destroy -- {task-id}       # Force-destroy
+```
+
+Clean up stale sandboxes older than 24 hours:
+
+```bash
+task env:cleanup:stale -- 24
 ```

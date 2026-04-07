@@ -1,0 +1,136 @@
+{{/*
+  Namespace Constraint for THE Dev Team Agent
+
+  This file provides two mechanisms to prevent the agent from operating
+  in restricted namespaces:
+
+  1. (Preferred) A Gatekeeper ConstraintTemplate + Constraint that blocks
+     the agent service account from creating/modifying resources in
+     restricted namespaces. Apply this when OPA Gatekeeper is installed.
+
+  2. (Simpler fallback) Namespace-scoped RoleBindings that explicitly
+     grant the agent access ONLY to agent-managed namespaces. Without
+     a matching RoleBinding in a restricted namespace, the agent cannot
+     operate there even if the ClusterRole grants broad verbs.
+
+  The RoleBindings below grant the agent access to a dedicated sandbox
+  namespace. Additional RoleBindings should be created dynamically when
+  the agent provisions new namespaces for workloads.
+*/}}
+
+---
+# Gatekeeper ConstraintTemplate — apply when OPA Gatekeeper is installed
+# kubectl apply -f this section manually or via Helmfile once Gatekeeper is ready
+#
+# apiVersion: templates.gatekeeper.sh/v1
+# kind: ConstraintTemplate
+# metadata:
+#   name: devteamagentnamespaceconstraint
+# spec:
+#   crd:
+#     spec:
+#       names:
+#         kind: DevTeamAgentNamespaceConstraint
+#       validation:
+#         openAPIV3Schema:
+#           type: object
+#           properties:
+#             restrictedNamespaces:
+#               type: array
+#               items:
+#                 type: string
+#             serviceAccountName:
+#               type: string
+#   targets:
+#     - target: admission.k8s.gatekeeper.sh
+#       rego: |
+#         package devteamagentnamespaceconstraint
+#
+#         violation[{"msg": msg}] {
+#           sa := input.review.userInfo.username
+#           contains(sa, input.parameters.serviceAccountName)
+#           ns := input.review.object.metadata.namespace
+#           ns == input.parameters.restrictedNamespaces[_]
+#           msg := sprintf("Agent %v is not allowed to operate in restricted namespace %v", [sa, ns])
+#         }
+#
+# ---
+# apiVersion: constraints.gatekeeper.sh/v1beta1
+# kind: DevTeamAgentNamespaceConstraint
+# metadata:
+#   name: restrict-dev-team-agent
+# spec:
+#   match:
+#     kinds:
+#       - apiGroups: ["*"]
+#         kinds: ["*"]
+#   parameters:
+#     serviceAccountName: "the-dev-team-agent"
+#     restrictedNamespaces:
+#       {{- range .Values.restrictedNamespaces }}
+#       - {{ . | quote }}
+#       {{- end }}
+
+---
+# Simpler alternative: namespace-scoped Role + RoleBinding
+# This Role mirrors the ClusterRole permissions but is scoped to a single namespace.
+# The agent only gets access to namespaces where a RoleBinding exists.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: the-dev-team-agent-workload
+  namespace: {{ .Values.serviceAccount.namespace }}
+  labels:
+    app.kubernetes.io/name: the-dev-team
+    app.kubernetes.io/component: agent
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+      - serviceaccounts
+    verbs: ["*"]
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: ["*"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["*"]
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: the-dev-team-agent-workload
+  namespace: {{ .Values.serviceAccount.namespace }}
+  labels:
+    app.kubernetes.io/name: the-dev-team
+    app.kubernetes.io/component: agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: the-dev-team-agent-workload
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name }}
+    namespace: {{ .Values.serviceAccount.namespace }}

@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AppLayout, LayoutProvider } from "./features/layouts";
 import { Login, ProtectedRoute } from "./features/keycloak-auth";
 import SmokeTests from "./features/testing-tools/pages/SmokeTests";
-import ConversationalAI from "./features/mastra-agents/pages/ConversationalAI";
 import { UsersPage, UserPage } from "./features/user-management";
 
 export default function App() {
@@ -19,7 +18,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<ConversationalAI />} />
+            <Route index element={<SmokeTests />} />
             <Route path="smoke-tests" element={<SmokeTests />} />
             <Route path="admin/users" element={<UsersPage />} />
             <Route path="admin/users/new" element={<UserPage />} />

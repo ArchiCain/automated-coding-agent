@@ -29,12 +29,26 @@ nav:
       - Database: projects/application/database.md
       - Keycloak: projects/application/keycloak.md
       - E2E Tests: projects/application/e2e.md
-    - Coding Agent:
-      - Backend: projects/coding-agent/backend.md
-      - Frontend: projects/coding-agent/frontend.md
-      - Backlog System: projects/coding-agent/backlog.md
-    - OpenClaw:
-      - Overview: projects/openclaw/overview.md
+    - THE Dev Team:
+      - Orchestrator: projects/coding-agent/backend.md
+      - Dashboard: projects/the-dev-team-dashboard.md
+      - Task State & History: projects/coding-agent/backlog.md
+
+  - THE Dev Team:
+    - Overview: the-dev-team/overview.md
+    - Roles & Skills: the-dev-team/roles-and-skills.md
+    - Execution Loop: the-dev-team/execution-loop.md
+    - Validation Gates: the-dev-team/validation-gates.md
+    - Sandbox Environments: the-dev-team/sandbox-environments.md
+    - Safety Model: the-dev-team/safety-model.md
+    - PR Workflow: the-dev-team/pr-workflow.md
+    - Submitting Tasks: the-dev-team/submitting-tasks.md
+    - Configuration: the-dev-team/configuration.md
+
+  - Development:
+    - Taskfile Conventions: development/taskfile.md
+    - Local Workflow: development/local-workflow.md
+    - Testing: development/testing.md
 
   - Infrastructure:
     - Overview: infrastructure/overview.md
@@ -43,11 +57,6 @@ nav:
     - Networking: infrastructure/networking.md
     - Docker Compose: infrastructure/docker-compose.md
     - CI/CD: infrastructure/cicd.md
-
-  - Development:
-    - Taskfile Conventions: development/taskfile.md
-    - Local Workflow: development/local-workflow.md
-    - Testing: development/testing.md
 
 markdown_extensions:
   - admonition

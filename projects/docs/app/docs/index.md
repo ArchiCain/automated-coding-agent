@@ -1,68 +1,106 @@
 # Automated Repo
 
-A monorepo for building AI-powered applications, with an autonomous coding agent system for plan decomposition and task execution.
+A monorepo for building AI-powered applications, driven by **THE Dev Team** — an autonomous multi-role development system that implements, tests, reviews, and ships its own code.
 
 ## What's in this repo
 
-This repo contains two project sets that share infrastructure, tooling, and deployment patterns:
+Three project groups share infrastructure, tooling, and deployment patterns:
 
-| Project Set | Purpose | Services |
-|-------------|---------|----------|
-| **Application** | The main product | Backend (NestJS), Frontend (React), Database (PostgreSQL), Keycloak (Auth) |
-| **Coding Agent** | Autonomous coding system | Backend (NestJS), Frontend (Angular) |
+| Group | Purpose | Services |
+|-------|---------|----------|
+| **Application** | The main product | Backend (NestJS), Frontend (React), Database (PostgreSQL + pgvector), Keycloak |
+| **THE Dev Team** | Autonomous development system | Orchestrator (NestJS), Dashboard (React + MUI), shared `skills/` library |
+| **Docs** | This documentation site | MkDocs Material |
 
-Both deploy to a K3s cluster via Helmfile and run locally via Docker Compose.
+All services run on Kubernetes from day one. **Minikube** is the primary local target; Docker Compose is kept as a deprecated fallback. Production runs K3s.
 
-## Quick Start
+## THE Dev Team in one minute
+
+Instead of a single-agent gateway, THE Dev Team is a role-based orchestrator:
+
+- A task arrives (REST, GitHub issue, or a decomposed plan)
+- The orchestrator assigns an **agent slot**, creates an isolated git worktree and a sandbox K8s namespace (`env-{task-id}`)
+- It runs a **7-phase execution loop** (setup → implement → build+deploy → test → review+fix → submit → cleanup)
+- Along the way it dispatches work to nine specialised **roles** (architect, implementer, reviewer, tester, designer, bugfixer, documentarian, monitor, devops) using prompts assembled from `skills/soul.md` plus role-specific `SKILL.md` files
+- Every phase runs through **validation gates** (build, unit tests, deployment, integration, log audit, e2e, accessibility, design review, performance)
+- When all gates pass, the agent opens a PR with evidence (tests, screenshots, metrics)
+- A **human** merges — the agent never pushes to `main`
+
+The [Dashboard](projects/the-dev-team-dashboard.md) gives you live visibility into every active task. The [Task State & History](projects/coding-agent/backlog.md) system records every session as JSONL transcripts and markdown summaries, synced to a protected git branch.
+
+Start here: [THE Dev Team Overview](the-dev-team/overview.md).
+
+## Quick start
 
 ```bash
 # 1. Enter the Nix dev shell (installs all tools)
-cd automated-repo
+cd automated-coding-agent
 direnv allow
 
 # 2. Configure environment
 cp .env.template .env
 # Edit .env with your credentials
 
-# 3. Start everything locally
-task start-local
+# 3. Start the local K8s cluster
+task minikube:start
 
-# 4. Verify
-task status
+# 4. Build and deploy the full stack
+task build:all
+task deploy:apply
+
+# 5. Start the orchestrator and dashboard
+task coding-agent-backend:local:start
+task the-dev-team-dashboard:local:start
 ```
 
-| Service | Local URL |
-|---------|-----------|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8085 |
-| Keycloak | http://localhost:8081 |
-| PGWeb | http://localhost:8082 |
-| Coding Agent Frontend | http://localhost:3001 |
-| Coding Agent Backend | http://localhost:8086 |
-| Docs | http://localhost:8083 |
+Default local URLs (with `DEV_HOSTNAME=localhost`):
 
-## Repo Structure
+| Service | URL |
+|---------|-----|
+| Application frontend | http://app.localhost |
+| Application API | http://api.localhost |
+| Keycloak | http://auth.localhost |
+| THE Dev Team orchestrator | http://the-dev-team.localhost |
+| THE Dev Team dashboard | http://dashboard.the-dev-team.localhost |
+| Docs | http://docs.localhost |
+
+See [Environment Setup](getting-started/environment-setup.md) for the `DEV_HOSTNAME` override (used for Tailscale hostnames).
+
+## Repo structure
 
 ```
-automated-repo/
+automated-coding-agent/
 ├── projects/
-│   ├── application/             # Main product services
-│   │   ├── backend/             # NestJS API
-│   │   ├── frontend/            # React SPA
-│   │   ├── database/            # PostgreSQL + pgvector
-│   │   ├── keycloak/            # Auth service
-│   │   └── e2e/                 # Playwright tests
-│   ├── coding-agent/            # Autonomous coding system
-│   │   ├── backend/             # Coding agent API
-│   │   └── frontend/            # Coding agent UI
-│   └── docs/                    # This documentation site
+│   ├── application/              # Main product
+│   │   ├── backend/              # NestJS API
+│   │   ├── frontend/             # React SPA
+│   │   ├── database/             # PostgreSQL + pgvector
+│   │   ├── keycloak/             # Auth service
+│   │   └── e2e/                  # Playwright tests
+│   ├── coding-agent/
+│   │   └── backend/              # THE Dev Team orchestrator (NestJS)
+│   ├── the-dev-team-dashboard/   # Observability dashboard (React + MUI)
+│   └── docs/                     # This documentation site
+├── skills/                       # soul.md + 10 role skills
+├── .the-dev-team/                # Runtime state, history, baselines, config
 ├── infrastructure/
-│   ├── docker/                  # Docker Compose (local dev)
-│   ├── k8s/                     # Helmfile + Helm charts
-│   └── terraform/               # EC2/K3s provisioning
-├── .coding-agent-data/          # Runtime data from coding agent
-│   ├── agents/                  # Agent configurations
-│   └── backlog/                 # Plan storage
-├── flake.nix                    # Nix dev shell
-└── Taskfile.yml                 # Root task automation
+│   ├── agent-envs/               # env:* Taskfile (sandbox lifecycle)
+│   ├── history/                  # history:* Taskfile
+│   ├── minikube/                 # minikube:* Taskfile
+│   ├── k8s/
+│   │   └── charts/
+│   │       ├── full-stack/       # Umbrella chart for sandbox envs
+│   │       └── the-dev-team/     # Orchestrator RBAC + secrets
+│   ├── docker/                   # Docker Compose (deprecated)
+│   └── terraform/                # EC2 + K3s provisioning
+├── flake.nix                     # Nix dev shell
+└── Taskfile.yml                  # Root task automation
 ```
+
+## Where to go next
+
+- **Just browsing?** Read [THE Dev Team Overview](the-dev-team/overview.md).
+- **Setting up a machine?** Start with [Prerequisites](getting-started/prerequisites.md) and [Environment Setup](getting-started/environment-setup.md).
+- **Running it locally?** See [Local Workflow](development/local-workflow.md).
+- **Submitting a task?** Jump to [Submitting Tasks](the-dev-team/submitting-tasks.md).
+- **Want to understand the architecture?** The [Orchestrator](projects/coding-agent/backend.md), [Execution Loop](the-dev-team/execution-loop.md), and [Validation Gates](the-dev-team/validation-gates.md) docs are the core.

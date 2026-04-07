@@ -22,6 +22,9 @@
         devShells.default = pkgs.mkShell {
           buildInputs = [
             pkgs.docker
+            pkgs.docker-client
+            pkgs.colima
+            pkgs.minikube
             pkgs.direnv
             pkgs.go-task
             pkgs.git

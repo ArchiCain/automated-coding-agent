@@ -1,30 +1,29 @@
 # Projects Overview
 
-All deployable services live under `projects/`, organized into three groups with a shared docs project.
+All deployable services live under `projects/`, organised into three groups with a shared documentation site.
 
 ```
 projects/
-├── application/         # Main product (K8s namespace: app)
-│   ├── backend/
-│   ├── frontend/
-│   ├── database/
-│   ├── keycloak/
-│   └── e2e/
-├── coding-agent/        # Legacy coding system (K8s namespace: coding-agent)
-│   ├── backend/
-│   └── frontend/
-├── openclaw/            # Autonomous coding agent (K8s namespace: openclaw)
-└── docs/                # This documentation site
+├── application/                 # Main product (K8s namespace: app)
+│   ├── backend/                 # NestJS API
+│   ├── frontend/                # React SPA
+│   ├── database/                # PostgreSQL + pgvector
+│   ├── keycloak/                # Auth service
+│   └── e2e/                     # Playwright tests
+├── coding-agent/                # THE Dev Team orchestrator (K8s namespace: the-dev-team)
+│   └── backend/                 # NestJS orchestrator
+├── the-dev-team-dashboard/      # Observability dashboard (K8s namespace: the-dev-team)
+└── docs/                        # This documentation site
 ```
 
-Each project follows a consistent structure:
+Each project follows a consistent layout:
 
 ```
 project-name/
-├── app/              # Source code
-├── dockerfiles/      # Container definitions (local + prod)
-├── chart/            # Helm chart for K8s deployment
-├── Taskfile.yml      # Project-level automation
+├── app/                # Source code
+├── dockerfiles/        # Container definitions (local + prod)
+├── chart/              # Helm chart for K8s deployment
+├── Taskfile.yml        # Project-level automation
 └── README.md
 ```
 
@@ -37,30 +36,28 @@ The main product — a full-stack web application with AI features. Deployed to 
 | [Backend](application/backend.md) | NestJS 11 | REST API, WebSocket chat, database, AI agents, Keycloak auth |
 | [Frontend](application/frontend.md) | React 19 + Vite 6 | Conversational AI UI, user management |
 | [Database](application/database.md) | PostgreSQL 16 + pgvector | Shared database infrastructure |
-| [Keycloak](application/keycloak.md) | Keycloak 23 | Authentication and authorization |
+| [Keycloak](application/keycloak.md) | Keycloak 23 | Authentication and authorisation |
 | [E2E Tests](application/e2e.md) | Playwright 1.48 | Browser-based end-to-end tests |
 
-## Coding Agent
+When a task runs, THE Dev Team deploys an entire copy of this stack into an ephemeral namespace (`env-{task-id}`) so the agent can validate its work against a live environment. See [Sandbox Environments](../the-dev-team/sandbox-environments.md).
 
-An autonomous system for decomposing feature requests into executable implementation plans. Deployed to the `coding-agent` K8s namespace.
+## THE Dev Team
 
-| Project | Stack | Purpose |
-|---------|-------|---------|
-| [Backend](coding-agent/backend.md) | NestJS 11 + Claude Code SDK | Plan decomposition, task execution, agent management |
-| [Frontend](coding-agent/frontend.md) | Angular 21 | Project browser, decomposition UI, agent builder, command center |
-| [Backlog System](coding-agent/backlog.md) | File-based | Plan storage and decomposition structure |
-
-Runtime data (agent configs, plans) lives in `.coding-agent-data/` at the repo root.
-
-## OpenClaw
-
-The next-generation autonomous coding agent, replacing the coding-agent backend and frontend with a single OpenClaw Gateway. Deployed to the `openclaw` K8s namespace.
+The autonomous development system: an orchestrator, a dashboard, and a shared skills library. Deployed to the `the-dev-team` K8s namespace.
 
 | Project | Stack | Purpose |
 |---------|-------|---------|
-| [OpenClaw Gateway](openclaw/overview.md) | OpenClaw + Claude Code ACP + Playwright | Autonomous agent with built-in Web UI, webhook receiver, cron jobs, and E2E testing |
+| [Orchestrator](coding-agent/backend.md) | NestJS 11 + Claude Code SDK | Task intake, agent pool, execution loop, validation gates, PR management |
+| [Dashboard](the-dev-team-dashboard.md) | React 19 + Vite + MUI 6 | Real-time observability into agents, tasks, environments, history |
+| [Task State & History](coding-agent/backlog.md) | File-based + git | Per-task state, findings, session transcripts, searchable archive |
 
-OpenClaw replaces ~50+ NestJS source files and a separate Angular frontend with ~15 configuration files and skill definitions. The built-in Web UI eliminates the need for a separate frontend deployment.
+The orchestrator lives in `projects/coding-agent/backend/` for historical reasons — the directory name predates the THE Dev Team rename. The runtime data directory is `.the-dev-team/` at the repo root, and the shared skills library is at `skills/`.
+
+Read the [THE Dev Team Overview](../the-dev-team/overview.md) for the mental model before diving into individual services.
+
+## Docs
+
+MkDocs Material site (this one). Deployed to the `app` namespace as `docs.localhost` locally and `docs.mac-mini` (or production domain) in the cluster.
 
 ## Conventions
 
@@ -87,15 +84,14 @@ Every backend feature must have its own NestJS module. `app.module.ts` should on
 @Module({ imports: [HealthModule, AuthModule, UsersModule] })
 export class AppModule {}
 
-// Bad - never import controllers/services directly in app.module
+// Bad — never import controllers/services directly in app.module
 @Module({ controllers: [HealthController] })
 export class AppModule {}
 ```
 
 ### Naming conventions
 
-- Directories: `kebab-case` (e.g., `user-dashboard`, `api-client`)
-- Frontend pages: `*.page.tsx` (React) or standalone components (Angular)
+- Directories: `kebab-case` (e.g. `user-dashboard`, `api-client`)
+- Frontend pages: `*.page.tsx`
 - Backend controllers: `*.controller.ts`
-- Tests: `*.spec.ts` (backend), `*.test.tsx` (frontend)
-- Integration tests: `*.integration.spec.ts`
+- Tests: `*.spec.ts` (backend unit), `*.integration.spec.ts` (backend integration), `*.test.tsx` (frontend)

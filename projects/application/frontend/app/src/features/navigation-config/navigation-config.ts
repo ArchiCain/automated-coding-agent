@@ -1,4 +1,3 @@
-import ChatIcon from '@mui/icons-material/Chat';
 import PeopleIcon from '@mui/icons-material/People';
 import ScienceIcon from '@mui/icons-material/Science';
 import type { NavigationConfig } from './types';
@@ -11,16 +10,6 @@ import type { NavigationConfig } from './types';
 export const navigationConfig: NavigationConfig = {
   maxDepth: 1,
   items: [
-    {
-      id: 'conversational-ai',
-      label: 'Conversational AI',
-      path: '/',
-      icon: ChatIcon,
-      metadata: {
-        description: 'Chat with AI assistants',
-        fullWidth: true, // Hide left nav for immersive chat experience
-      },
-    },
     {
       id: 'smoke-tests',
       label: 'Smoke Tests',
