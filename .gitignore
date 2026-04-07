@@ -1,3 +1,10 @@
+# Private keys
+*.pem
+.github-app-private-key.pem
+
+# Agent worktrees
+.worktrees/
+
 # AWS specific
 .aws/
 aws.json
@@ -273,8 +280,11 @@ example-files/.worktrees/
 # Auto Claude data directory
 .auto-claude/
 
-# OpenClaw runtime files
-.openclaw/
+# THE Dev Team runtime data
+.the-dev-team/state/
+.the-dev-team/history/sessions/
+.the-dev-team/history/tasks/
+.the-dev-team/history/orchestrator/
 
 # Coding agent data: Track plan definitions but ignore execution state
 # Plan files (TRACKED - committed to git):

@@ -2,28 +2,89 @@
 
 ## Traefik ingress
 
-Traefik handles all HTTP routing into the cluster. It's installed via Helm (not K3s's bundled version) to manage it alongside other releases.
+Traefik handles all HTTP routing into the cluster. It's installed via Helm (not K3s's bundled version) so it can be managed alongside the other releases. On Minikube, the nginx-ingress addon fills the same role.
 
-### Service hostnames
+## Service hostnames
 
-Each service gets a subdomain:
+Every service gets a subdomain under a single base hostname. The base hostname is controlled by the `DEV_HOSTNAME` environment variable, which lets the same URLs work on localhost, on a Tailscale machine, and on production.
 
-| Service | Local | K8s (Mac Mini) |
-|---------|-------|-----------------|
-| Frontend | http://localhost:3000 | http://app.mac-mini |
-| Backend API | http://localhost:8085 | http://api.mac-mini |
-| Keycloak | http://localhost:8081 | http://auth.mac-mini |
-| Docs | http://localhost:8083 | http://docs.mac-mini |
-| Coding Agent Frontend | http://localhost:3001 | http://agent.mac-mini |
-| Coding Agent API | http://localhost:8086 | http://agent-api.mac-mini |
+| Service | Pattern |
+|---------|---------|
+| Application frontend | `app.{DEV_HOSTNAME}` |
+| Application API | `api.{DEV_HOSTNAME}` |
+| Keycloak | `auth.{DEV_HOSTNAME}` |
+| Docs | `docs.{DEV_HOSTNAME}` |
+| THE Dev Team orchestrator | `the-dev-team.{DEV_HOSTNAME}` |
+| THE Dev Team dashboard | `dashboard.the-dev-team.{DEV_HOSTNAME}` |
+| Per-task sandbox frontend | `app.{task-id}.{DEV_HOSTNAME}` |
+| Per-task sandbox API | `api.{task-id}.{DEV_HOSTNAME}` |
+| Per-task sandbox Keycloak | `auth.{task-id}.{DEV_HOSTNAME}` |
 
-Hostnames are configured via env vars (`BACKEND_HOST`, `FRONTEND_HOST`, etc.).
+## The `DEV_HOSTNAME` variable
 
-## Tailscale
+`DEV_HOSTNAME` defaults to `localhost` — use it unchanged if you're only developing on the machine that runs the cluster.
 
-Tailscale provides secure networking between all devices (MacBook, Mac Mini, EC2 instances) and enables GitHub Actions to deploy to private infrastructure without exposing ports.
+Override it when you want to reach local services from **another device** — typically another machine on your tailnet. The value should be something every device in your network can resolve to the host running Minikube (or K3s).
 
-### Current tailnet devices
+### Example: `DEV_HOSTNAME` unset vs set
+
+| Service | `DEV_HOSTNAME=localhost` (default) | `DEV_HOSTNAME=shawns-macbook` (Tailscale) |
+|---------|------------------------------------|-------------------------------------------|
+| Application frontend | `http://app.localhost` | `http://app.shawns-macbook` |
+| Application API | `http://api.localhost` | `http://api.shawns-macbook` |
+| THE Dev Team dashboard | `http://dashboard.the-dev-team.localhost` | `http://dashboard.the-dev-team.shawns-macbook` |
+| Sandbox for task `abc123` | `http://app.abc123.localhost` | `http://app.abc123.shawns-macbook` |
+
+Whichever value you pick, set it once in `.env`:
+
+```bash
+DEV_HOSTNAME=shawns-macbook
+```
+
+Helmfile reads `DEV_HOSTNAME` and templates it into every ingress resource. Restart the stack (`task deploy:apply`) after changing it.
+
+## Detecting your Tailscale hostname
+
+If you want the Tailscale pattern, you need to know your tailnet machine name. The repo ships a helper task:
+
+```bash
+task tailscale:hostname
+# → shawns-macbook
+```
+
+This queries the Tailscale CLI for the current machine's tailnet name. Export it into `.env`:
+
+```bash
+DEV_HOSTNAME=$(task tailscale:hostname) task deploy:apply
+```
+
+Or simply:
+
+```bash
+echo "DEV_HOSTNAME=$(task tailscale:hostname)" >> .env
+```
+
+## Tailscale for local dev
+
+Tailscale's main role is **secure networking between devices**. A common setup:
+
+- Minikube (or Docker Desktop) runs on your Mac Mini
+- You develop from a MacBook sitting in a different room
+- Both machines are on the same tailnet
+- Set `DEV_HOSTNAME=mac-mini` (or whatever Tailscale names the Mac Mini)
+- From the MacBook, you can now hit `http://app.mac-mini`, `http://dashboard.the-dev-team.mac-mini`, and every `env-*` sandbox without port-forwarding or VPNs
+
+The same pattern applies to deploying to a remote K3s node: change `DEV_HOSTNAME` to the node's tailnet name and Helmfile does the rest.
+
+## Tailscale for production + CI
+
+Tailscale also provides the production networking fabric:
+
+- Every deployment target (Mac Mini, EC2, Raspberry Pi) joins the tailnet
+- GitHub Actions runners join ephemerally as `tag:ci` to build, push images, and run `helmfile apply` against private infrastructure
+- No exposed ports, no bastion hosts
+
+### Current tailnet devices (example)
 
 | Device | Role |
 |--------|------|
@@ -32,7 +93,7 @@ Tailscale provides secure networking between all devices (MacBook, Mac Mini, EC2
 
 ### GitHub Actions integration
 
-CI runners join the tailnet as ephemeral nodes to build, push images, and deploy:
+CI runners join the tailnet as ephemeral nodes:
 
 1. The `tailscale/github-action@v3` step installs Tailscale on the runner
 2. Authenticates using OAuth credentials (stored as repo secrets)
@@ -51,27 +112,27 @@ Create these at [Tailscale Trust Credentials](https://login.tailscale.com/admin/
 
 ## Split DNS
 
-Tailscale MagicDNS resolves device names (`mac-mini`) but not subdomains (`app.mac-mini`). To make service hostnames work on all tailnet devices:
+Tailscale MagicDNS resolves device names (`mac-mini`) but not subdomains (`app.mac-mini`, `dashboard.the-dev-team.mac-mini`). To make service hostnames work on all tailnet devices:
 
-1. A CoreDNS pod runs in the K3s cluster (deployed by Helmfile's `dns` release)
-2. It resolves any `*.mac-mini` query to the Mac Mini's Tailscale IP
-3. Tailscale Split DNS routes all `mac-mini` domain queries to this CoreDNS instance
+1. A CoreDNS pod runs in the cluster (deployed by Helmfile's `dns` release)
+2. It resolves any `*.{DEV_HOSTNAME}` query to the host's Tailscale IP
+3. Tailscale Split DNS routes all `{DEV_HOSTNAME}` domain queries to this CoreDNS instance
 
-### Setup (one-time)
+### Setup (one-time per host)
 
 Go to [Tailscale DNS settings](https://login.tailscale.com/admin/dns):
 
 1. Add nameserver > Custom
-2. Enter the Mac Mini's Tailscale IP (e.g., `100.71.239.27`)
+2. Enter the host's Tailscale IP (e.g., `100.71.239.27`)
 3. Check "Restrict to domain"
-4. Enter domain: `mac-mini`
+4. Enter the domain matching `DEV_HOSTNAME` (e.g., `mac-mini` or `shawns-macbook`)
 5. Save
 
 ### Adding a new deployment target
 
 For a new K3s node with domain `prod`:
 
-1. Set `TAILSCALE_IP` and `DNS_DOMAIN` in the target's `.env`
+1. Set `DEV_HOSTNAME=prod` (and `TAILSCALE_IP`) in the target's `.env`
 2. Helmfile deploys CoreDNS with the correct config automatically
 3. Add another Split DNS entry in Tailscale for the new domain
 
@@ -80,3 +141,9 @@ For a new K3s node with domain `prod`:
 1. Revoke the old credential at [Trust Credentials](https://login.tailscale.com/admin/settings/trust-credentials)
 2. Create a new one with the same settings
 3. Update `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` in GitHub repo secrets
+
+## Related reading
+
+- [Kubernetes](kubernetes.md)
+- [Sandbox Environments](../the-dev-team/sandbox-environments.md)
+- [Environment Setup](../getting-started/environment-setup.md)

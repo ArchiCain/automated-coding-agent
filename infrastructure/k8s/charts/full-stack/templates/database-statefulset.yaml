@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-database
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "full-stack.database.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ .Release.Name }}-database
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "full-stack.database.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "full-stack.database.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: database
+          image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: {{ .Values.database.port }}
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.database.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.database.auth.password | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.database.auth.database | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.database.auth.username }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.database.auth.username }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.database.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-database

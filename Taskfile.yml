@@ -9,12 +9,22 @@ includes:
   keycloak: ./projects/application/keycloak/Taskfile.yml
   e2e: ./projects/application/e2e/Taskfile.yml
   coding-agent-backend: ./projects/coding-agent/backend/Taskfile.yml
-  coding-agent-frontend: ./projects/coding-agent/frontend/Taskfile.yml
-  openclaw: ./projects/openclaw/Taskfile.yml
   docs: ./projects/docs/Taskfile.yml
   infra:
     taskfile: ./infrastructure/Taskfile.yml
     dir: ./infrastructure
+  env:
+    taskfile: infrastructure/agent-envs/Taskfile.yml
+    dir: .
+  history:
+    taskfile: infrastructure/history/Taskfile.yml
+    dir: .
+  minikube:
+    taskfile: infrastructure/minikube/Taskfile.yml
+    dir: .
+  dashboard:
+    taskfile: projects/the-dev-team-dashboard/Taskfile.yml
+    dir: .
 
 tasks:
   default:
@@ -60,6 +70,70 @@ tasks:
     desc: Check status of all services
     cmds:
       - task: infra:docker:status
+
+  # ===================================================================
+  # THE Dev Team — Minikube-based full stack
+  # ===================================================================
+
+  up:
+    desc: "Start THE Dev Team orchestrator + dashboard (dev servers on host)"
+    cmds:
+      - echo "=== Installing orchestrator dependencies ==="
+      - task: coding-agent-backend:local:install
+      - echo ""
+      - echo "=== Installing dashboard dependencies ==="
+      - task: dashboard:local:install
+      - echo ""
+      - echo "=== Starting orchestrator ==="
+      - task: coding-agent-backend:local:start
+      - echo ""
+      - echo "=== Starting dashboard ==="
+      - task: dashboard:local:run
+      - echo ""
+      - |
+        echo "============================================"
+        echo "THE Dev Team is running."
+        echo ""
+        echo "  Dashboard:    http://${DEV_HOSTNAME:-localhost}:${DASHBOARD_PORT:-3002}"
+        echo "  Orchestrator: http://${DEV_HOSTNAME:-localhost}:${CODING_AGENT_BACKEND_PORT:-8086}"
+        echo "============================================"
+
+  up:full:
+    desc: "Start full stack with Minikube (Colima + K8s + build + deploy + orchestrator + dashboard)"
+    cmds:
+      - task: minikube:start
+      - eval $(minikube docker-env) && task build:all
+      - task: deploy:apply
+      - task: up
+
+  down:
+    desc: "Stop orchestrator and dashboard dev servers"
+    cmds:
+      - pkill -f "nest start" 2>/dev/null || true
+      - pkill -f "vite.*the-dev-team-dashboard" 2>/dev/null || true
+      - |
+        echo "Dev servers stopped."
+        echo "  task minikube:stop    — pause the cluster (preserves state)"
+        echo "  task minikube:delete  — destroy the cluster entirely"
+
+  tailscale:hostname:
+    desc: "Print your Tailscale hostname (paste into .env as DEV_HOSTNAME)"
+    cmds:
+      - |
+        HOSTNAME=$(./scripts/detect-tailscale-hostname.sh)
+        if [ -z "$HOSTNAME" ]; then
+          echo "Tailscale not installed or not running."
+          echo "Install: https://tailscale.com/download"
+          exit 1
+        fi
+        echo ""
+        echo "Your Tailscale hostname: $HOSTNAME"
+        echo ""
+        echo "To use it, set in .env:"
+        echo "  DEV_HOSTNAME=$HOSTNAME"
+        echo ""
+        echo "Then restart your dev environment:"
+        echo "  task stop-local && task start-local"
 
   # ===================================================================
   # Testing
@@ -127,56 +201,88 @@ tasks:
 
   build:all:
     desc: Build and push all service images
+    vars:
+      WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
       - task: build:backend
+        vars:
+          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
       - task: build:frontend
+        vars:
+          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
       - task: build:keycloak
+        vars:
+          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
       - task: build:coding-agent-backend
-      - task: build:coding-agent-frontend
-      - task: build:openclaw
+        vars:
+          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
       - task: build:docs
+        vars:
+          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+      - task: build:dashboard
+        vars:
+          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
 
   build:backend:
     desc: Build and push backend image
+    vars:
+      WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/backend:${IMAGE_TAG:-latest} -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend
-      - docker push ${REGISTRY:-localhost:30500}/backend:${IMAGE_TAG:-latest}
+      - docker build -t ${REGISTRY:-localhost:30500}/backend:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/application/backend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/application/backend
+      - docker push ${REGISTRY:-localhost:30500}/backend:{{.IMAGE_TAG}}
 
   build:frontend:
     desc: Build and push frontend image
+    vars:
+      WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/frontend:${IMAGE_TAG:-latest} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend
-      - docker push ${REGISTRY:-localhost:30500}/frontend:${IMAGE_TAG:-latest}
+      - docker build -t ${REGISTRY:-localhost:30500}/frontend:{{.IMAGE_TAG}} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f {{.WORKTREE_PATH}}/projects/application/frontend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/application/frontend
+      - docker push ${REGISTRY:-localhost:30500}/frontend:{{.IMAGE_TAG}}
 
   build:keycloak:
     desc: Build and push keycloak image
+    vars:
+      WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/keycloak:${IMAGE_TAG:-latest} -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak
-      - docker push ${REGISTRY:-localhost:30500}/keycloak:${IMAGE_TAG:-latest}
+      - docker build -t ${REGISTRY:-localhost:30500}/keycloak:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/application/keycloak/dockerfiles/Dockerfile {{.WORKTREE_PATH}}/projects/application/keycloak
+      - docker push ${REGISTRY:-localhost:30500}/keycloak:{{.IMAGE_TAG}}
 
   build:coding-agent-backend:
     desc: Build and push coding-agent-backend image
+    vars:
+      WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/coding-agent-backend:${IMAGE_TAG:-latest} -f projects/coding-agent/backend/dockerfiles/prod.Dockerfile projects/coding-agent/backend
-      - docker push ${REGISTRY:-localhost:30500}/coding-agent-backend:${IMAGE_TAG:-latest}
+      - docker build -t ${REGISTRY:-localhost:30500}/coding-agent-backend:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/coding-agent/backend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/coding-agent/backend
+      - docker push ${REGISTRY:-localhost:30500}/coding-agent-backend:{{.IMAGE_TAG}}
 
-  build:coding-agent-frontend:
-    desc: Build and push coding-agent-frontend image
+  build:dashboard:
+    desc: Build and push THE Dev Team dashboard image
+    vars:
+      WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/coding-agent-frontend:${IMAGE_TAG:-latest} -f projects/coding-agent/frontend/dockerfiles/prod.Dockerfile projects/coding-agent/frontend
-      - docker push ${REGISTRY:-localhost:30500}/coding-agent-frontend:${IMAGE_TAG:-latest}
-
-  build:openclaw:
-    desc: Build and push openclaw-gateway image
-    cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/openclaw-gateway:${IMAGE_TAG:-latest} -f projects/openclaw/dockerfiles/prod.Dockerfile projects/openclaw
-      - docker push ${REGISTRY:-localhost:30500}/openclaw-gateway:${IMAGE_TAG:-latest}
+      - docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:{{.IMAGE_TAG}} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f {{.WORKTREE_PATH}}/projects/the-dev-team-dashboard/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/the-dev-team-dashboard
+      - docker push ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:{{.IMAGE_TAG}}
 
   build:docs:
     desc: Build and push docs image
+    vars:
+      WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/docs:${IMAGE_TAG:-latest} -f projects/docs/dockerfiles/prod.Dockerfile projects/docs
-      - docker push ${REGISTRY:-localhost:30500}/docs:${IMAGE_TAG:-latest}
+      - docker build -t ${REGISTRY:-localhost:30500}/docs:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/docs/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/docs
+      - docker push ${REGISTRY:-localhost:30500}/docs:{{.IMAGE_TAG}}
 
   # ===================================================================
   # Deployment — delegates to infra:k8s:*

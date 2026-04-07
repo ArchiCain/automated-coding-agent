@@ -1,0 +1,51 @@
+global:
+  registry: localhost:30500
+  imageTag: latest
+  domain: localhost
+  taskId: ""
+
+backend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+frontend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 125m
+      memory: 128Mi
+
+database:
+  storage:
+    size: 512Mi
+    storageClass: standard
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+keycloak:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ingress:
+  enabled: true
+  className: nginx
