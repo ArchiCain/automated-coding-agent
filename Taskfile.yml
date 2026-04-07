@@ -67,54 +67,68 @@ tasks:
       - task: infra:docker:logs
 
   status:
-    desc: Check status of all services
+    desc: "Show cluster and service status"
     cmds:
-      - task: infra:docker:status
+      - |
+        echo "=== Minikube ==="
+        minikube status 2>/dev/null || echo "Not running"
+        echo ""
+        echo "=== Pods (all namespaces) ==="
+        kubectl get pods -A --no-headers 2>/dev/null | grep -v kube-system || echo "No application pods"
+        echo ""
+        echo "=== Services ==="
+        kubectl get svc -A --no-headers 2>/dev/null | grep -v kube-system || echo "No services"
+
+  logs:
+    desc: "Show logs for a service (usage: task logs -- coding-agent-backend)"
+    cmds:
+      - kubectl logs -f deployment/{{.CLI_ARGS}} -n coding-agent --tail=100
 
   # ===================================================================
   # THE Dev Team — Minikube-based full stack
   # ===================================================================
 
   up:
-    desc: "Start THE Dev Team orchestrator + dashboard (dev servers on host)"
-    cmds:
-      - echo "=== Installing orchestrator dependencies ==="
-      - task: coding-agent-backend:local:install
-      - echo ""
-      - echo "=== Installing dashboard dependencies ==="
-      - task: dashboard:local:install
-      - echo ""
-      - echo "=== Starting orchestrator ==="
-      - task: coding-agent-backend:local:start
-      - echo ""
-      - echo "=== Starting dashboard ==="
-      - task: dashboard:local:run
-      - echo ""
-      - |
-        echo "============================================"
-        echo "THE Dev Team is running."
-        echo ""
-        echo "  Dashboard:    http://${DEV_HOSTNAME:-localhost}:${DASHBOARD_PORT:-3002}"
-        echo "  Orchestrator: http://${DEV_HOSTNAME:-localhost}:${CODING_AGENT_BACKEND_PORT:-8086}"
-        echo "============================================"
-
-  up:full:
-    desc: "Start full stack with Minikube (Colima + K8s + build + deploy + orchestrator + dashboard)"
+    desc: "Start THE Dev Team (Minikube + build + deploy)"
     cmds:
       - task: minikube:start
-      - eval $(minikube docker-env) && task build:all
+      - task: setup-secrets
+      - |
+        echo "Pointing Docker CLI at Minikube..."
+        eval $(minikube docker-env)
+      - task: build:all
       - task: deploy:apply
-      - task: up
+      - |
+        echo "============================================"
+        echo "THE Dev Team is deployed to Minikube."
+        echo ""
+        echo "  Dashboard:    http://dashboard.localhost"
+        echo "  Orchestrator: http://agent-api.localhost"
+        echo "  App:          http://app.localhost"
+        echo ""
+        echo "Run 'task minikube:tunnel' in a separate terminal"
+        echo "to access services via ingress."
+        echo "============================================"
 
   down:
-    desc: "Stop orchestrator and dashboard dev servers"
+    desc: "Stop Minikube cluster (preserves state)"
     cmds:
-      - pkill -f "nest start" 2>/dev/null || true
-      - pkill -f "vite.*the-dev-team-dashboard" 2>/dev/null || true
+      - minikube stop
       - |
-        echo "Dev servers stopped."
-        echo "  task minikube:stop    — pause the cluster (preserves state)"
-        echo "  task minikube:delete  — destroy the cluster entirely"
+        echo "Minikube stopped. State preserved."
+        echo "  task up        — resume"
+        echo "  task destroy   — delete cluster entirely"
+
+  destroy:
+    desc: "Delete Minikube cluster and all data"
+    cmds:
+      - minikube delete
+      - echo "Minikube cluster deleted."
+
+  setup-secrets:
+    desc: "Create K8s secrets from .env (run before first deploy)"
+    cmds:
+      - scripts/setup-k8s-secrets.sh
 
   tailscale:hostname:
     desc: "Print your Tailscale hostname (paste into .env as DEV_HOSTNAME)"

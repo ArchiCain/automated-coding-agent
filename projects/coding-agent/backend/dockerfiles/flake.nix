@@ -20,6 +20,8 @@
             pkgs.nodejs_20
             pkgs.nodejs_20.pkgs.npm
             pkgs.git
+            pkgs.gh
+            pkgs.docker-client
             pkgs.go-task
             pkgs.kubectl
             pkgs.kubernetes-helm

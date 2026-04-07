@@ -65,40 +65,36 @@ task deploy:logs -- backend    # Tail logs
 
 Use this for changes that depend on cluster-specific behaviour (ingress, service discovery, cron jobs).
 
-## Running THE Dev Team locally
-
-This is the end-to-end local workflow for the autonomous system.
-
-### 1. Make sure the main stack is up
+## Running THE Dev Team
 
 ```bash
-task minikube:start
-eval $(minikube docker-env)
-task build:all
-task deploy:apply
+# First time only: set up secrets
+task setup-secrets
+
+# Start the cluster and deploy everything
+task up
+
+# In a separate terminal, enable ingress access
+task minikube:tunnel
 ```
 
-This deploys the `app` namespace (application backend, frontend, database, keycloak, docs) **and** the `the-dev-team` namespace (orchestrator + dashboard).
+Then open:
+- Dashboard: http://dashboard.localhost
+- Orchestrator API: http://agent-api.localhost
 
-### 2. Verify everything is healthy
+This deploys the full stack into Minikube — the same topology as production (K3s).
+
+### Verify everything is healthy
 
 ```bash
-task deploy:status
-# Expect: all pods Running in app and the-dev-team namespaces
+task status
+# Expect: all pods Running in app and coding-agent namespaces
 ```
 
-### 3. Open the dashboard
+### Submit a test task
 
 ```bash
-open http://dashboard.the-dev-team.localhost
-```
-
-You should see an empty overview with `maxConcurrent` idle agent slots (default 4).
-
-### 4. Submit a test task
-
-```bash
-curl -X POST http://the-dev-team.localhost/api/tasks \
+curl -X POST http://agent-api.localhost/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Add /api/hello endpoint",
@@ -108,7 +104,7 @@ curl -X POST http://the-dev-team.localhost/api/tasks \
   }'
 ```
 
-### 5. Watch it execute via the dashboard
+### Watch it execute via the dashboard
 
 The dashboard immediately shows the new task in the **queued** column. Within seconds it moves to **implementing**. Click the card to open the live-stream view and watch the implementer write the code.
 
@@ -122,7 +118,7 @@ Phase transitions visible on the dashboard:
 
 Along the way, the **Environment Map** view shows a new sandbox (`env-{task-id}`) appear and turn healthy.
 
-### 6. Inspect afterwards
+### Inspect afterwards
 
 ```bash
 task history:task -- {task-id}          # Markdown summary
@@ -140,7 +136,7 @@ If you're developing the orchestrator itself, you can run it outside the cluster
 task coding-agent-backend:local:start
 ```
 
-It will still create sandbox environments in Minikube (via `kubectl`), but the orchestrator process itself runs on your host. The dashboard is harder to run this way because it expects the orchestrator at `the-dev-team.{DEV_HOSTNAME}` — either update its dev config to point at `http://localhost:8086` or deploy the orchestrator into the cluster and only run the dashboard locally.
+It will still create sandbox environments in Minikube (via `kubectl`), but the orchestrator process itself runs on your host. The dashboard is harder to run this way because it expects the orchestrator at an ingress hostname — either update its dev config to point at `http://localhost:8086` or deploy the orchestrator into the cluster and only run the dashboard locally.
 
 ## Running tests
 

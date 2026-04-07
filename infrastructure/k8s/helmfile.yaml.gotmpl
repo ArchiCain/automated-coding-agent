@@ -242,13 +242,23 @@ releases:
           CODING_AGENT_CORS_ORIGINS: {{ env "CODING_AGENT_CORS_ORIGINS" | default "*" }}
           CODING_AGENT_WORKSPACE_ROOT: {{ env "CODING_AGENT_WORKSPACE_ROOT" | default "/workspace" }}
           REPO_ROOT: {{ env "REPO_ROOT" | default "/workspace" }}
+          EXECUTION_MODE: {{ env "EXECUTION_MODE" | default "sandbox" }}
         secretEnv:
           ANTHROPIC_API_KEY: {{ env "ANTHROPIC_API_KEY" | default "" }}
           CLAUDE_CODE_OAUTH_TOKEN: {{ env "CLAUDE_CODE_OAUTH_TOKEN" | default "" }}
           GITHUB_TOKEN: {{ env "GITHUB_TOKEN" | default "" }}
+          GITHUB_APP_ID: {{ env "GITHUB_APP_ID" | default "" }}
+          GITHUB_APP_CLIENT_ID: {{ env "GITHUB_APP_CLIENT_ID" | default "" }}
+          GITHUB_APP_INSTALLATION_ID: {{ env "GITHUB_APP_INSTALLATION_ID" | default "" }}
+        githubApp:
+          privateKeySecret: {{ env "GITHUB_APP_PRIVATE_KEY_SECRET" | default "" }}
+        docker:
+          socketMount: {{ env "DOCKER_SOCKET_MOUNT" | default "true" }}
         workspace:
           enabled: true
           size: {{ env "CODING_AGENT_WORKSPACE_SIZE" | default "50Gi" }}
+          repoOwner: {{ env "REPO_OWNER" | default "ArchiCain" }}
+          repoName: {{ env "REPO_NAME" | default "automated-coding-agent" }}
         resources:
           requests:
             memory: {{ env "CODING_AGENT_BACKEND_MEMORY_REQUEST" | default "512Mi" }}
@@ -256,4 +266,25 @@ releases:
           limits:
             memory: {{ env "CODING_AGENT_BACKEND_MEMORY_LIMIT" | default "2Gi" }}
             cpu: {{ env "CODING_AGENT_BACKEND_CPU_LIMIT" | default "2000m" }}
+
+  - name: the-dev-team-dashboard
+    namespace: {{ env "CODING_AGENT_NAMESPACE" | default "coding-agent" }}
+    chart: ../../projects/the-dev-team-dashboard/chart
+    createNamespace: true
+    values:
+      - image:
+          repository: {{ env "DASHBOARD_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/the-dev-team-dashboard") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        ingress:
+          enabled: true
+          host: {{ env "DASHBOARD_HOST" | default "dashboard.localhost" }}
+        env:
+          VITE_BACKEND_URL: "http://coding-agent-backend:8080"
+        resources:
+          requests:
+            memory: {{ env "DASHBOARD_MEMORY_REQUEST" | default "128Mi" }}
+            cpu: {{ env "DASHBOARD_CPU_REQUEST" | default "50m" }}
+          limits:
+            memory: {{ env "DASHBOARD_MEMORY_LIMIT" | default "256Mi" }}
+            cpu: {{ env "DASHBOARD_CPU_LIMIT" | default "200m" }}
 

@@ -25,6 +25,27 @@ spec:
           volumeMounts:
             - name: workspace
               mountPath: {{ .Values.workspace.mountPath }}
+        - name: clone-repo
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              if [ ! -d "{{ .Values.workspace.mountPath }}/.git" ]; then
+                echo "Cloning repository..."
+                git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/{{ .Values.workspace.repoOwner }}/{{ .Values.workspace.repoName }}.git" "{{ .Values.workspace.mountPath }}"
+              else
+                echo "Repository exists, fetching latest..."
+                cd "{{ .Values.workspace.mountPath }}" && git fetch --all --prune || true
+              fi
+          volumeMounts:
+            - name: workspace
+              mountPath: {{ .Values.workspace.mountPath }}
+          {{- if .Values.secretEnv }}
+          envFrom:
+            - secretRef:
+                name: {{ .Release.Name }}-secret
+          {{- end }}
       {{- end }}
       containers:
         - name: {{ .Release.Name }}
@@ -43,10 +64,26 @@ spec:
                 name: {{ .Release.Name }}-secret
             {{- end }}
           {{- end }}
-          {{- if .Values.workspace.enabled }}
+          {{- if .Values.githubApp.privateKeySecret }}
+          env:
+            - name: GITHUB_APP_PRIVATE_KEY_PATH
+              value: "/etc/github-app/{{ .Values.githubApp.privateKeyFile }}"
+          {{- end }}
+          {{- if or .Values.workspace.enabled .Values.githubApp.privateKeySecret .Values.docker.socketMount }}
           volumeMounts:
+            {{- if .Values.workspace.enabled }}
             - name: workspace
               mountPath: {{ .Values.workspace.mountPath }}
+            {{- end }}
+            {{- if .Values.githubApp.privateKeySecret }}
+            - name: github-app-key
+              mountPath: /etc/github-app
+              readOnly: true
+            {{- end }}
+            {{- if .Values.docker.socketMount }}
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+            {{- end }}
           {{- end }}
           livenessProbe:
             httpGet:
@@ -62,9 +99,22 @@ spec:
             periodSeconds: 5
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      {{- if .Values.workspace.enabled }}
+      {{- if or .Values.workspace.enabled .Values.githubApp.privateKeySecret .Values.docker.socketMount }}
       volumes:
+        {{- if .Values.workspace.enabled }}
         - name: workspace
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-workspace
+        {{- end }}
+        {{- if .Values.githubApp.privateKeySecret }}
+        - name: github-app-key
+          secret:
+            secretName: {{ .Values.githubApp.privateKeySecret }}
+        {{- end }}
+        {{- if .Values.docker.socketMount }}
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        {{- end }}
       {{- end }}

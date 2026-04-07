@@ -60,7 +60,7 @@ export class DevTeamConfigService {
       const parsed = yaml.load(raw) as Partial<DevTeamConfig>;
       this.logger.log(`Loaded config from ${configPath}`);
 
-      return {
+      const config: DevTeamConfig = {
         default: parsed.default ?? DEFAULT_CONFIG.default,
         roles: parsed.roles ?? DEFAULT_CONFIG.roles,
         maxConcurrent: parsed.maxConcurrent ?? DEFAULT_CONFIG.maxConcurrent,
@@ -69,11 +69,29 @@ export class DevTeamConfigService {
           parsed.keepEnvironmentForReview ?? DEFAULT_CONFIG.keepEnvironmentForReview,
         executionMode: parsed.executionMode ?? DEFAULT_CONFIG.executionMode,
       };
+
+      // Environment variable override for executionMode (used in K8s deployments)
+      if (process.env.EXECUTION_MODE) {
+        const envMode = process.env.EXECUTION_MODE as ExecutionMode;
+        this.logger.log(`Overriding executionMode from env: ${envMode}`);
+        config.executionMode = envMode;
+      }
+
+      return config;
     } catch (err) {
       this.logger.warn(
         `Could not load config from ${configPath}, using defaults: ${(err as Error).message}`,
       );
-      return { ...DEFAULT_CONFIG };
+      const config = { ...DEFAULT_CONFIG };
+
+      // Environment variable override for executionMode (used in K8s deployments)
+      if (process.env.EXECUTION_MODE) {
+        const envMode = process.env.EXECUTION_MODE as ExecutionMode;
+        this.logger.log(`Overriding executionMode from env: ${envMode}`);
+        config.executionMode = envMode;
+      }
+
+      return config;
     }
   }
 

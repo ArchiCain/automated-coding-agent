@@ -38,9 +38,20 @@ serviceAccount:
 rbac:
   create: true
 
+# GitHub App authentication
+githubApp:
+  privateKeySecret: ""  # Name of K8s secret containing the private key
+  privateKeyFile: "private-key.pem"
+
+# Docker socket mount for image building
+docker:
+  socketMount: true  # Mount /var/run/docker.sock for image building
+
 # Persistent workspace for cloned repos
 workspace:
   enabled: true
   size: "50Gi"
   storageClass: ""
   mountPath: /workspace
+  repoOwner: "ArchiCain"
+  repoName: "automated-coding-agent"
