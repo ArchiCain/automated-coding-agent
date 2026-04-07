@@ -93,11 +93,7 @@ tasks:
     cmds:
       - task: minikube:start
       - task: setup-secrets
-      - |
-        echo "Pointing Docker CLI at Minikube..."
-        eval $(minikube docker-env)
-      - task: build:all
-      - task: deploy:apply
+      - task: up:build-and-deploy
       - |
         DOMAIN="${DEV_HOSTNAME:-localhost}"
         echo "============================================"
@@ -116,6 +112,26 @@ tasks:
           echo "Services accessible from any device on your tailnet."
         fi
         echo "============================================"
+
+  up:build-and-deploy:
+    desc: "Build images into Minikube and deploy (internal)"
+    internal: true
+    cmds:
+      - |
+        echo "=== Configuring Docker for Minikube ==="
+        eval $(minikube docker-env)
+        echo "Docker host: $DOCKER_HOST"
+        echo ""
+        echo "=== Building all images ==="
+        docker build -t ${REGISTRY:-localhost:30500}/backend:${IMAGE_TAG:-latest} -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend
+        docker build -t ${REGISTRY:-localhost:30500}/frontend:${IMAGE_TAG:-latest} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.${DEV_HOSTNAME:-localhost}} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend
+        docker build -t ${REGISTRY:-localhost:30500}/keycloak:${IMAGE_TAG:-latest} -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak
+        docker build -t ${REGISTRY:-localhost:30500}/coding-agent-backend:${IMAGE_TAG:-latest} -f projects/coding-agent/backend/dockerfiles/prod.Dockerfile projects/coding-agent/backend
+        docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:${IMAGE_TAG:-latest} -f projects/coding-agent/dashboard/dockerfiles/prod.Dockerfile projects/coding-agent/dashboard
+        docker build -t ${REGISTRY:-localhost:30500}/docs:${IMAGE_TAG:-latest} -f projects/docs/dockerfiles/prod.Dockerfile projects/docs
+        echo ""
+        echo "=== All images built ==="
+      - task: deploy:apply
 
   down:
     desc: "Stop Minikube cluster (preserves state)"
