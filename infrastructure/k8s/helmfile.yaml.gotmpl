@@ -117,7 +117,7 @@ releases:
           DATABASE_SSL: {{ env "DATABASE_SSL" | default "false" }}
           KEYCLOAK_REALM: {{ env "KEYCLOAK_REALM" | default "application" }}
           KEYCLOAK_CLIENT_ID: {{ env "KEYCLOAK_CLIENT_ID" | default "backend-service" }}
-          CORS_ORIGINS: {{ env "CORS_ORIGINS" | default "*" }}
+          CORS_ORIGINS: "{{ env "CORS_ORIGINS" | default "*" }}"
         secretEnv:
           DATABASE_PASSWORD: {{ requiredEnv "DATABASE_PASSWORD" }}
           KEYCLOAK_CLIENT_SECRET: {{ env "KEYCLOAK_CLIENT_SECRET" | default "backend-service-secret" }}
@@ -239,7 +239,7 @@ releases:
           NODE_ENV: {{ env "NODE_ENV" | default "production" }}
           PORT: {{ env "K8S_SERVICE_PORT" | default "8080" }}
           SERVICE_NAME: {{ env "CODING_AGENT_BACKEND_SERVICE_NAME" | default "coding-agent-backend" }}
-          CODING_AGENT_CORS_ORIGINS: {{ env "CODING_AGENT_CORS_ORIGINS" | default "*" }}
+          CODING_AGENT_CORS_ORIGINS: "{{ env "CODING_AGENT_CORS_ORIGINS" | default "*" }}"
           CODING_AGENT_WORKSPACE_ROOT: {{ env "CODING_AGENT_WORKSPACE_ROOT" | default "/workspace" }}
           REPO_ROOT: {{ env "REPO_ROOT" | default "/workspace" }}
           EXECUTION_MODE: {{ env "EXECUTION_MODE" | default "sandbox" }}
