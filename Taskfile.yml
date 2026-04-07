@@ -120,17 +120,31 @@ tasks:
       - |
         echo "=== Configuring Docker for Minikube ==="
         eval $(minikube docker-env)
-        echo "Docker host: $DOCKER_HOST"
+        REG="${REGISTRY:-localhost:30500}"
+        TAG="${IMAGE_TAG:-latest}"
+        echo "Registry: $REG"
         echo ""
-        echo "=== Building all images ==="
-        docker build -t ${REGISTRY:-localhost:30500}/backend:${IMAGE_TAG:-latest} -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend
-        docker build -t ${REGISTRY:-localhost:30500}/frontend:${IMAGE_TAG:-latest} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.${DEV_HOSTNAME:-localhost}} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend
-        docker build -t ${REGISTRY:-localhost:30500}/keycloak:${IMAGE_TAG:-latest} -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak
-        docker build -t ${REGISTRY:-localhost:30500}/coding-agent-backend:${IMAGE_TAG:-latest} -f projects/coding-agent/backend/dockerfiles/prod.Dockerfile projects/coding-agent/backend
-        docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:${IMAGE_TAG:-latest} -f projects/coding-agent/dashboard/dockerfiles/prod.Dockerfile projects/coding-agent/dashboard
-        docker build -t ${REGISTRY:-localhost:30500}/docs:${IMAGE_TAG:-latest} -f projects/docs/dockerfiles/prod.Dockerfile projects/docs
+
+        echo "=== Building and pushing images ==="
+        for img in backend frontend keycloak coding-agent-backend the-dev-team-dashboard docs; do
+          case $img in
+            backend)
+              docker build -t $REG/$img:$TAG -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend ;;
+            frontend)
+              docker build -t $REG/$img:$TAG --build-arg VITE_BACKEND_URL=http://api.${DEV_HOSTNAME:-localhost} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend ;;
+            keycloak)
+              docker build -t $REG/$img:$TAG -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak ;;
+            coding-agent-backend)
+              docker build -t $REG/$img:$TAG -f projects/coding-agent/backend/dockerfiles/prod.Dockerfile projects/coding-agent/backend ;;
+            the-dev-team-dashboard)
+              docker build -t $REG/$img:$TAG -f projects/coding-agent/dashboard/dockerfiles/prod.Dockerfile projects/coding-agent/dashboard ;;
+            docs)
+              docker build -t $REG/$img:$TAG -f projects/docs/dockerfiles/prod.Dockerfile projects/docs ;;
+          esac
+          docker push $REG/$img:$TAG || echo "Push failed for $img (registry may not be ready — images are still in Minikube Docker)"
+        done
         echo ""
-        echo "=== All images built ==="
+        echo "=== All images built and pushed ==="
       - task: deploy:apply
 
   down:
