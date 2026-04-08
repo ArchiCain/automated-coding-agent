@@ -240,8 +240,8 @@ releases:
           PORT: {{ env "K8S_SERVICE_PORT" | default "8080" }}
           SERVICE_NAME: {{ env "CODING_AGENT_BACKEND_SERVICE_NAME" | default "coding-agent-backend" }}
           CODING_AGENT_CORS_ORIGINS: "{{ env "CODING_AGENT_CORS_ORIGINS" | default "*" }}"
-          CODING_AGENT_WORKSPACE_ROOT: {{ env "CODING_AGENT_WORKSPACE_ROOT" | default "/workspace" }}
-          REPO_ROOT: {{ env "REPO_ROOT" | default "/workspace" }}
+          CODING_AGENT_WORKSPACE_ROOT: /workspace
+          REPO_ROOT: /workspace
           EXECUTION_MODE: {{ env "EXECUTION_MODE" | default "sandbox" }}
         secretEnv:
           ANTHROPIC_API_KEY: {{ env "ANTHROPIC_API_KEY" | default "" }}

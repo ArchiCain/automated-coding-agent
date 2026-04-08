@@ -32,9 +32,10 @@ RUN nix develop --command bash -c "cd app && npm ci"
 # Symlink claude CLI to a stable PATH location
 RUN mkdir -p /usr/local/bin && ln -sf /app/app/node_modules/.bin/claude /usr/local/bin/claude
 
-# Copy source and build
+# Copy source and build (ARG busts cache when source changes)
+ARG CACHEBUST=0
 COPY app/ ./app/
-RUN nix develop --command bash -c "cd app && npm run build"
+RUN nix develop --command bash -c "cd app && rm -rf dist && npm run build"
 
 # Copy entrypoint script
 COPY dockerfiles/entrypoint.sh /usr/local/bin/entrypoint.sh
