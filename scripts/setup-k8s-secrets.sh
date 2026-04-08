@@ -6,7 +6,7 @@ set -a
 source .env
 set +a
 
-NAMESPACE="${CODING_AGENT_NAMESPACE:-coding-agent}"
+NAMESPACE="${THE_DEV_TEAM_NAMESPACE:-the-dev-team}"
 
 echo "Creating namespace ${NAMESPACE}..."
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -

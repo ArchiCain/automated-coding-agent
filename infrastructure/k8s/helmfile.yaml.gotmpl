@@ -220,71 +220,62 @@ releases:
             cpu: {{ env "DOCS_CPU_LIMIT" | default "100m" }}
 
   # ===================================================================
-  # Coding Agent Services (namespace: coding-agent)
+  # THE Dev Team (namespace: the-dev-team)
   # ===================================================================
 
-  - name: coding-agent-backend
-    namespace: {{ env "CODING_AGENT_NAMESPACE" | default "coding-agent" }}
-    chart: ../../projects/coding-agent/backend/chart
+  - name: the-dev-team-backend
+    namespace: {{ env "THE_DEV_TEAM_NAMESPACE" | default "the-dev-team" }}
+    chart: ../../projects/the-dev-team/backend/chart
     createNamespace: true
     values:
       - image:
-          repository: {{ env "CODING_AGENT_BACKEND_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/coding-agent-backend") }}
+          repository: {{ env "THE_DEV_TEAM_BACKEND_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/the-dev-team-backend") }}
           tag: {{ env "IMAGE_TAG" | default "latest" }}
         ingress:
           enabled: true
-          host: {{ env "CODING_AGENT_BACKEND_HOST" | default (print "agent-api." (env "DEV_HOSTNAME" | default "localhost")) }}
+          host: {{ env "THE_DEV_TEAM_BACKEND_HOST" | default (print "agent-api." (env "DEV_HOSTNAME" | default "localhost")) }}
           tls: {{ .Values | get "ingressTLS" false }}
         env:
           NODE_ENV: {{ env "NODE_ENV" | default "production" }}
-          PORT: {{ env "K8S_SERVICE_PORT" | default "8080" }}
-          SERVICE_NAME: {{ env "CODING_AGENT_BACKEND_SERVICE_NAME" | default "coding-agent-backend" }}
-          CODING_AGENT_CORS_ORIGINS: "{{ env "CODING_AGENT_CORS_ORIGINS" | default "*" }}"
-          CODING_AGENT_WORKSPACE_ROOT: /workspace
+          PORT: "8080"
           REPO_ROOT: /workspace
-          EXECUTION_MODE: {{ env "EXECUTION_MODE" | default "sandbox" }}
+          CORS_ORIGINS: "{{ env "CORS_ORIGINS" | default "*" }}"
         secretEnv:
-          ANTHROPIC_API_KEY: {{ env "ANTHROPIC_API_KEY" | default "" }}
           CLAUDE_CODE_OAUTH_TOKEN: {{ env "CLAUDE_CODE_OAUTH_TOKEN" | default "" }}
           GITHUB_TOKEN: {{ env "GITHUB_TOKEN" | default "" }}
           GITHUB_APP_ID: {{ env "GITHUB_APP_ID" | default "" }}
-          GITHUB_APP_CLIENT_ID: {{ env "GITHUB_APP_CLIENT_ID" | default "" }}
           GITHUB_APP_INSTALLATION_ID: {{ env "GITHUB_APP_INSTALLATION_ID" | default "" }}
         githubApp:
           privateKeySecret: {{ env "GITHUB_APP_PRIVATE_KEY_SECRET" | default "" }}
-        docker:
-          socketMount: {{ env "DOCKER_SOCKET_MOUNT" | default "true" }}
         workspace:
           enabled: true
-          size: {{ env "CODING_AGENT_WORKSPACE_SIZE" | default "50Gi" }}
+          size: {{ env "THE_DEV_TEAM_WORKSPACE_SIZE" | default "50Gi" }}
           repoOwner: {{ env "REPO_OWNER" | default "ArchiCain" }}
           repoName: {{ env "REPO_NAME" | default "automated-coding-agent" }}
         resources:
           requests:
-            memory: {{ env "CODING_AGENT_BACKEND_MEMORY_REQUEST" | default "512Mi" }}
-            cpu: {{ env "CODING_AGENT_BACKEND_CPU_REQUEST" | default "200m" }}
+            memory: "512Mi"
+            cpu: "200m"
           limits:
-            memory: {{ env "CODING_AGENT_BACKEND_MEMORY_LIMIT" | default "2Gi" }}
-            cpu: {{ env "CODING_AGENT_BACKEND_CPU_LIMIT" | default "2000m" }}
+            memory: "2Gi"
+            cpu: "2000m"
 
-  - name: the-dev-team-dashboard
-    namespace: {{ env "CODING_AGENT_NAMESPACE" | default "coding-agent" }}
-    chart: ../../projects/coding-agent/dashboard/chart
+  - name: the-dev-team-frontend
+    namespace: {{ env "THE_DEV_TEAM_NAMESPACE" | default "the-dev-team" }}
+    chart: ../../projects/the-dev-team/frontend/chart
     createNamespace: true
     values:
       - image:
-          repository: {{ env "DASHBOARD_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/the-dev-team-dashboard") }}
+          repository: {{ env "THE_DEV_TEAM_FRONTEND_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/the-dev-team-frontend") }}
           tag: {{ env "IMAGE_TAG" | default "latest" }}
         ingress:
           enabled: true
-          host: {{ env "DASHBOARD_HOST" | default (print "dashboard." (env "DEV_HOSTNAME" | default "localhost")) }}
-        env:
-          VITE_BACKEND_URL: "http://coding-agent-backend:8080"
+          host: {{ env "THE_DEV_TEAM_FRONTEND_HOST" | default (print "devteam." (env "DEV_HOSTNAME" | default "localhost")) }}
         resources:
           requests:
-            memory: {{ env "DASHBOARD_MEMORY_REQUEST" | default "128Mi" }}
-            cpu: {{ env "DASHBOARD_CPU_REQUEST" | default "50m" }}
+            memory: "128Mi"
+            cpu: "50m"
           limits:
-            memory: {{ env "DASHBOARD_MEMORY_LIMIT" | default "256Mi" }}
-            cpu: {{ env "DASHBOARD_CPU_LIMIT" | default "200m" }}
+            memory: "256Mi"
+            cpu: "200m"
 

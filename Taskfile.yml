@@ -8,7 +8,8 @@ includes:
   database: ./projects/application/database/Taskfile.yml
   keycloak: ./projects/application/keycloak/Taskfile.yml
   e2e: ./projects/application/e2e/Taskfile.yml
-  coding-agent-backend: ./projects/coding-agent/backend/Taskfile.yml
+  devteam-backend: ./projects/the-dev-team/backend/Taskfile.yml
+  devteam-frontend: ./projects/the-dev-team/frontend/Taskfile.yml
   docs: ./projects/docs/Taskfile.yml
   infra:
     taskfile: ./infrastructure/Taskfile.yml
@@ -21,9 +22,6 @@ includes:
     dir: .
   minikube:
     taskfile: infrastructure/minikube/Taskfile.yml
-    dir: .
-  dashboard:
-    taskfile: projects/coding-agent/dashboard/Taskfile.yml
     dir: .
 
 tasks:
@@ -84,6 +82,27 @@ tasks:
     cmds:
       - kubectl logs -f deployment/{{.CLI_ARGS}} -n coding-agent --tail=100
 
+  open:
+    desc: "Port-forward frontend and backend for local access"
+    cmds:
+      - |
+        pkill -f "port-forward.*the-dev-team" 2>/dev/null || true
+        sleep 1
+        kubectl port-forward -n the-dev-team svc/the-dev-team-frontend 3002:8080 &
+        kubectl port-forward -n the-dev-team svc/the-dev-team-backend 8086:8080 &
+        sleep 2
+        echo "============================================"
+        echo "  Chat UI:  http://localhost:3002"
+        echo "  API:      http://localhost:8086"
+        echo "============================================"
+        echo "Port-forwards running. Run 'task close' to stop."
+
+  close:
+    desc: "Stop port-forwards"
+    cmds:
+      - pkill -f "port-forward.*the-dev-team" 2>/dev/null || true
+      - echo "Port-forwards stopped."
+
   # ===================================================================
   # THE Dev Team — Minikube-based full stack
   # ===================================================================
@@ -94,24 +113,7 @@ tasks:
       - task: minikube:start
       - task: setup-secrets
       - task: up:build-and-deploy
-      - |
-        DOMAIN="${DEV_HOSTNAME:-localhost}"
-        echo "============================================"
-        echo "THE Dev Team is deployed to Minikube."
-        echo ""
-        echo "  Dashboard:    http://dashboard.${DOMAIN}"
-        echo "  Orchestrator: http://agent-api.${DOMAIN}"
-        echo "  App:          http://app.${DOMAIN}"
-        echo "  Auth:         http://auth.${DOMAIN}"
-        echo "  Docs:         http://docs.${DOMAIN}"
-        echo ""
-        if [ "$DOMAIN" = "localhost" ]; then
-          echo "Run 'task minikube:tunnel' in a separate terminal"
-          echo "to access services via ingress."
-        else
-          echo "Services accessible from any device on your tailnet."
-        fi
-        echo "============================================"
+      - task: open
 
   up:build-and-deploy:
     desc: "Build images into Minikube and deploy (internal)"
@@ -126,7 +128,7 @@ tasks:
         echo ""
 
         echo "=== Building and pushing images ==="
-        for img in backend frontend keycloak coding-agent-backend the-dev-team-dashboard docs; do
+        for img in backend frontend keycloak the-dev-team-backend the-dev-team-frontend docs; do
           case $img in
             backend)
               docker build -t $REG/$img:$TAG -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend ;;
@@ -134,14 +136,14 @@ tasks:
               docker build -t $REG/$img:$TAG --build-arg VITE_BACKEND_URL=http://api.${DEV_HOSTNAME:-localhost} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend ;;
             keycloak)
               docker build -t $REG/$img:$TAG -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak ;;
-            coding-agent-backend)
-              docker build -t $REG/$img:$TAG -f projects/coding-agent/backend/dockerfiles/prod.Dockerfile projects/coding-agent/backend ;;
-            the-dev-team-dashboard)
-              docker build -t $REG/$img:$TAG -f projects/coding-agent/dashboard/dockerfiles/prod.Dockerfile projects/coding-agent/dashboard ;;
+            the-dev-team-backend)
+              docker build --build-arg CACHEBUST=$(date +%s) -t $REG/$img:$TAG -f projects/the-dev-team/backend/dockerfiles/prod.Dockerfile projects/the-dev-team/backend ;;
+            the-dev-team-frontend)
+              docker build -t $REG/$img:$TAG -f projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile projects/the-dev-team/frontend ;;
             docs)
               docker build -t $REG/$img:$TAG -f projects/docs/dockerfiles/prod.Dockerfile projects/docs ;;
           esac
-          docker push $REG/$img:$TAG || echo "Push failed for $img (registry may not be ready — images are still in Minikube Docker)"
+          docker push $REG/$img:$TAG || echo "Push failed for $img — images are still in Minikube Docker"
         done
         echo ""
         echo "=== All images built and pushed ==="
