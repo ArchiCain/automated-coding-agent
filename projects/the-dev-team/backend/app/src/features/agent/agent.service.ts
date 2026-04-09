@@ -3,6 +3,16 @@ import { v4 as uuidv4 } from 'uuid';
 import { ProviderRegistry } from './providers/provider-registry';
 import { AgentMessage } from './providers/provider.interface';
 
+/** Normalized message stored in session history */
+export interface NormalizedMessage {
+  sessionId: string;
+  type: string;
+  content?: string;
+  tool?: string;
+  input?: unknown;
+  output?: unknown;
+}
+
 export interface Session {
   id: string;
   provider: string;
@@ -13,6 +23,10 @@ export interface Session {
   abortController: AbortController | null;
   /** Claude Code session ID for resume support */
   claudeSessionId?: string;
+  /** System prompt given to the agent */
+  systemPrompt: string;
+  /** Full normalized message history */
+  messages: NormalizedMessage[];
 }
 
 /** Serializable session info (no AbortController) */
@@ -32,37 +46,9 @@ export class AgentService {
 
   constructor(private readonly providerRegistry: ProviderRegistry) {}
 
-  createSession(model?: string, provider?: string): SessionInfo {
-    const id = uuidv4();
-    const session: Session = {
-      id,
-      provider: provider || 'claude-code',
-      model: model || 'claude-sonnet-4-20250514',
-      createdAt: new Date(),
-      lastMessageAt: new Date(),
-      isActive: false,
-      abortController: null,
-    };
-    this.sessions.set(id, session);
-    this.logger.log(`Session created: ${id} (provider: ${session.provider}, model: ${session.model})`);
-    return this.toSessionInfo(session);
-  }
-
-  async *sendMessage(sessionId: string, message: string): AsyncIterable<AgentMessage> {
-    const session = this.getSessionInternal(sessionId);
-
-    if (session.isActive) {
-      throw new Error('Session is already processing a message. Cancel it first or wait.');
-    }
-
-    const provider = this.providerRegistry.getProvider(session.provider);
-    const abortController = new AbortController();
-    session.abortController = abortController;
-    session.isActive = true;
-    session.lastMessageAt = new Date();
-
+  private buildSystemPrompt(): string {
     const repoRoot = process.env.REPO_ROOT || '/workspace';
-    const systemPrompt = [
+    return [
       `You have access to a repository at ${repoRoot}.`,
       '',
       '## Available Tools',
@@ -100,12 +86,59 @@ export class AgentService {
       '',
       'Never push to main directly. Always work on branches.',
     ].join('\n');
+  }
+
+  createSession(model?: string, provider?: string): SessionInfo {
+    const id = uuidv4();
+    const systemPrompt = this.buildSystemPrompt();
+    const session: Session = {
+      id,
+      provider: provider || 'claude-code',
+      model: model || 'claude-sonnet-4-20250514',
+      createdAt: new Date(),
+      lastMessageAt: new Date(),
+      isActive: false,
+      abortController: null,
+      systemPrompt,
+      messages: [],
+    };
+    this.sessions.set(id, session);
+    this.logger.log(`Session created: ${id} (provider: ${session.provider}, model: ${session.model})`);
+    return this.toSessionInfo(session);
+  }
+
+  /** Append a normalized message to the session history */
+  addMessage(sessionId: string, message: NormalizedMessage): void {
+    const session = this.getSessionInternal(sessionId);
+    session.messages.push(message);
+  }
+
+  /** Get the system prompt and full message history for a session */
+  getHistory(sessionId: string): { systemPrompt: string; messages: NormalizedMessage[] } {
+    const session = this.getSessionInternal(sessionId);
+    return { systemPrompt: session.systemPrompt, messages: [...session.messages] };
+  }
+
+  async *sendMessage(sessionId: string, message: string): AsyncIterable<AgentMessage> {
+    const session = this.getSessionInternal(sessionId);
+
+    if (session.isActive) {
+      throw new Error('Session is already processing a message. Cancel it first or wait.');
+    }
+
+    const provider = this.providerRegistry.getProvider(session.provider);
+    const abortController = new AbortController();
+    session.abortController = abortController;
+    session.isActive = true;
+    session.lastMessageAt = new Date();
+
+    const repoRoot = process.env.REPO_ROOT || '/workspace';
 
     try {
       const stream = provider.query(message, {
         cwd: repoRoot,
         model: session.model,
-        systemPrompt,
+        systemPrompt: session.systemPrompt,
         abortController,
         resume: session.claudeSessionId,
       });

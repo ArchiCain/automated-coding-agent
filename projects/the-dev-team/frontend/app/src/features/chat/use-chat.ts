@@ -1,17 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { Session, AgentMessage } from '../shared';
+import type { Session, AgentMessage, SessionHistory } from '../shared';
 
 export function useChat() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Map<string, AgentMessage[]>>(new Map());
+  const [systemPrompts, setSystemPrompts] = useState<Map<string, string>>(new Map());
   const [isStreaming, setIsStreaming] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     const socket = io('/agent', { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
+
+    socket.on('agent:history', (data: SessionHistory) => {
+      const { sessionId, systemPrompt, messages: history } = data;
+      setSystemPrompts((prev) => {
+        const next = new Map(prev);
+        next.set(sessionId, systemPrompt);
+        return next;
+      });
+      setMessages((prev) => {
+        const next = new Map(prev);
+        next.set(sessionId, history);
+        return next;
+      });
+    });
 
     socket.on('agent:message', (msg: AgentMessage) => {
       const sid = msg.sessionId;
@@ -55,16 +70,18 @@ export function useChat() {
     };
   }, []);
 
+  // When active session changes, join the session to get history
+  useEffect(() => {
+    if (activeSessionId && socketRef.current) {
+      socketRef.current.emit('join:session', { sessionId: activeSessionId });
+    }
+  }, [activeSessionId]);
+
   const createSession = useCallback(async () => {
     const res = await fetch('/api/agent/sessions', { method: 'POST' });
     const session = (await res.json()) as Session;
     setSessions((prev) => [session, ...prev]);
     setActiveSessionId(session.id);
-    setMessages((prev) => {
-      const next = new Map(prev);
-      next.set(session.id, []);
-      return next;
-    });
   }, []);
 
   const deleteSession = useCallback(
@@ -72,6 +89,11 @@ export function useChat() {
       await fetch(`/api/agent/sessions/${sessionId}`, { method: 'DELETE' });
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       setMessages((prev) => {
+        const next = new Map(prev);
+        next.delete(sessionId);
+        return next;
+      });
+      setSystemPrompts((prev) => {
         const next = new Map(prev);
         next.delete(sessionId);
         return next;
@@ -87,6 +109,7 @@ export function useChat() {
     (message: string) => {
       if (!activeSessionId || !socketRef.current) return;
       setIsStreaming(true);
+      // Optimistically add user message (backend also stores it)
       setMessages((prev) => {
         const next = new Map(prev);
         const existing = next.get(activeSessionId) ?? [];
@@ -114,10 +137,15 @@ export function useChat() {
     ? messages.get(activeSessionId) ?? []
     : [];
 
+  const activeSystemPrompt = activeSessionId
+    ? systemPrompts.get(activeSessionId) ?? null
+    : null;
+
   return {
     sessions,
     activeSessionId,
     activeMessages,
+    activeSystemPrompt,
     isStreaming,
     createSession,
     deleteSession,

@@ -8,9 +8,26 @@ interface MetricsEntry {
   memory: string;
 }
 
+/** Derive a display name for a namespace based on context */
+function displayName(ns: string, env: string): string {
+  if (ns === 'app') return env || 'main';
+  if (ns === 'the-dev-team') return 'the-dev-team';
+  if (ns.startsWith('env-')) return `sandbox-${ns.slice(4)}`;
+  return ns;
+}
+
+/** Sort order: the-dev-team first, then app, then env-* alphabetically */
+function sortOrder(ns: string): number {
+  if (ns === 'the-dev-team') return 0;
+  if (ns === 'app') return 1;
+  if (ns.startsWith('env-')) return 2;
+  return 3;
+}
+
 export function useCluster(refreshInterval = 5000) {
   const [pods, setPods] = useState<PodInfo[]>([]);
   const [services, setServices] = useState<ServiceInfo[]>([]);
+  const [branch, setBranch] = useState('main');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -18,10 +35,11 @@ export function useCluster(refreshInterval = 5000) {
 
   const fetchData = useCallback(async () => {
     try {
-      const [podsRes, servicesRes, metricsRes] = await Promise.all([
+      const [podsRes, servicesRes, metricsRes, infoRes] = await Promise.all([
         fetch('/api/cluster/pods'),
         fetch('/api/cluster/services'),
         fetch('/api/cluster/metrics'),
+        fetch('/api/cluster/info'),
       ]);
 
       if (!podsRes.ok || !servicesRes.ok) {
@@ -31,10 +49,14 @@ export function useCluster(refreshInterval = 5000) {
       const podsData: PodInfo[] = await podsRes.json();
       const servicesData: ServiceInfo[] = await servicesRes.json();
 
+      if (infoRes.ok) {
+        const info = await infoRes.json();
+        if (info.branch) setBranch(info.branch);
+      }
+
       let metricsMap = new Map<string, { cpu: string; memory: string }>();
       if (metricsRes.ok) {
         const metricsRaw = await metricsRes.json();
-        // Backend may return { pods: [...] } or [...] depending on metrics availability
         const metricsData: MetricsEntry[] = Array.isArray(metricsRaw)
           ? metricsRaw
           : Array.isArray(metricsRaw?.pods)
@@ -74,19 +96,33 @@ export function useCluster(refreshInterval = 5000) {
 
     for (const pod of pods) {
       if (!nsMap.has(pod.namespace)) {
-        nsMap.set(pod.namespace, { namespace: pod.namespace, pods: [], services: [] });
+        nsMap.set(pod.namespace, {
+          namespace: pod.namespace,
+          displayName: displayName(pod.namespace, branch),
+          pods: [],
+          services: [],
+        });
       }
       nsMap.get(pod.namespace)!.pods.push(pod);
     }
 
     for (const svc of services) {
       if (!nsMap.has(svc.namespace)) {
-        nsMap.set(svc.namespace, { namespace: svc.namespace, pods: [], services: [] });
+        nsMap.set(svc.namespace, {
+          namespace: svc.namespace,
+          displayName: displayName(svc.namespace, branch),
+          pods: [],
+          services: [],
+        });
       }
       nsMap.get(svc.namespace)!.services.push(svc);
     }
 
-    return Array.from(nsMap.values()).sort((a, b) => a.namespace.localeCompare(b.namespace));
+    return Array.from(nsMap.values()).sort((a, b) => {
+      const orderDiff = sortOrder(a.namespace) - sortOrder(b.namespace);
+      if (orderDiff !== 0) return orderDiff;
+      return a.namespace.localeCompare(b.namespace);
+    });
   })();
 
   return { namespaces, loading, error, lastUpdated, refresh: fetchData };

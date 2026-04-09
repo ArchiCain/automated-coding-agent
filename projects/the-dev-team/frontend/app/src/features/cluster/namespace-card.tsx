@@ -45,6 +45,14 @@ function formatPorts(svc: ServiceInfo): string {
     .join(', ');
 }
 
+/** Strip the release/namespace prefix from a service name for cleaner display */
+function shortServiceName(name: string, namespace: string): string {
+  // e.g., "env-testing-features-backend" → "backend" when namespace is "env-testing-features"
+  const prefix = `${namespace}-`;
+  if (name.startsWith(prefix)) return name.slice(prefix.length);
+  return name;
+}
+
 interface NamespaceCardProps {
   group: NamespaceGroup;
   onPodClick?: (pod: PodInfo, serviceName: string) => void;
@@ -64,18 +72,26 @@ export function NamespaceCard({ group, onPodClick }: NamespaceCardProps) {
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            {group.namespace}
+            {group.displayName}
           </Typography>
-          <Chip
-            label={`${group.pods.length} pod${group.pods.length !== 1 ? 's' : ''}`}
-            size="small"
-            sx={{
-              height: 20,
-              fontSize: '0.7rem',
-              bgcolor: 'rgba(88, 166, 255, 0.15)',
-              color: 'primary.main',
-            }}
-          />
+          {(() => {
+            const failing = group.pods.filter((p) => {
+              const s = p.status.toLowerCase();
+              return s === 'failed' || s === 'crashloopbackoff' || s === 'imagepullbackoff' || s === 'error';
+            }).length;
+            return failing > 0 ? (
+              <Chip
+                label={`${failing} failing`}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: '0.7rem',
+                  bgcolor: 'rgba(248, 81, 73, 0.15)',
+                  color: 'error.main',
+                }}
+              />
+            ) : null;
+          })()}
         </Box>
 
         {/* Unified table */}
@@ -123,7 +139,7 @@ export function NamespaceCard({ group, onPodClick }: NamespaceCardProps) {
                         }}
                         title={pod.name}
                       >
-                        {svc?.name ?? pod.name}
+                        {shortServiceName(svc?.name ?? pod.name, group.namespace)}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>

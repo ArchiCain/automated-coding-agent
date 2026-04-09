@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import ChatIcon from '@mui/icons-material/Chat';
 import StorageIcon from '@mui/icons-material/Storage';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
 
 export function NavBar() {
   const location = useLocation();
@@ -44,12 +45,21 @@ export function NavBar() {
           </Button>
           <Button
             size="small"
-            color={location.pathname === '/cluster' ? 'primary' : 'inherit'}
-            onClick={() => navigate('/cluster')}
+            color={location.pathname === '/devops' ? 'primary' : 'inherit'}
+            onClick={() => navigate('/devops')}
             startIcon={<StorageIcon />}
             sx={{ textTransform: 'none', fontSize: '0.8rem' }}
           >
-            Cluster
+            DevOps
+          </Button>
+          <Button
+            size="small"
+            color={location.pathname === '/docs' ? 'primary' : 'inherit'}
+            onClick={() => navigate('/docs')}
+            startIcon={<MenuBookIcon />}
+            sx={{ textTransform: 'none', fontSize: '0.8rem' }}
+          >
+            Docs
           </Button>
         </Box>
       </Toolbar>

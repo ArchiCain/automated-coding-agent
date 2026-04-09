@@ -17,6 +17,11 @@ spec:
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name | default .Release.Name }}
       {{- end }}
+      {{- if and .Values.docker.socketMount .Values.docker.socketGid }}
+      securityContext:
+        supplementalGroups:
+          - {{ .Values.docker.socketGid }}
+      {{- end }}
       {{- if .Values.workspace.enabled }}
       initContainers:
         - name: fix-permissions

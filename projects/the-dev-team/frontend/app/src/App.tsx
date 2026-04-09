@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import { MuiThemeProvider } from './features/mui-theme';
 import { ChatPage } from './features/chat';
 import { ClusterPage } from './features/cluster';
+import { DocsPage } from './features/docs';
 import { NavBar } from './features/navigation';
 
 export default function App() {
@@ -20,7 +21,8 @@ export default function App() {
         >
           <Routes>
             <Route path="/" element={<ChatPage />} />
-            <Route path="/cluster" element={<ClusterPage />} />
+            <Route path="/devops" element={<ClusterPage />} />
+            <Route path="/docs" element={<DocsPage />} />
           </Routes>
         </Box>
       </BrowserRouter>

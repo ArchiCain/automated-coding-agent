@@ -7,7 +7,7 @@ metadata:
     {{- include "full-stack.labels" . | nindent 4 }}
     app.kubernetes.io/component: migration
   annotations:
-    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook": post-install
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
@@ -27,3 +27,6 @@ spec:
           env:
             - name: DATABASE_URL
               value: "postgresql://{{ .Values.database.auth.username }}:{{ .Values.database.auth.password }}@{{ .Release.Name }}-database:{{ .Values.database.port }}/{{ .Values.database.auth.database }}"
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config

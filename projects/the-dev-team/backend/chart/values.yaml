@@ -46,6 +46,7 @@ githubApp:
 # Docker socket mount for image building
 docker:
   socketMount: true  # Mount /var/run/docker.sock for image building
+  socketGid: 999     # GID of the docker group on the host (Minikube default)
 
 # Persistent workspace for cloned repos
 workspace:

@@ -17,7 +17,11 @@ spec:
     spec:
       containers:
         - name: keycloak
+          {{- if .Values.keycloak.image.tag }}
+          image: "{{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}"
+          {{- else }}
           image: "{{ .Values.global.registry }}/{{ .Values.keycloak.image.repository }}:{{ .Values.global.imageTag }}"
+          {{- end }}
           imagePullPolicy: {{ .Values.keycloak.image.pullPolicy }}
           ports:
             - name: http
@@ -42,17 +46,18 @@ spec:
               value: edge
           args:
             - start-dev
+            - --health-enabled=true
           livenessProbe:
             httpGet:
               path: /health/live
               port: http
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 15
           readinessProbe:
             httpGet:
               path: /health/ready
               port: http
-            initialDelaySeconds: 30
+            initialDelaySeconds: 90
             periodSeconds: 10
           resources:
             {{- toYaml .Values.keycloak.resources | nindent 12 }}

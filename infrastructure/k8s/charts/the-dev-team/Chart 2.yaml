@@ -1,5 +1,0 @@
-apiVersion: v2
-name: the-dev-team
-description: THE Dev Team orchestrator RBAC and security resources
-version: 1.0.0
-type: application

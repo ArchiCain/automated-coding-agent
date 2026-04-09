@@ -25,6 +25,12 @@ export class ClusterController {
     return this.clusterService.getNamespaces();
   }
 
+  @Get('info')
+  async getInfo() {
+    const branch = await this.clusterService.getBranch();
+    return { branch };
+  }
+
   @Get('logs/:namespace/:pod')
   async getLogs(
     @Param('namespace') namespace: string,
@@ -32,5 +38,47 @@ export class ClusterController {
     @Query('tail') tail?: string,
   ) {
     return this.clusterService.getLogs(namespace, pod, parseInt(tail || '200', 10));
+  }
+
+  @Get('prometheus/query')
+  async prometheusQuery(
+    @Query('query') query: string,
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+    @Query('step') step?: string,
+  ) {
+    return this.clusterService.queryPrometheus(query, start, end, step);
+  }
+
+  @Get('loki/query')
+  async lokiQuery(
+    @Query('query') query: string,
+    @Query('limit') limit?: string,
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+  ) {
+    return this.clusterService.queryLoki(query, parseInt(limit || '100', 10), start, end);
+  }
+
+  @Get('grafana/dashboards')
+  async grafanaDashboards() {
+    return this.clusterService.getGrafanaDashboards();
+  }
+
+  @Get('grafana/url')
+  async grafanaUrl() {
+    return { url: this.clusterService.getGrafanaUrl() };
+  }
+
+  @Get('docs')
+  async listDocs(@Query('path') subpath?: string) {
+    return this.clusterService.listDocs(subpath || '');
+  }
+
+  @Get('docs/read')
+  async readDoc(@Query('path') filePath: string) {
+    const content = await this.clusterService.readDoc(filePath);
+    if (content === null) return { error: 'Not found' };
+    return { content };
   }
 }

@@ -30,6 +30,7 @@ export interface ServiceInfo {
 
 export interface NamespaceGroup {
   namespace: string;
+  displayName: string;
   pods: PodInfo[];
   services: ServiceInfo[];
 }

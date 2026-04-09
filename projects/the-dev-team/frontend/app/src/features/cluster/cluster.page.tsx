@@ -7,15 +7,19 @@ import IconButton from '@mui/material/IconButton';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Skeleton from '@mui/material/Skeleton';
 import { useCluster } from './use-cluster';
 import { NamespaceCard } from './namespace-card';
 import { LogDrawer } from './log-drawer';
+import { MetricsPanel } from './metrics-panel';
+import { LogsPanel } from './logs-panel';
 import type { PodInfo } from './types';
 
-const INFRA_NAMESPACES = ['default', 'dns', 'traefik', 'registry', 'ingress-nginx'];
+const INFRA_NAMESPACES = ['default', 'dns', 'traefik', 'registry', 'ingress-nginx', 'monitoring'];
 
 function timeSince(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -24,14 +28,21 @@ function timeSince(date: Date): string {
   return `${Math.floor(seconds / 60)}m ago`;
 }
 
-export function ClusterPage() {
-  const { namespaces, loading, error, lastUpdated, refresh } = useCluster();
+function DeploymentsTab({
+  namespaces,
+  loading,
+  error,
+  lastUpdated,
+  refresh,
+}: {
+  namespaces: ReturnType<typeof useCluster>['namespaces'];
+  loading: boolean;
+  error: string | null;
+  lastUpdated: Date | null;
+  refresh: () => Promise<void>;
+}) {
   const [sinceText, setSinceText] = useState('');
   const [logTarget, setLogTarget] = useState<{ pod: PodInfo; serviceName: string } | null>(null);
-
-  const handlePodClick = (pod: PodInfo, serviceName: string) => {
-    setLogTarget({ pod, serviceName });
-  };
 
   useEffect(() => {
     if (!lastUpdated) return;
@@ -40,15 +51,9 @@ export function ClusterPage() {
     return () => clearInterval(id);
   }, [lastUpdated]);
 
-  const totalPods = namespaces.reduce((sum, ns) => sum + ns.pods.length, 0);
-  const runningPods = namespaces.reduce(
-    (sum, ns) => sum + ns.pods.filter((p) => p.status.toLowerCase() === 'running').length,
-    0,
-  );
   const failingPods = namespaces.reduce(
     (sum, ns) =>
-      sum +
-      ns.pods.filter((p) => {
+      sum + ns.pods.filter((p) => {
         const s = p.status.toLowerCase();
         return s === 'failed' || s === 'crashloopbackoff' || s === 'imagepullbackoff' || s === 'error';
       }).length,
@@ -57,27 +62,10 @@ export function ClusterPage() {
 
   const appNamespaces = namespaces.filter((ns) => !INFRA_NAMESPACES.includes(ns.namespace));
   const infraNamespaces = namespaces.filter((ns) => INFRA_NAMESPACES.includes(ns.namespace));
-  const infraPodCount = infraNamespaces.reduce((sum, ns) => sum + ns.pods.length, 0);
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Cluster
-        </Typography>
-        <Chip
-          label={`${totalPods} pods`}
-          size="small"
-          sx={{ bgcolor: 'rgba(88, 166, 255, 0.15)', color: 'primary.main' }}
-        />
-        {runningPods > 0 && (
-          <Chip
-            label={`${runningPods} running`}
-            size="small"
-            sx={{ bgcolor: 'rgba(63, 185, 80, 0.15)', color: 'secondary.main' }}
-          />
-        )}
+    <>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         {failingPods > 0 && (
           <Chip
             label={`${failingPods} failing`}
@@ -97,16 +85,11 @@ export function ClusterPage() {
         </Box>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {/* Loading skeleton */}
       {loading && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-          {[1, 2, 3, 4].map((i) => (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {[1, 2, 3].map((i) => (
             <Skeleton key={i} variant="rounded" height={200} sx={{ bgcolor: 'rgba(255,255,255,0.05)' }} />
           ))}
         </Box>
@@ -120,7 +103,6 @@ export function ClusterPage() {
 
       {!loading && namespaces.length > 0 && (
         <>
-          {/* Infrastructure accordion */}
           {infraNamespaces.length > 0 && (
             <Accordion
               defaultExpanded={false}
@@ -129,42 +111,33 @@ export function ClusterPage() {
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: '4px !important',
-                mb: 3,
+                mb: 2,
                 '&:before': { display: 'none' },
               }}
             >
               <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: 'text.secondary' }} />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Cluster Infrastructure
-                  </Typography>
-                  <Chip
-                    label={`${infraPodCount} pods`}
-                    size="small"
-                    sx={{ height: 20, fontSize: '0.7rem', bgcolor: 'rgba(255,255,255,0.06)' }}
-                  />
-                </Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Cluster Infrastructure
+                </Typography>
               </AccordionSummary>
               <AccordionDetails sx={{ pt: 0 }}>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {infraNamespaces.map((ns) => (
-                    <NamespaceCard key={ns.namespace} group={ns} onPodClick={handlePodClick} />
+                    <NamespaceCard key={ns.namespace} group={ns} onPodClick={(pod, svc) => setLogTarget({ pod, serviceName: svc })} />
                   ))}
                 </Box>
               </AccordionDetails>
             </Accordion>
           )}
 
-          {/* App namespace cards */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {appNamespaces.map((ns) => (
-              <NamespaceCard key={ns.namespace} group={ns} onPodClick={handlePodClick} />
+              <NamespaceCard key={ns.namespace} group={ns} onPodClick={(pod, svc) => setLogTarget({ pod, serviceName: svc })} />
             ))}
           </Box>
         </>
       )}
 
-      {/* Log drawer */}
       <LogDrawer
         open={!!logTarget}
         onClose={() => setLogTarget(null)}
@@ -172,6 +145,38 @@ export function ClusterPage() {
         podName={logTarget?.pod.name ?? ''}
         serviceName={logTarget?.serviceName ?? ''}
       />
+    </>
+  );
+}
+
+export function ClusterPage() {
+  const cluster = useCluster();
+  const [tab, setTab] = useState(0);
+
+  return (
+    <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
+      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+        DevOps
+      </Typography>
+
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        sx={{
+          mb: 3,
+          '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, fontSize: '0.85rem' },
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <Tab label="Deployments" />
+        <Tab label="Metrics" />
+        <Tab label="Log Search" />
+      </Tabs>
+
+      {tab === 0 && <DeploymentsTab {...cluster} />}
+      {tab === 1 && <MetricsPanel />}
+      {tab === 2 && <LogsPanel />}
     </Box>
   );
 }

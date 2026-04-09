@@ -9,6 +9,7 @@ export function ChatPage() {
     sessions,
     activeSessionId,
     activeMessages,
+    activeSystemPrompt,
     isStreaming,
     createSession,
     deleteSession,
@@ -37,7 +38,7 @@ export function ChatPage() {
             overflow: 'hidden',
           }}
         >
-          <MessageList messages={activeMessages} isStreaming={isStreaming} />
+          <MessageList messages={activeMessages} systemPrompt={activeSystemPrompt} isStreaming={isStreaming} />
           <MessageInput
             isStreaming={isStreaming}
             onSend={sendMessage}
