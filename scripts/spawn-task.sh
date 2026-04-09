@@ -167,7 +167,7 @@ tmux new-session -d -s "$SESSION" bash -c "
   export BACKEND_PORT=\"$BACKEND_PORT\"
   export KEYCLOAK_PORT=\"$KEYCLOAK_PORT\"
   export FRONTEND_PORT=\"$FRONTEND_PORT\"
-  export DATABASE_URL=\"postgresql://postgres:postgres@localhost:${DATABASE_PORT}/coding_agent\"
+  export DATABASE_URL=\"postgresql://postgres:postgres@localhost:${DATABASE_PORT}/the_dev_team\"
 
   # Change to task worktree
   cd \"$TASK_WORKTREE_PATH\"

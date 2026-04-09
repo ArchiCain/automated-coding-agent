@@ -286,18 +286,5 @@ example-files/.worktrees/
 .the-dev-team/history/tasks/
 .the-dev-team/history/orchestrator/
 
-# Coding agent data: Track plan definitions but ignore execution state
-# Plan files (TRACKED - committed to git):
-#   .coding-agent-data/backlog/*/plan.md
-#   .coding-agent-data/backlog/*/tasks.jsonl
-#   .coding-agent-data/backlog/*/state.json
-#   .coding-agent-data/backlog/*/*.md
-
-# Runtime/execution files (IGNORED - not committed):
-.coding-agent-data/backlog/.jobs/
-.coding-agent-data/backlog/*/locks/
-.coding-agent-data/backlog/*/docker-state.json
-.coding-agent-data/backlog/*/docker.lock
-.coding-agent-data/backlog/*/*.lock
-.coding-agent-data/backlog/*/*.tmp
-.coding-agent-data/backlog/*/*.backup
+# Legacy coding-agent-data directory (no longer used, replaced by .the-dev-team/)
+.coding-agent-data/

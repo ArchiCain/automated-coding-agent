@@ -14,16 +14,16 @@ This directory contains all deployable projects in the automated-repo monorepo, 
 
 K8s namespace: `app`
 
-## Coding Agent (`projects/coding-agent/`)
+## THE Dev Team (`projects/the-dev-team/`)
 
 | Project | Path | Stack | Description |
 |---------|------|-------|-------------|
-| **backend** | `projects/coding-agent/backend` | NestJS + Claude Code SDK | Autonomous coding agent API |
-| **frontend** | `projects/coding-agent/frontend` | Angular | Coding agent UI |
+| **backend** | `projects/the-dev-team/backend` | NestJS + Claude Code SDK | Orchestrator + API |
+| **frontend** | `projects/the-dev-team/frontend` | React + Vite | Chat UI + cluster visualization |
 
-K8s namespace: `coding-agent`
+K8s namespace: `the-dev-team`
 
-Runtime data (backlog, agent configs) lives in `.coding-agent-data/` at the repo root.
+Runtime data (task state, history, agent configs) lives in `.the-dev-team/` at the repo root.
 
 ## Shared
 

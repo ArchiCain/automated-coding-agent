@@ -98,7 +98,7 @@ Valid status values:
 Use the project path from `projects/README.md`:
 - `backend` (maps to `projects/backend`)
 - `frontend` (maps to `projects/frontend`)
-- `coding-agent-backend` (maps to `projects/coding-agent-backend`)
+- `the-dev-team-backend` (maps to `projects/the-dev-team/backend`)
 
 ### Features
 
