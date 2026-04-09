@@ -6,6 +6,73 @@ vars:
   LABEL_SELECTOR: managed-by=the-dev-team
 
 tasks:
+  deploy:
+    desc: "Build from worktree, push, and deploy a sandbox (usage: task env:deploy NAME=my-feature)"
+    vars:
+      NAME: '{{.NAME}}'
+      WORKTREE: '{{.WORKTREE | default (print "/workspace/.worktrees/" .NAME)}}'
+      REGISTRY: '{{.REGISTRY | default "localhost:30500"}}'
+      SERVICES: '{{.SERVICES | default "backend frontend"}}'
+    preconditions:
+      - sh: '[ -n "{{.NAME}}" ]'
+        msg: "Usage: task env:deploy NAME=<name> [WORKTREE=<path>] [SERVICES='backend frontend']"
+    cmds:
+      - |
+        NAME="{{.NAME}}"
+        WORKTREE="{{.WORKTREE}}"
+        REG="{{.REGISTRY}}"
+        TAG="${NAME}"
+        SERVICES="{{.SERVICES}}"
+
+        echo "=== Building images from worktree ==="
+        echo "Worktree: ${WORKTREE}"
+        echo "Tag: ${TAG}"
+        echo ""
+
+        for svc in ${SERVICES}; do
+          case ${svc} in
+            backend)
+              echo "Building backend..."
+              docker build -t ${REG}/backend:${TAG} \
+                -f ${WORKTREE}/projects/application/backend/dockerfiles/prod.Dockerfile \
+                ${WORKTREE}/projects/application/backend
+              docker push ${REG}/backend:${TAG} || true
+              ;;
+            frontend)
+              echo "Building frontend..."
+              docker build -t ${REG}/frontend:${TAG} \
+                -f ${WORKTREE}/projects/application/frontend/dockerfiles/prod.Dockerfile \
+                ${WORKTREE}/projects/application/frontend
+              docker push ${REG}/frontend:${TAG} || true
+              ;;
+            *)
+              echo "Unknown service: ${svc}, skipping"
+              ;;
+          esac
+          echo ""
+        done
+
+        echo "=== Deploying sandbox env-${NAME} ==="
+        kubectl create namespace env-${NAME} --dry-run=client -o yaml | kubectl apply -f -
+        kubectl label namespace env-${NAME} managed-by=the-dev-team sandbox-name=${NAME} --overwrite
+
+        helm upgrade --install env-${NAME} \
+          {{.CHART_PATH}} \
+          --namespace env-${NAME} \
+          --values {{.VALUES_PATH}} \
+          --set global.imageTag=${TAG} \
+          --wait --timeout 5m
+
+        echo ""
+        echo "=== Waiting for pods ==="
+        kubectl wait --for=condition=Ready pods --all -n env-${NAME} --timeout=300s || true
+
+        echo ""
+        echo "=== Sandbox deployed ==="
+        kubectl get pods -n env-${NAME} --no-headers
+        echo ""
+        echo "Sandbox env-${NAME} is running."
+
   create:
     desc: "Create sandbox environment for a task (usage: task env:create -- TASK_ID)"
     vars:
