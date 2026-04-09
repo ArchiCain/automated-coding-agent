@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ClusterService } from './cluster.service';
 
 @Controller('cluster')
@@ -23,5 +23,14 @@ export class ClusterController {
   @Get('namespaces')
   async getNamespaces() {
     return this.clusterService.getNamespaces();
+  }
+
+  @Get('logs/:namespace/:pod')
+  async getLogs(
+    @Param('namespace') namespace: string,
+    @Param('pod') pod: string,
+    @Query('tail') tail?: string,
+  ) {
+    return this.clusterService.getLogs(namespace, pod, parseInt(tail || '200', 10));
   }
 }

@@ -47,9 +47,10 @@ function formatPorts(svc: ServiceInfo): string {
 
 interface NamespaceCardProps {
   group: NamespaceGroup;
+  onPodClick?: (pod: PodInfo, serviceName: string) => void;
 }
 
-export function NamespaceCard({ group }: NamespaceCardProps) {
+export function NamespaceCard({ group, onPodClick }: NamespaceCardProps) {
   return (
     <Card
       sx={{
@@ -105,7 +106,11 @@ export function NamespaceCard({ group }: NamespaceCardProps) {
                   return (
                     <TableRow
                       key={pod.name}
-                      sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' } }}
+                      onClick={() => onPodClick?.(pod, svc?.name ?? pod.name)}
+                      sx={{
+                        cursor: onPodClick ? 'pointer' : 'default',
+                        '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' },
+                      }}
                     >
                       <TableCell
                         sx={{

@@ -12,6 +12,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Skeleton from '@mui/material/Skeleton';
 import { useCluster } from './use-cluster';
 import { NamespaceCard } from './namespace-card';
+import { LogDrawer } from './log-drawer';
+import type { PodInfo } from './types';
 
 const INFRA_NAMESPACES = ['default', 'dns', 'traefik', 'registry', 'ingress-nginx'];
 
@@ -25,6 +27,11 @@ function timeSince(date: Date): string {
 export function ClusterPage() {
   const { namespaces, loading, error, lastUpdated, refresh } = useCluster();
   const [sinceText, setSinceText] = useState('');
+  const [logTarget, setLogTarget] = useState<{ pod: PodInfo; serviceName: string } | null>(null);
+
+  const handlePodClick = (pod: PodInfo, serviceName: string) => {
+    setLogTarget({ pod, serviceName });
+  };
 
   useEffect(() => {
     if (!lastUpdated) return;
@@ -141,7 +148,7 @@ export function ClusterPage() {
               <AccordionDetails sx={{ pt: 0 }}>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
                   {infraNamespaces.map((ns) => (
-                    <NamespaceCard key={ns.namespace} group={ns} />
+                    <NamespaceCard key={ns.namespace} group={ns} onPodClick={handlePodClick} />
                   ))}
                 </Box>
               </AccordionDetails>
@@ -151,11 +158,20 @@ export function ClusterPage() {
           {/* App namespace cards */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
             {appNamespaces.map((ns) => (
-              <NamespaceCard key={ns.namespace} group={ns} />
+              <NamespaceCard key={ns.namespace} group={ns} onPodClick={handlePodClick} />
             ))}
           </Box>
         </>
       )}
+
+      {/* Log drawer */}
+      <LogDrawer
+        open={!!logTarget}
+        onClose={() => setLogTarget(null)}
+        namespace={logTarget?.pod.namespace ?? ''}
+        podName={logTarget?.pod.name ?? ''}
+        serviceName={logTarget?.serviceName ?? ''}
+      />
     </Box>
   );
 }

@@ -157,6 +157,23 @@ export class ClusterService {
     }
   }
 
+  async getLogs(namespace: string, pod: string, tailLines = 200): Promise<{ lines: string[] }> {
+    try {
+      const response = await this.coreApi.readNamespacedPodLog({
+        name: pod,
+        namespace,
+        tailLines,
+      });
+      const lines = (typeof response === 'string' ? response : String(response))
+        .split('\n')
+        .filter(Boolean);
+      return { lines };
+    } catch (error) {
+      this.logger.error(`Failed to get logs for ${namespace}/${pod}`, error);
+      return { lines: [`Error: Could not retrieve logs for ${pod}`] };
+    }
+  }
+
   private mapPod(pod: k8s.V1Pod): PodInfo {
     const containerStatuses = pod.status?.containerStatuses ?? [];
     const totalContainers =
