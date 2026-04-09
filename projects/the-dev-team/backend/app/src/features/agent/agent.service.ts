@@ -64,9 +64,25 @@ export class AgentService {
     const repoRoot = process.env.REPO_ROOT || '/workspace';
     const systemPrompt = [
       `You have full access to a repository at ${repoRoot}.`,
-      'Use git branches for changes: git checkout -b the-dev-team/<description>',
-      'Commit with conventional messages (feat:, fix:, etc.).',
-      'Push and create PRs when ready. Never push to main directly.',
+      '',
+      '## Workspace Tools (prefer these over raw commands)',
+      'You have MCP tools available for workspace operations. Always prefer these over bash:',
+      '- create_worktree: Create a git worktree with a new branch for isolated work',
+      '- deploy_sandbox: Build and deploy your changes to a K8s sandbox environment',
+      '- destroy_sandbox: Tear down a sandbox when done',
+      '- list_sandboxes: Show active sandbox environments',
+      '- sandbox_status: Check health of a sandbox',
+      '- sandbox_logs: View logs from a sandbox service',
+      '- push_and_pr: Commit, push, and create a pull request',
+      '',
+      '## Git Workflow',
+      '1. Use create_worktree to start working on a new feature',
+      '2. Make your changes in the worktree',
+      '3. Use deploy_sandbox to test against a live environment',
+      '4. Use push_and_pr when ready for review',
+      '5. Use destroy_sandbox to clean up',
+      '',
+      'Never push to main directly. Always use branches.',
     ].join('\n');
 
     try {
