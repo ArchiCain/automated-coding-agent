@@ -31,12 +31,17 @@ spec:
           command: ["sh", "-c"]
           args:
             - |
+              # Set up git credentials for clone
+              git config --global credential.helper store
+              if [ -n "$GITHUB_TOKEN" ]; then
+                echo "https://x-access-token:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+              fi
               if [ ! -d "{{ .Values.workspace.mountPath }}/.git" ]; then
                 echo "Cloning repository..."
-                git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/{{ .Values.workspace.repoOwner }}/{{ .Values.workspace.repoName }}.git" "{{ .Values.workspace.mountPath }}"
+                git clone "https://github.com/{{ .Values.workspace.repoOwner }}/{{ .Values.workspace.repoName }}.git" "{{ .Values.workspace.mountPath }}"
               else
                 echo "Repository exists, fetching latest..."
-                cd "{{ .Values.workspace.mountPath }}" && git fetch --all --prune || true
+                cd "{{ .Values.workspace.mountPath }}" && git remote set-url origin "https://github.com/{{ .Values.workspace.repoOwner }}/{{ .Values.workspace.repoName }}.git" && git fetch --all --prune || true
               fi
           volumeMounts:
             - name: workspace
