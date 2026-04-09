@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Box from '@mui/material/Box';
 import { MuiThemeProvider } from './features/mui-theme';
 import { ChatPage } from './features/chat';
 import { ClusterPage } from './features/cluster';
@@ -9,10 +10,19 @@ export default function App() {
     <MuiThemeProvider>
       <BrowserRouter>
         <NavBar />
-        <Routes>
-          <Route path="/" element={<ChatPage />} />
-          <Route path="/cluster" element={<ClusterPage />} />
-        </Routes>
+        <Box
+          sx={{
+            pt: '48px',
+            height: '100vh',
+            overflow: 'auto',
+            bgcolor: 'background.default',
+          }}
+        >
+          <Routes>
+            <Route path="/" element={<ChatPage />} />
+            <Route path="/cluster" element={<ClusterPage />} />
+          </Routes>
+        </Box>
       </BrowserRouter>
     </MuiThemeProvider>
   );
