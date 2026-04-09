@@ -4,6 +4,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { HealthModule } from './features/health';
 import { CorsModule } from './features/cors';
 import { AgentModule } from './features/agent';
+import { ClusterModule } from './features/cluster';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { AgentModule } from './features/agent';
     HealthModule,
     CorsModule,
     AgentModule,
+    ClusterModule,
   ],
 })
 export class AppModule {}

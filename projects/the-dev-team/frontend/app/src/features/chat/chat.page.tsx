@@ -1,8 +1,4 @@
 import Box from '@mui/material/Box';
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
-import TerminalIcon from '@mui/icons-material/Terminal';
 import { useChat } from './use-chat';
 import { SessionSidebar } from './session-sidebar';
 import { MessageList } from './message-list';
@@ -22,27 +18,7 @@ export function ChatPage() {
   } = useChat();
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <AppBar
-        position="static"
-        elevation={0}
-        sx={{
-          bgcolor: 'background.paper',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-        }}
-      >
-        <Toolbar variant="dense">
-          <TerminalIcon sx={{ mr: 1, color: 'secondary.main' }} />
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}
-          >
-            THE Dev Team
-          </Typography>
-        </Toolbar>
-      </AppBar>
-
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', pt: '48px' }}>
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SessionSidebar
           sessions={sessions}

@@ -17,6 +17,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.12",
     "@anthropic-ai/claude-code": "^2.1.12",
+    "@kubernetes/client-node": "^1.4.0",
     "@nestjs/common": "^11.1.9",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.9",
