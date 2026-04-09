@@ -92,7 +92,7 @@ Build and unit tests run **before** deployment to fail fast on cheap checks. Onl
 - Run `performance` gate
 ```
 
-`task.touchesFrontend` is determined from the changed files (anything under `projects/application/frontend/` or `projects/coding-agent/dashboard/`). It drives whether the designer runs and whether the three frontend-specific gates are in the sequence.
+`task.touchesFrontend` is determined from the changed files (anything under `projects/application/frontend/` or `projects/the-dev-team/frontend/`). It drives whether the designer runs and whether the three frontend-specific gates are in the sequence.
 
 ## Phase 5 — Review + Fix
 
@@ -193,7 +193,7 @@ Gate results and findings are preserved across restarts because they live in the
 
 ## Sequential vs parallel
 
-The execution loop is deliberately sequential. Parallelism lives at the **task pool** level — N agent slots can run N tasks concurrently, each through its own sequential loop. This gives concurrency where it matters (throughput across unrelated tasks) without the complexity of parallel phases within one task. See [Task Decomposition & Concurrency](../projects/coding-agent/backlog.md) and the `AgentPoolService` in the [Orchestrator](../projects/coding-agent/backend.md).
+The execution loop is deliberately sequential. Parallelism lives at the **task pool** level — N agent slots can run N tasks concurrently, each through its own sequential loop. This gives concurrency where it matters (throughput across unrelated tasks) without the complexity of parallel phases within one task. See [Task Decomposition & Concurrency](../projects/the-dev-team/backlog.md) and the `AgentPoolService` in the [Backend](../projects/the-dev-team/backend.md).
 
 ## Related reading
 

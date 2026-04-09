@@ -52,7 +52,7 @@ Will hit every registered endpoint (OpenAPI spec or NestJS route registry) and v
 Will verify the schema state in the sandbox database matches the expected migrations output. Stubbed until schema expectations are codified.
 
 ### 8. e2e-tests
-Runs `npx playwright test` from `projects/application/e2e/` with `BASE_URL=http://app.env-{task-id}.svc.cluster.local`. Fails on any failing spec. See [Design Validation](../projects/coding-agent/backend.md) for how the designer writes these.
+Runs `npx playwright test` from `projects/application/e2e/` with `BASE_URL=http://app.env-{task-id}.svc.cluster.local`. Fails on any failing spec. See [Backend](../projects/the-dev-team/backend.md) for how the designer writes these.
 
 ### 9. accessibility
 The designer uses `@axe-core/playwright` to run WCAG AA audits on every page modified by the task. The raw axe output is written to `.the-dev-team/state/{task-id}/gate-results/accessibility-raw.json`, and the gate reads it. Fails if there are **any** violations — advisory findings are included in the PR description but do not block.
@@ -132,5 +132,5 @@ Gates with `applicableTo: 'frontend'` return `passed: true, output: 'Skipped (no
 
 - [Execution Loop](execution-loop.md)
 - [Sandbox Environments](sandbox-environments.md)
-- [Task State & History](../projects/coding-agent/backlog.md)
+- [Task State & History](../projects/the-dev-team/backlog.md)
 - [PR Workflow](pr-workflow.md)

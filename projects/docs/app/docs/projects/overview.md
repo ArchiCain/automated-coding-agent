@@ -10,9 +10,9 @@ projects/
 │   ├── database/
 │   ├── keycloak/
 │   └── e2e/
-├── coding-agent/        # THE Dev Team (K8s namespace: coding-agent)
-│   ├── backend/         # Orchestrator
-│   └── dashboard/       # Observability dashboard
+├── the-dev-team/        # THE Dev Team (K8s namespace: the-dev-team)
+│   ├── backend/         # Orchestrator + API
+│   └── frontend/        # Chat UI + cluster visualization
 └── docs/                # Documentation site
 ```
 
@@ -43,15 +43,15 @@ When a task runs, THE Dev Team deploys an entire copy of this stack into an ephe
 
 ## THE Dev Team
 
-The autonomous development system: an orchestrator, a dashboard, and a shared skills library. Both services are deployed to the `coding-agent` K8s namespace.
+The autonomous development system: an orchestrator, a dashboard, and a shared skills library. Both services are deployed to the `the-dev-team` K8s namespace.
 
 | Project | Stack | Purpose |
 |---------|-------|---------|
-| [Orchestrator](coding-agent/backend.md) | NestJS 11 + Claude Code SDK | Task intake, agent pool, execution loop, validation gates, PR management |
-| [Dashboard](coding-agent/dashboard.md) | React 19 + Vite + MUI 6 | Real-time observability into agents, tasks, environments, history |
-| [Task State & History](coding-agent/backlog.md) | File-based + git | Per-task state, findings, session transcripts, searchable archive |
+| [Backend](the-dev-team/backend.md) | NestJS 11 + Claude Code SDK | Task intake, agent pool, execution loop, validation gates, PR management |
+| [Frontend](the-dev-team/frontend.md) | React 19 + Vite | Chat UI, cluster visualization, real-time observability |
+| [Task State & History](the-dev-team/backlog.md) | File-based + git | Per-task state, findings, session transcripts, searchable archive |
 
-The orchestrator and dashboard both live under `projects/coding-agent/`. The runtime data directory is `.the-dev-team/` at the repo root, and the shared skills library is at `skills/`.
+Both services live under `projects/the-dev-team/`. The runtime data directory is `.the-dev-team/` at the repo root, and the shared skills library is at `skills/`.
 
 Read the [THE Dev Team Overview](../the-dev-team/overview.md) for the mental model before diving into individual services.
 

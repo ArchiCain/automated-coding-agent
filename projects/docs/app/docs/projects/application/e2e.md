@@ -30,7 +30,7 @@ task e2e:report               # View HTML report
 | Protected Routes | `auth/protected-routes.spec.ts` | Access control, unauthorized redirects |
 | Chat | `chat/send-message.spec.ts` | Message sending, display, chat interface |
 | User Management | `user-management/create-user-login.spec.ts` | User creation, new user login |
-| Coding Agent | `coding-agent-workflow.spec.ts` | AI agent interactions |
+| THE Dev Team | `coding-agent-workflow.spec.ts` | AI agent interactions |
 | Navigation | `hamburger-menu.spec.ts` | Menu interactions, page navigation |
 
 ## Configuration

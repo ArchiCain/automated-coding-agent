@@ -106,32 +106,32 @@ jobs:
           docker push $REGISTRY/keycloak:$IMAGE_TAG
           docker push $REGISTRY/keycloak:latest
 
-      - name: Build and push coding-agent-backend
+      - name: Build and push the-dev-team-backend
         run: |
           docker build \
-            -t $REGISTRY/coding-agent-backend:$IMAGE_TAG \
-            -t $REGISTRY/coding-agent-backend:latest \
-            -f projects/coding-agent/backend/dockerfiles/prod.Dockerfile \
-            projects/coding-agent/backend
-          docker push $REGISTRY/coding-agent-backend:$IMAGE_TAG
-          docker push $REGISTRY/coding-agent-backend:latest
+            -t $REGISTRY/the-dev-team-backend:$IMAGE_TAG \
+            -t $REGISTRY/the-dev-team-backend:latest \
+            -f projects/the-dev-team/backend/dockerfiles/prod.Dockerfile \
+            projects/the-dev-team/backend
+          docker push $REGISTRY/the-dev-team-backend:$IMAGE_TAG
+          docker push $REGISTRY/the-dev-team-backend:latest
 
-      - name: Build and push dashboard
+      - name: Build and push the-dev-team-frontend
         run: |
           docker build \
-            -t $REGISTRY/the-dev-team-dashboard:$IMAGE_TAG \
-            -t $REGISTRY/the-dev-team-dashboard:latest \
-            -f projects/coding-agent/dashboard/dockerfiles/prod.Dockerfile \
-            projects/coding-agent/dashboard
-          docker push $REGISTRY/the-dev-team-dashboard:$IMAGE_TAG
-          docker push $REGISTRY/the-dev-team-dashboard:latest
+            -t $REGISTRY/the-dev-team-frontend:$IMAGE_TAG \
+            -t $REGISTRY/the-dev-team-frontend:latest \
+            -f projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile \
+            projects/the-dev-team/frontend
+          docker push $REGISTRY/the-dev-team-frontend:$IMAGE_TAG
+          docker push $REGISTRY/the-dev-team-frontend:latest
 
       - name: Create GitHub App secret
         run: |
           echo "${{ secrets.GITHUB_APP_PRIVATE_KEY }}" > /tmp/github-app-key.pem
-          kubectl create namespace coding-agent --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace the-dev-team --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic github-app-key \
-            --namespace coding-agent \
+            --namespace the-dev-team \
             --from-file=private-key.pem=/tmp/github-app-key.pem \
             --dry-run=client -o yaml | kubectl apply -f -
           rm -f /tmp/github-app-key.pem
@@ -147,13 +147,13 @@ jobs:
           kubectl rollout status deployment/backend -n app --timeout=120s
           kubectl rollout status deployment/frontend -n app --timeout=120s
           kubectl rollout status deployment/keycloak -n app --timeout=120s
-          kubectl rollout status deployment/coding-agent-backend -n coding-agent --timeout=180s
-          kubectl rollout status deployment/the-dev-team-dashboard -n coding-agent --timeout=120s
+          kubectl rollout status deployment/the-dev-team-backend -n the-dev-team --timeout=180s
+          kubectl rollout status deployment/the-dev-team-frontend -n the-dev-team --timeout=120s
           echo ""
           echo "=== App Namespace ==="
           kubectl get pods -n app
           kubectl get ingress -n app
           echo ""
-          echo "=== Coding Agent Namespace ==="
-          kubectl get pods -n coding-agent
-          kubectl get ingress -n coding-agent
+          echo "=== THE Dev Team Namespace ==="
+          kubectl get pods -n the-dev-team
+          kubectl get ingress -n the-dev-team

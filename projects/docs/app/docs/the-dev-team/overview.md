@@ -26,7 +26,7 @@ The outcome is a system where you can tell it "add a user profile page" and come
                 └──────────────┬───────────────┘
                                │
                       ┌────────▼────────┐
-                      │   Orchestrator  │  ← projects/coding-agent/backend
+                      │   Orchestrator  │  ← projects/the-dev-team/backend
                       │   (NestJS)      │
                       └────────┬────────┘
                                │
@@ -41,7 +41,7 @@ The outcome is a system where you can tell it "add a user profile page" and come
                                                 └─────────────┘
                                │
                        ┌───────▼────────┐
-                       │   Dashboard    │  ← projects/coding-agent/dashboard
+                       │   Dashboard    │  ← projects/the-dev-team/frontend
                        │   (React+MUI)  │
                        └────────────────┘
 ```
@@ -52,7 +52,7 @@ The outcome is a system where you can tell it "add a user profile page" and come
 - Every session, event, and gate result is written to `.the-dev-team/history/` as JSONL.
 - The **dashboard** reads REST + WebSocket from the orchestrator for live visibility.
 
-Everything runs in Kubernetes — Minikube locally, K3s in production. The orchestrator and dashboard are deployed to the `coding-agent` namespace; sandbox environments get their own `env-{task-id}` namespaces.
+Everything runs in Kubernetes — Minikube locally, K3s in production. The orchestrator and frontend are deployed to the `the-dev-team` namespace; sandbox environments get their own `env-{task-id}` namespaces.
 
 ## The nine roles
 

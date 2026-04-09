@@ -26,7 +26,7 @@ Instead of a single-agent gateway, THE Dev Team is a role-based orchestrator:
 - When all gates pass, the agent opens a PR with evidence (tests, screenshots, metrics)
 - A **human** merges — the agent never pushes to `main`
 
-The [Dashboard](projects/coding-agent/dashboard.md) gives you live visibility into every active task. The [Task State & History](projects/coding-agent/backlog.md) system records every session as JSONL transcripts and markdown summaries, synced to a protected git branch.
+The [Frontend](projects/the-dev-team/frontend.md) gives you live visibility into every active task. The [Task State & History](projects/the-dev-team/backlog.md) system records every session as JSONL transcripts and markdown summaries, synced to a protected git branch.
 
 Start here: [THE Dev Team Overview](the-dev-team/overview.md).
 
@@ -75,9 +75,9 @@ automated-coding-agent/
 │   │   ├── database/             # PostgreSQL + pgvector
 │   │   ├── keycloak/             # Auth service
 │   │   └── e2e/                  # Playwright tests
-│   ├── coding-agent/             # THE Dev Team
-│   │   ├── backend/              # Orchestrator (NestJS)
-│   │   └── dashboard/            # Observability dashboard (React + MUI)
+│   ├── the-dev-team/             # THE Dev Team
+│   │   ├── backend/              # Orchestrator + API (NestJS)
+│   │   └── frontend/             # Chat UI + cluster visualization (React)
 │   └── docs/                     # This documentation site
 ├── skills/                       # soul.md + 10 role skills
 ├── .the-dev-team/                # Runtime state, history, baselines, config
@@ -101,4 +101,4 @@ automated-coding-agent/
 - **Setting up a machine?** Start with [Prerequisites](getting-started/prerequisites.md) and [Environment Setup](getting-started/environment-setup.md).
 - **Running it locally?** See [Local Workflow](development/local-workflow.md).
 - **Submitting a task?** Jump to [Submitting Tasks](the-dev-team/submitting-tasks.md).
-- **Want to understand the architecture?** The [Orchestrator](projects/coding-agent/backend.md), [Execution Loop](the-dev-team/execution-loop.md), and [Validation Gates](the-dev-team/validation-gates.md) docs are the core.
+- **Want to understand the architecture?** The [Backend](projects/the-dev-team/backend.md), [Execution Loop](the-dev-team/execution-loop.md), and [Validation Gates](the-dev-team/validation-gates.md) docs are the core.

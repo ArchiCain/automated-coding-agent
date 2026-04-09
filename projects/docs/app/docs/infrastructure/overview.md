@@ -14,7 +14,7 @@ Helmfile ──> Helm charts ──> Kubernetes cluster
       ┌─────┬───────┼─────────────────┐
       │     │       │                 │
   Traefik  Registry  App services  THE Dev Team
-  (ingress)(images)  (app ns)      (coding-agent ns + env-* sandboxes)
+  (ingress)(images)  (app ns)      (the-dev-team ns + env-* sandboxes)
 ```
 
 - **Minikube** is the local K8s target. Everything runs in Kubernetes from day one, so local and production share the same topology (charts, namespaces, ingress). Use `task up` to get a cluster with everything deployed.
@@ -72,7 +72,7 @@ infrastructure/
 └── Taskfile.yml                  # Delegates to sub-Taskfiles
 ```
 
-Helm charts for the **application services** live with their projects (`projects/application/*/chart/`). The dashboard chart lives at `projects/coding-agent/dashboard/chart/`. Infrastructure-level and cross-cutting charts live in `infrastructure/k8s/charts/`.
+Helm charts for the **application services** live with their projects (`projects/application/*/chart/`). THE Dev Team charts live at `projects/the-dev-team/*/chart/`. Infrastructure-level and cross-cutting charts live in `infrastructure/k8s/charts/`.
 
 ## Build & deploy workflow
 
@@ -101,7 +101,7 @@ Images push to the in-cluster registry at `$REGISTRY` (defaults to `localhost:30
 ### 3. Deploy to the cluster
 
 ```bash
-task deploy:apply                      # Deploy all services (application + coding-agent)
+task deploy:apply                      # Deploy all services (application + the-dev-team)
 task deploy:diff                       # Preview changes
 task deploy:status                     # Check pods across namespaces
 task logs -- backend                   # Tail logs

@@ -176,7 +176,7 @@ Four steps:
 1. Edit `.the-dev-team/config/the-dev-team.config.yml`
 2. Add or change an entry under `roles:` for the role you want to change
 3. If you're switching to a provider that needs a new credential, add the env var to `the-dev-team-agent-secrets`
-4. Restart the orchestrator: `kubectl rollout restart deployment/coding-agent-backend -n coding-agent`
+4. Restart the orchestrator: `kubectl rollout restart deployment/the-dev-team-backend -n the-dev-team`
 
 The change takes effect for the next role dispatch. Tasks already running finish under the old config.
 
@@ -194,7 +194,7 @@ The orchestrator authenticates with GitHub via a GitHub App installation. The pr
    ```
 4. Run `task setup-secrets` to create the K8s secret from the `.pem` file and env vars
 
-The `setup-secrets` script reads the private key from `.github-app-private-key.pem` at the repo root (gitignored) and creates the appropriate K8s secret in the `coding-agent` namespace.
+The `setup-secrets` script reads the private key from `.github-app-private-key.pem` at the repo root (gitignored) and creates the appropriate K8s secret in the `the-dev-team` namespace.
 
 ## Environment variables
 
@@ -218,7 +218,7 @@ See [Environment Setup](../getting-started/environment-setup.md) for the full `.
 
 ## Related reading
 
-- [Orchestrator](../projects/coding-agent/backend.md)
+- [Backend](../projects/the-dev-team/backend.md)
 - [Execution Loop](execution-loop.md)
 - [Safety Model](safety-model.md)
 - [Roles & Skills](roles-and-skills.md)
