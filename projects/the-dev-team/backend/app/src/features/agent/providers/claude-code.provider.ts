@@ -25,8 +25,34 @@ export class ClaudeCodeProvider implements AgentProvider {
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       abortController: options.abortController,
-      // Register the workspace MCP server — gives the agent tools for
-      // sandbox deployment, worktree management, PR creation, etc.
+
+      // Restrict tools — no Bash, no arbitrary command execution.
+      // The agent can only use file operations + MCP tools we define.
+      allowedTools: [
+        // Built-in file operations
+        'Read', 'Write', 'Edit', 'Glob', 'Grep',
+        // All MCP tools from the workspace server
+        'mcp__workspace__create_worktree',
+        'mcp__workspace__deploy_sandbox',
+        'mcp__workspace__destroy_sandbox',
+        'mcp__workspace__list_sandboxes',
+        'mcp__workspace__sandbox_status',
+        'mcp__workspace__sandbox_logs',
+        'mcp__workspace__push_and_pr',
+        'mcp__workspace__git_status',
+        'mcp__workspace__git_diff',
+        'mcp__workspace__git_log',
+        'mcp__workspace__git_checkout',
+        'mcp__workspace__git_add',
+        'mcp__workspace__git_commit',
+        'mcp__workspace__git_push',
+        'mcp__workspace__git_pull',
+        'mcp__workspace__git_stash',
+        'mcp__workspace__git_branch',
+      ],
+
+      // Register the workspace MCP server — provides structured tools
+      // for git, sandbox deployment, worktree management, PR creation.
       mcpServers: {
         workspace: {
           type: 'stdio',

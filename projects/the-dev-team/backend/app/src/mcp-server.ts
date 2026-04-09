@@ -248,6 +248,189 @@ server.tool(
   },
 );
 
+// =========================================================================
+// Git tools — structured git operations (replaces Bash for git)
+// =========================================================================
+
+server.tool(
+  'git_status',
+  'Show the working tree status — modified, staged, and untracked files.',
+  {
+    cwd: z.string().optional().describe('Working directory (defaults to repo root)'),
+  },
+  async ({ cwd }) => {
+    const result = await runCommand('git', ['status', '--short'], cwd || REPO_ROOT);
+    const branch = await runCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'], cwd || REPO_ROOT);
+    return {
+      content: [{
+        type: 'text' as const,
+        text: `Branch: ${branch.stdout.trim()}\n\n${result.stdout || 'Working tree clean.'}`,
+      }],
+    };
+  },
+);
+
+server.tool(
+  'git_diff',
+  'Show changes in the working tree or between commits.',
+  {
+    path: z.string().optional().describe('File or directory to diff (defaults to all)'),
+    staged: z.boolean().optional().describe('Show staged changes only'),
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ path: diffPath, staged, cwd }) => {
+    const args = ['diff'];
+    if (staged) args.push('--cached');
+    if (diffPath) args.push(diffPath);
+    const result = await runCommand('git', args, cwd || REPO_ROOT);
+    return { content: [{ type: 'text' as const, text: result.stdout || 'No differences.' }] };
+  },
+);
+
+server.tool(
+  'git_log',
+  'Show recent commit history.',
+  {
+    count: z.number().optional().describe('Number of commits to show (default 10)'),
+    oneline: z.boolean().optional().describe('One line per commit (default true)'),
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ count, oneline, cwd }) => {
+    const args = ['log', `-${count || 10}`];
+    if (oneline !== false) args.push('--oneline');
+    const result = await runCommand('git', args, cwd || REPO_ROOT);
+    return { content: [{ type: 'text' as const, text: result.stdout }] };
+  },
+);
+
+server.tool(
+  'git_checkout',
+  'Switch branches or create a new branch.',
+  {
+    branch: z.string().describe('Branch name to switch to or create'),
+    create: z.boolean().optional().describe('Create the branch if it does not exist'),
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ branch, create, cwd }) => {
+    const args = ['checkout'];
+    if (create) args.push('-b');
+    args.push(branch);
+    const result = await runCommand('git', args, cwd || REPO_ROOT);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Checkout failed: ${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: `Switched to branch: ${branch}` }] };
+  },
+);
+
+server.tool(
+  'git_add',
+  'Stage files for commit.',
+  {
+    paths: z.string().describe('Files to stage — space-separated, or "." for all'),
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ paths, cwd }) => {
+    const args = ['add', ...paths.split(/\s+/)];
+    const result = await runCommand('git', args, cwd || REPO_ROOT);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Add failed: ${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: `Staged: ${paths}` }] };
+  },
+);
+
+server.tool(
+  'git_commit',
+  'Commit staged changes with a message.',
+  {
+    message: z.string().describe('Commit message (use conventional format: feat:, fix:, etc.)'),
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ message, cwd }) => {
+    const result = await runCommand('git', ['commit', '-m', message], cwd || REPO_ROOT);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Commit failed: ${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: result.stdout.trim() }] };
+  },
+);
+
+server.tool(
+  'git_push',
+  'Push the current branch to the remote repository.',
+  {
+    branch: z.string().optional().describe('Branch name (defaults to current branch)'),
+    setUpstream: z.boolean().optional().describe('Set upstream tracking (default true for new branches)'),
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ branch, setUpstream, cwd }) => {
+    const args = ['push'];
+    if (setUpstream !== false) args.push('-u');
+    args.push('origin');
+    if (branch) args.push(branch);
+    const result = await runCommand('git', args, cwd || REPO_ROOT);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Push failed: ${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: `Pushed successfully.\n${result.stderr}` }] };
+  },
+);
+
+server.tool(
+  'git_pull',
+  'Pull latest changes from the remote.',
+  {
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ cwd }) => {
+    const result = await runCommand('git', ['pull'], cwd || REPO_ROOT);
+    return { content: [{ type: 'text' as const, text: result.stdout || result.stderr }] };
+  },
+);
+
+server.tool(
+  'git_stash',
+  'Stash or restore uncommitted changes.',
+  {
+    action: z.enum(['push', 'pop', 'list', 'drop']).describe('Stash action'),
+    message: z.string().optional().describe('Stash message (for push)'),
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ action, message, cwd }) => {
+    const args = ['stash', action];
+    if (action === 'push' && message) args.push('-m', message);
+    const result = await runCommand('git', args, cwd || REPO_ROOT);
+    return { content: [{ type: 'text' as const, text: result.stdout || result.stderr || `Stash ${action} complete.` }] };
+  },
+);
+
+server.tool(
+  'git_branch',
+  'List, create, or delete branches.',
+  {
+    action: z.enum(['list', 'create', 'delete']).optional().describe('Action (default: list)'),
+    name: z.string().optional().describe('Branch name (for create/delete)'),
+    cwd: z.string().optional().describe('Working directory'),
+  },
+  async ({ action, name, cwd }) => {
+    const act = action || 'list';
+    if (act === 'list') {
+      const result = await runCommand('git', ['branch', '-a'], cwd || REPO_ROOT);
+      return { content: [{ type: 'text' as const, text: result.stdout }] };
+    }
+    if (act === 'create' && name) {
+      const result = await runCommand('git', ['branch', name], cwd || REPO_ROOT);
+      return { content: [{ type: 'text' as const, text: result.exitCode === 0 ? `Branch ${name} created.` : result.stderr }] };
+    }
+    if (act === 'delete' && name) {
+      const result = await runCommand('git', ['branch', '-d', name], cwd || REPO_ROOT);
+      return { content: [{ type: 'text' as const, text: result.exitCode === 0 ? `Branch ${name} deleted.` : result.stderr }] };
+    }
+    return { content: [{ type: 'text' as const, text: 'Invalid branch action.' }] };
+  },
+);
+
 // ── Start server ───────────────────────────────────────────────────
 
 async function main() {
