@@ -24,7 +24,7 @@ Taskfile.yml (root)
 ├── projects/application/keycloak/Taskfile.yml
 ├── projects/application/e2e/Taskfile.yml
 ├── projects/coding-agent/backend/Taskfile.yml        # THE Dev Team orchestrator
-├── projects/the-dev-team-dashboard/Taskfile.yml      # Dashboard SPA
+├── projects/coding-agent/dashboard/Taskfile.yml      # Dashboard SPA
 ├── projects/docs/Taskfile.yml
 └── infrastructure/
     ├── agent-envs/Taskfile.yml                       # env:*
@@ -36,6 +36,19 @@ Taskfile.yml (root)
 ```
 
 The root Taskfile includes all sub-Taskfiles. Environment variables from `.env` are loaded once at the root and inherited by every included task.
+
+## Top-level commands
+
+These are the commands you use most often:
+
+| Command | Purpose |
+|---------|---------|
+| `task up` | Start Minikube + build all images + deploy everything via Helmfile |
+| `task down` | Stop Minikube (preserves state for fast resume) |
+| `task destroy` | Delete the Minikube cluster and all data |
+| `task setup-secrets` | Create K8s secrets from `.env` (run before first deploy) |
+| `task status` | Show Minikube status, pods, and services across all namespaces |
+| `task logs -- SERVICE` | Tail kubectl logs for a deployment (e.g. `task logs -- coding-agent-backend`) |
 
 ## Common commands
 
@@ -107,16 +120,14 @@ See [Task State & History](../projects/coding-agent/backlog.md).
 
 ### Dashboard (`dashboard:*`)
 
-Convenience commands for the [THE Dev Team Dashboard](../projects/the-dev-team-dashboard.md):
+Convenience commands for the [THE Dev Team Dashboard](../projects/coding-agent/dashboard.md):
 
 | Command | Purpose |
 |---------|---------|
-| `task the-dev-team-dashboard:local:start` | Vite dev server |
-| `task the-dev-team-dashboard:local:build` | Production bundle |
-| `task the-dev-team-dashboard:local:test` | Vitest unit tests |
-| `task the-dev-team-dashboard:local:lint` | ESLint |
-| `task the-dev-team-dashboard:remote:build` | Docker image into Minikube |
-| `task the-dev-team-dashboard:remote:deploy` | Helm release into `the-dev-team` |
+| `task dashboard:local:run` | Vite dev server |
+| `task dashboard:local:build` | Production bundle |
+| `task dashboard:local:test` | Vitest unit tests |
+| `task dashboard:local:lint` | ESLint |
 
 ### Orchestrator (`coding-agent-backend:*`)
 
@@ -127,8 +138,6 @@ Convenience commands for the [THE Dev Team Dashboard](../projects/the-dev-team-d
 | `task coding-agent-backend:local:test` | Unit tests |
 | `task coding-agent-backend:local:test:integration` | Integration tests |
 | `task coding-agent-backend:local:lint` | ESLint |
-| `task coding-agent-backend:remote:build` | Docker image into Minikube |
-| `task coding-agent-backend:remote:deploy` | Helm release into `the-dev-team` |
 
 ### Testing
 
@@ -147,16 +156,6 @@ task e2e:test                                       # Playwright E2E
 task infra:init                  # Initialise Terraform
 task infra:plan                  # Plan changes
 task infra:apply                 # Provision EC2 + K3s
-```
-
-### Deprecated: Docker Compose
-
-```bash
-task start-local                 # Start the Compose stack (no agent sandboxes)
-task stop-local                  # Stop it
-task purge-local                 # Teardown + volumes
-task logs-local                  # Follow all logs
-task status                      # Service status
 ```
 
 ## Environment variable loading

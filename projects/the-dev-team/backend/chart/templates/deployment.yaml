@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name | default .Release.Name }}
+      {{- end }}
+      {{- if .Values.workspace.enabled }}
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ["sh", "-c", "chown -R 1000:1000 {{ .Values.workspace.mountPath }}"]
+          volumeMounts:
+            - name: workspace
+              mountPath: {{ .Values.workspace.mountPath }}
+        - name: clone-repo
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              # Set up git credentials for clone
+              git config --global credential.helper store
+              if [ -n "$GITHUB_TOKEN" ]; then
+                echo "https://x-access-token:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+              fi
+              if [ ! -d "{{ .Values.workspace.mountPath }}/.git" ]; then
+                echo "Cloning repository..."
+                git clone "https://github.com/{{ .Values.workspace.repoOwner }}/{{ .Values.workspace.repoName }}.git" "{{ .Values.workspace.mountPath }}"
+              else
+                echo "Repository exists, fetching latest..."
+                cd "{{ .Values.workspace.mountPath }}" && git remote set-url origin "https://github.com/{{ .Values.workspace.repoOwner }}/{{ .Values.workspace.repoName }}.git" && git fetch --all --prune || true
+              fi
+          volumeMounts:
+            - name: workspace
+              mountPath: {{ .Values.workspace.mountPath }}
+          {{- if .Values.secretEnv }}
+          envFrom:
+            - secretRef:
+                name: {{ .Release.Name }}-secret
+          {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ .Release.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          {{- if or .Values.env .Values.secretEnv }}
+          envFrom:
+            {{- if .Values.env }}
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            {{- end }}
+            {{- if .Values.secretEnv }}
+            - secretRef:
+                name: {{ .Release.Name }}-secret
+            {{- end }}
+          {{- end }}
+          {{- if .Values.githubApp.privateKeySecret }}
+          env:
+            - name: GITHUB_APP_PRIVATE_KEY_PATH
+              value: "/etc/github-app/{{ .Values.githubApp.privateKeyFile }}"
+          {{- end }}
+          {{- if or .Values.workspace.enabled .Values.githubApp.privateKeySecret .Values.docker.socketMount }}
+          volumeMounts:
+            {{- if .Values.workspace.enabled }}
+            - name: workspace
+              mountPath: {{ .Values.workspace.mountPath }}
+            {{- end }}
+            {{- if .Values.githubApp.privateKeySecret }}
+            - name: github-app-key
+              mountPath: /etc/github-app
+              readOnly: true
+            {{- end }}
+            {{- if .Values.docker.socketMount }}
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.healthCheck.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.healthCheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthCheck.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.healthCheck.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if or .Values.workspace.enabled .Values.githubApp.privateKeySecret .Values.docker.socketMount }}
+      volumes:
+        {{- if .Values.workspace.enabled }}
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-workspace
+        {{- end }}
+        {{- if .Values.githubApp.privateKeySecret }}
+        - name: github-app-key
+          secret:
+            secretName: {{ .Values.githubApp.privateKeySecret }}
+        {{- end }}
+        {{- if .Values.docker.socketMount }}
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        {{- end }}
+      {{- end }}

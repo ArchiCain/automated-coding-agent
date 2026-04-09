@@ -1,0 +1,29 @@
+version: "3"
+
+vars:
+  APP_DIR: ./app
+
+tasks:
+  local:install:
+    desc: Install frontend dependencies
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - npm install
+
+  local:run:
+    desc: Run the frontend dev server
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - npm run dev
+
+  local:build:
+    desc: Build the frontend for production
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - npm run build
+
+  local:type-check:
+    desc: Run TypeScript type checking
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - npx tsc --noEmit

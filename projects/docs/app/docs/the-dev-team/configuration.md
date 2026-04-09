@@ -23,6 +23,10 @@ retryBudget: 3
 # destroy it after 24 hours regardless.
 keepEnvironmentForReview: true
 
+# Execution mode: "sandbox" (default) deploys a full K8s namespace per task.
+# Override via EXECUTION_MODE env var in K8s.
+executionMode: sandbox
+
 # How often to poll GitHub for new issues labelled `the-dev-team`.
 issuePollCron: "*/5 * * * *"
 
@@ -72,6 +76,7 @@ interface DevTeamConfig {
   maxConcurrent: number;              // default: 4
   retryBudget: number;                // default: 3
   keepEnvironmentForReview: boolean;  // default: true
+  executionMode: 'sandbox' | 'local'; // default: sandbox
   issuePollCron: string;              // default: "*/5 * * * *"
   reviewPollCron: string;             // default: "*/2 * * * *"
   default: ProviderConfig;            // required
@@ -110,6 +115,12 @@ Practical limits:
 
 The orchestrator also checks cluster capacity before assigning — if the nodes are above 80% CPU or memory, new task assignment is paused even if slots are free.
 
+## Execution mode: `executionMode`
+
+Defaults to `sandbox`. In sandbox mode, every task gets a dedicated `env-{task-id}` K8s namespace with a full application stack.
+
+In K8s deployments, the `EXECUTION_MODE` environment variable overrides the config file value. The Helmfile configuration sets `EXECUTION_MODE: sandbox` by default. See [Sandbox Environments](sandbox-environments.md) for the full lifecycle.
+
 ## Retry budget: `retryBudget`
 
 The number of retries allowed per gate **and** per reviewer loop iteration. With `retryBudget: 3`:
@@ -131,9 +142,9 @@ getProviderConfig(role: TaskRole): ProviderConfig {
 
 This is how you route specific roles to specific models:
 
-- Heavy reasoning (architect, reviewer) → a stronger model
-- Grinder roles (implementer, tester, bugfixer) → a faster/cheaper model
-- Vision-requiring roles (designer) → a vision-capable model — this is enforced at startup (config validation fails if you assign a non-vision model to `designer`)
+- Heavy reasoning (architect, reviewer) -> a stronger model
+- Grinder roles (implementer, tester, bugfixer) -> a faster/cheaper model
+- Vision-requiring roles (designer) -> a vision-capable model — this is enforced at startup (config validation fails if you assign a non-vision model to `designer`)
 
 ### Switching providers per role
 
@@ -165,9 +176,25 @@ Four steps:
 1. Edit `.the-dev-team/config/the-dev-team.config.yml`
 2. Add or change an entry under `roles:` for the role you want to change
 3. If you're switching to a provider that needs a new credential, add the env var to `the-dev-team-agent-secrets`
-4. Restart the orchestrator: `kubectl rollout restart deployment/the-dev-team -n the-dev-team`
+4. Restart the orchestrator: `kubectl rollout restart deployment/coding-agent-backend -n coding-agent`
 
 The change takes effect for the next role dispatch. Tasks already running finish under the old config.
+
+## GitHub App secret setup
+
+The orchestrator authenticates with GitHub via a GitHub App installation. The private key is stored as a K8s secret:
+
+1. Create a GitHub App with the required permissions (issues read, PRs write, contents write)
+2. Generate a private key and download the `.pem` file
+3. Set the following in your `.env`:
+   ```bash
+   GITHUB_APP_ID=your-app-id
+   GITHUB_APP_CLIENT_ID=your-client-id
+   GITHUB_APP_INSTALLATION_ID=your-installation-id
+   ```
+4. Run `task setup-secrets` to create the K8s secret from the `.pem` file and env vars
+
+The `setup-secrets` script reads the private key from `.github-app-private-key.pem` at the repo root (gitignored) and creates the appropriate K8s secret in the `coding-agent` namespace.
 
 ## Environment variables
 
@@ -176,9 +203,14 @@ A small number of things live in env vars rather than the YAML file, because the
 | Variable | Purpose |
 |----------|---------|
 | `ANTHROPIC_API_KEY` | Credentials for the claude-code provider |
+| `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token for Claude Code (Max plan) |
 | `GITHUB_TOKEN` | Bot account PAT |
+| `GITHUB_APP_ID` | GitHub App ID |
+| `GITHUB_APP_CLIENT_ID` | GitHub App client ID |
+| `GITHUB_APP_INSTALLATION_ID` | GitHub App installation ID |
 | `DEV_HOSTNAME` | Hostname suffix for ingress (see [Networking](../infrastructure/networking.md)) |
 | `REPO_ROOT` | Absolute path to the repo checkout inside the pod |
+| `EXECUTION_MODE` | Overrides `executionMode` from config file (default: `sandbox`) |
 | `ISSUE_POLL_CRON` | Overrides the YAML cron if set |
 | `REVIEW_POLL_CRON` | Overrides the YAML cron if set |
 

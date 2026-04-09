@@ -15,7 +15,7 @@ The orchestrator is the brain of THE Dev Team. It:
 - Runs a fixed sequence of **validation gates** between phases, retrying failures with the bugfixer role
 - Submits a PR with structured evidence when every gate passes
 - Records everything to `.the-dev-team/history/` as JSONL transcripts and markdown summaries
-- Streams progress over WebSocket to the [Dashboard](../the-dev-team-dashboard.md)
+- Streams progress over WebSocket to the [Dashboard](dashboard.md)
 
 Humans still merge PRs — the orchestrator cannot push to protected branches. See [Safety Model](../../the-dev-team/safety-model.md).
 
@@ -117,7 +117,7 @@ See [Submitting Tasks](../../the-dev-team/submitting-tasks.md) for request/respo
 
 ## WebSocket gateway
 
-The orchestrator exposes a `/dashboard` namespace via `socket.io` for real-time events consumed by the [Dashboard](../the-dev-team-dashboard.md):
+The orchestrator exposes a `/dashboard` namespace via `socket.io` for real-time events consumed by the [Dashboard](dashboard.md):
 
 | Event | Payload |
 |-------|---------|

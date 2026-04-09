@@ -1,0 +1,10 @@
+global:
+  registry: localhost:30500
+  domain: localhost
+  storageClass: standard
+  resourceProfile: minimal
+
+ingress:
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /

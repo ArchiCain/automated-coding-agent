@@ -1,0 +1,36 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-agent
+  labels:
+    app: {{ .Release.Name }}
+rules:
+  # Namespace management for ephemeral agent workspaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  # Full access to common resources (for deploying into agent-* namespaces)
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+    resources: ["*"]
+    verbs: ["*"]
+  # Metrics API (for cluster page resource usage)
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-agent
+  labels:
+    app: {{ .Release.Name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-agent
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name | default .Release.Name }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

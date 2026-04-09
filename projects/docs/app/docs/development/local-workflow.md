@@ -3,33 +3,32 @@
 Day-to-day development patterns for the two main workflows in this repo:
 
 1. **Working on application code** — backend, frontend, database, keycloak, docs
-2. **Running THE Dev Team locally** — orchestrator + dashboard + sandbox environments
+2. **Running THE Dev Team** — orchestrator + dashboard + sandbox environments
 
-Both run on Minikube. Docker Compose still exists as a deprecated fallback but does not support agent sandboxes or the dashboard — see [Docker Compose](../infrastructure/docker-compose.md).
+Everything runs in Kubernetes (Minikube locally, K3s in production) with the same topology.
 
-## Starting the stack on Minikube
+## Starting the full stack
 
 ```bash
-task minikube:start                 # Start local K8s cluster
-eval $(minikube docker-env)         # Point Docker CLI at Minikube
-task build:all                      # Build all images into the in-cluster registry
-task deploy:apply                   # Deploy everything via Helmfile
-task deploy:status                  # Verify all pods are healthy
+# First time only
+task setup-secrets
+
+# Start everything
+task up
+
+# In a separate terminal, enable ingress access
+task minikube:tunnel
 ```
 
-Default service URLs (`DEV_HOSTNAME=localhost`):
+`task up` starts Minikube, builds all container images, and deploys everything via Helmfile. Once it completes, open:
 
 | Service | URL |
 |---------|-----|
+| Dashboard | http://dashboard.localhost |
+| Orchestrator API | http://agent-api.localhost |
 | Application frontend | http://app.localhost |
-| Application API | http://api.localhost |
 | Keycloak | http://auth.localhost |
-| Keycloak Admin | http://auth.localhost/admin/ |
 | Docs | http://docs.localhost |
-| THE Dev Team orchestrator | http://the-dev-team.localhost |
-| THE Dev Team dashboard | http://dashboard.the-dev-team.localhost |
-
-If you're running Minikube on a different machine from the one you're developing on, set `DEV_HOSTNAME` to that machine's Tailscale name — see [Environment Setup](../getting-started/environment-setup.md#tailscale-hostname-use-case).
 
 ## Login credentials
 
@@ -47,8 +46,8 @@ Iterating on backend / frontend code has two modes:
 Run the service directly against a Minikube-deployed database and Keycloak. Hot reload, debugger attached, no Docker rebuild cycle:
 
 ```bash
-task backend:local:start       # NestJS dev server on :8085 against Minikube DB/Keycloak
-task frontend:local:start      # Vite dev server on :5173 against Minikube API/Keycloak
+task backend:local:start       # NestJS dev server against Minikube DB/Keycloak
+task frontend:local:start      # Vite dev server against Minikube API/Keycloak
 ```
 
 The backend reads `DATABASE_HOST_LOCAL=localhost` when running this way and connects to the Minikube database via `kubectl port-forward` (automated by the task).
@@ -58,47 +57,45 @@ The backend reads `DATABASE_HOST_LOCAL=localhost` when running this way and conn
 Rebuild the image and re-deploy the service into Minikube:
 
 ```bash
-task backend:remote:build      # Rebuild the image into Minikube's registry
-task backend:remote:deploy     # Roll out the new image
-task deploy:logs -- backend    # Tail logs
+eval $(minikube docker-env)
+task build:backend
+task deploy:apply
+task logs -- backend
 ```
 
 Use this for changes that depend on cluster-specific behaviour (ingress, service discovery, cron jobs).
 
-## Running THE Dev Team locally
-
-This is the end-to-end local workflow for the autonomous system.
-
-### 1. Make sure the main stack is up
+## Running THE Dev Team
 
 ```bash
-task minikube:start
-eval $(minikube docker-env)
-task build:all
-task deploy:apply
+# First time only: set up secrets
+task setup-secrets
+
+# Start the cluster and deploy everything
+task up
+
+# In a separate terminal, enable ingress access
+task minikube:tunnel
 ```
 
-This deploys the `app` namespace (application backend, frontend, database, keycloak, docs) **and** the `the-dev-team` namespace (orchestrator + dashboard).
+Then open:
 
-### 2. Verify everything is healthy
+- Dashboard: http://dashboard.localhost
+- Orchestrator API: http://agent-api.localhost
+
+This deploys the full stack into Minikube — the same topology as production (K3s).
+
+### Verify everything is healthy
 
 ```bash
-task deploy:status
-# Expect: all pods Running in app and the-dev-team namespaces
+task status
+# Expect: all pods Running in app and coding-agent namespaces
 ```
 
-### 3. Open the dashboard
+### Submit a test task
 
 ```bash
-open http://dashboard.the-dev-team.localhost
-```
-
-You should see an empty overview with `maxConcurrent` idle agent slots (default 4).
-
-### 4. Submit a test task
-
-```bash
-curl -X POST http://the-dev-team.localhost/api/tasks \
+curl -X POST http://agent-api.localhost/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Add /api/hello endpoint",
@@ -108,7 +105,7 @@ curl -X POST http://the-dev-team.localhost/api/tasks \
   }'
 ```
 
-### 5. Watch it execute via the dashboard
+### Watch it execute via the dashboard
 
 The dashboard immediately shows the new task in the **queued** column. Within seconds it moves to **implementing**. Click the card to open the live-stream view and watch the implementer write the code.
 
@@ -122,7 +119,7 @@ Phase transitions visible on the dashboard:
 
 Along the way, the **Environment Map** view shows a new sandbox (`env-{task-id}`) appear and turn healthy.
 
-### 6. Inspect afterwards
+### Inspect afterwards
 
 ```bash
 task history:task -- {task-id}          # Markdown summary
@@ -132,15 +129,12 @@ task history:search -- 'hello'          # Search all transcripts
 
 Or use the dashboard's history browser.
 
-### Running just the orchestrator in dev mode
-
-If you're developing the orchestrator itself, you can run it outside the cluster for hot reload:
+## Stopping and cleaning up
 
 ```bash
-task coding-agent-backend:local:start
+task down                # Stop Minikube (preserves state, fast resume)
+task destroy             # Delete the cluster entirely
 ```
-
-It will still create sandbox environments in Minikube (via `kubectl`), but the orchestrator process itself runs on your host. The dashboard is harder to run this way because it expects the orchestrator at `the-dev-team.{DEV_HOSTNAME}` — either update its dev config to point at `http://localhost:8086` or deploy the orchestrator into the cluster and only run the dashboard locally.
 
 ## Running tests
 
@@ -150,7 +144,7 @@ Unit tests run on your host machine (in the Nix shell) and don't require the sta
 task backend:local:test
 task frontend:local:test
 task coding-agent-backend:local:test
-task the-dev-team-dashboard:local:test
+task dashboard:local:test
 ```
 
 Integration tests connect to the running Minikube stack:
@@ -165,7 +159,7 @@ E2E tests use Playwright against the full stack:
 
 ```bash
 task e2e:install     # One-time setup
-task e2e:test        # Run all E2E tests against app.{DEV_HOSTNAME}
+task e2e:test        # Run all E2E tests against app.localhost
 ```
 
 ## Rebuilding after Dockerfile / package.json changes
@@ -179,9 +173,8 @@ task deploy:apply              # Roll out
 For a clean slate:
 
 ```bash
-task minikube:delete
-task minikube:start
-# ...then build + deploy from scratch
+task destroy
+task up
 ```
 
 ## Port conflicts and troubleshooting

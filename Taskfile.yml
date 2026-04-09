@@ -8,7 +8,8 @@ includes:
   database: ./projects/application/database/Taskfile.yml
   keycloak: ./projects/application/keycloak/Taskfile.yml
   e2e: ./projects/application/e2e/Taskfile.yml
-  coding-agent-backend: ./projects/coding-agent/backend/Taskfile.yml
+  devteam-backend: ./projects/the-dev-team/backend/Taskfile.yml
+  devteam-frontend: ./projects/the-dev-team/frontend/Taskfile.yml
   docs: ./projects/docs/Taskfile.yml
   infra:
     taskfile: ./infrastructure/Taskfile.yml
@@ -21,9 +22,6 @@ includes:
     dir: .
   minikube:
     taskfile: infrastructure/minikube/Taskfile.yml
-    dir: .
-  dashboard:
-    taskfile: projects/the-dev-team-dashboard/Taskfile.yml
     dir: .
 
 tasks:
@@ -67,54 +65,109 @@ tasks:
       - task: infra:docker:logs
 
   status:
-    desc: Check status of all services
+    desc: "Show cluster and service status"
     cmds:
-      - task: infra:docker:status
+      - |
+        echo "=== Minikube ==="
+        minikube status 2>/dev/null || echo "Not running"
+        echo ""
+        echo "=== Pods (all namespaces) ==="
+        kubectl get pods -A --no-headers 2>/dev/null | grep -v kube-system || echo "No application pods"
+        echo ""
+        echo "=== Services ==="
+        kubectl get svc -A --no-headers 2>/dev/null | grep -v kube-system || echo "No services"
+
+  logs:
+    desc: "Show logs for a service (usage: task logs -- coding-agent-backend)"
+    cmds:
+      - kubectl logs -f deployment/{{.CLI_ARGS}} -n coding-agent --tail=100
+
+  open:
+    desc: "Port-forward frontend and backend for local access"
+    cmds:
+      - |
+        pkill -f "port-forward.*the-dev-team" 2>/dev/null || true
+        sleep 1
+        kubectl port-forward -n the-dev-team svc/the-dev-team-frontend 3002:8080 &
+        kubectl port-forward -n the-dev-team svc/the-dev-team-backend 8086:8080 &
+        sleep 2
+        echo "============================================"
+        echo "  Chat UI:  http://localhost:3002"
+        echo "  API:      http://localhost:8086"
+        echo "============================================"
+        echo "Port-forwards running. Run 'task close' to stop."
+
+  close:
+    desc: "Stop port-forwards"
+    cmds:
+      - pkill -f "port-forward.*the-dev-team" 2>/dev/null || true
+      - echo "Port-forwards stopped."
 
   # ===================================================================
   # THE Dev Team — Minikube-based full stack
   # ===================================================================
 
   up:
-    desc: "Start THE Dev Team orchestrator + dashboard (dev servers on host)"
-    cmds:
-      - echo "=== Installing orchestrator dependencies ==="
-      - task: coding-agent-backend:local:install
-      - echo ""
-      - echo "=== Installing dashboard dependencies ==="
-      - task: dashboard:local:install
-      - echo ""
-      - echo "=== Starting orchestrator ==="
-      - task: coding-agent-backend:local:start
-      - echo ""
-      - echo "=== Starting dashboard ==="
-      - task: dashboard:local:run
-      - echo ""
-      - |
-        echo "============================================"
-        echo "THE Dev Team is running."
-        echo ""
-        echo "  Dashboard:    http://${DEV_HOSTNAME:-localhost}:${DASHBOARD_PORT:-3002}"
-        echo "  Orchestrator: http://${DEV_HOSTNAME:-localhost}:${CODING_AGENT_BACKEND_PORT:-8086}"
-        echo "============================================"
-
-  up:full:
-    desc: "Start full stack with Minikube (Colima + K8s + build + deploy + orchestrator + dashboard)"
+    desc: "Start THE Dev Team (Minikube + build + deploy)"
     cmds:
       - task: minikube:start
-      - eval $(minikube docker-env) && task build:all
+      - task: setup-secrets
+      - task: up:build-and-deploy
+      - task: open
+
+  up:build-and-deploy:
+    desc: "Build images into Minikube and deploy (internal)"
+    internal: true
+    cmds:
+      - |
+        echo "=== Configuring Docker for Minikube ==="
+        eval $(minikube docker-env)
+        REG="${REGISTRY:-localhost:30500}"
+        TAG="${IMAGE_TAG:-latest}"
+        echo "Registry: $REG"
+        echo ""
+
+        echo "=== Building and pushing images ==="
+        for img in backend frontend keycloak the-dev-team-backend the-dev-team-frontend docs; do
+          case $img in
+            backend)
+              docker build -t $REG/$img:$TAG -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend ;;
+            frontend)
+              docker build -t $REG/$img:$TAG --build-arg VITE_BACKEND_URL=http://api.${DEV_HOSTNAME:-localhost} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend ;;
+            keycloak)
+              docker build -t $REG/$img:$TAG -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak ;;
+            the-dev-team-backend)
+              docker build --build-arg CACHEBUST=$(date +%s) -t $REG/$img:$TAG -f projects/the-dev-team/backend/dockerfiles/prod.Dockerfile projects/the-dev-team/backend ;;
+            the-dev-team-frontend)
+              docker build -t $REG/$img:$TAG -f projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile projects/the-dev-team/frontend ;;
+            docs)
+              docker build -t $REG/$img:$TAG -f projects/docs/dockerfiles/prod.Dockerfile projects/docs ;;
+          esac
+          docker push $REG/$img:$TAG || echo "Push failed for $img — images are still in Minikube Docker"
+        done
+        echo ""
+        echo "=== All images built and pushed ==="
       - task: deploy:apply
-      - task: up
 
   down:
-    desc: "Stop orchestrator and dashboard dev servers"
+    desc: "Stop Minikube cluster (preserves state)"
     cmds:
-      - pkill -f "nest start" 2>/dev/null || true
-      - pkill -f "vite.*the-dev-team-dashboard" 2>/dev/null || true
+      - minikube stop
       - |
-        echo "Dev servers stopped."
-        echo "  task minikube:stop    — pause the cluster (preserves state)"
-        echo "  task minikube:delete  — destroy the cluster entirely"
+        echo "Minikube stopped. State preserved."
+        echo "  task up        — resume"
+        echo "  task destroy   — delete cluster entirely"
+
+  destroy:
+    desc: "Delete Minikube cluster and all data"
+    cmds:
+      - minikube delete
+      - echo "Minikube cluster deleted."
+
+  setup-secrets:
+    desc: "Create K8s secrets from .env (run before first deploy)"
+    cmds:
+      - scripts/setup-k8s-secrets.sh
 
   tailscale:hostname:
     desc: "Print your Tailscale hostname (paste into .env as DEV_HOSTNAME)"
@@ -272,7 +325,7 @@ tasks:
       WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
       IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:{{.IMAGE_TAG}} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f {{.WORKTREE_PATH}}/projects/the-dev-team-dashboard/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/the-dev-team-dashboard
+      - docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:{{.IMAGE_TAG}} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f {{.WORKTREE_PATH}}/projects/coding-agent/dashboard/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/coding-agent/dashboard
       - docker push ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:{{.IMAGE_TAG}}
 
   build:docs:

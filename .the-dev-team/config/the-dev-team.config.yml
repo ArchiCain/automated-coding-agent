@@ -7,4 +7,4 @@ roles: {}
 maxConcurrent: 4
 retryBudget: 3
 keepEnvironmentForReview: false
-executionMode: local  # 'local' skips sandbox deployment, 'sandbox' requires K8s
+executionMode: sandbox  # 'local' skips sandbox deployment, 'sandbox' requires K8s
