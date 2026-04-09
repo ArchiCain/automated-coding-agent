@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { execFile as execFileCb } from 'child_process';
+import { promisify } from 'util';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+const execFile = promisify(execFileCb);
 
 const SYSTEM_NAMESPACES = ['kube-system', 'kube-public', 'kube-node-lease'];
 
@@ -49,6 +55,116 @@ export class ClusterService {
     kc.loadFromDefault();
     this.coreApi = kc.makeApiClient(k8s.CoreV1Api);
     this.metricsApi = kc.makeApiClient(k8s.CustomObjectsApi);
+  }
+
+  // ── Observability proxies ──────────────────────────────────────
+
+  private readonly grafanaUrl = process.env.GRAFANA_URL || 'http://kube-prometheus-stack-grafana.monitoring:80';
+  private readonly prometheusUrl = process.env.PROMETHEUS_URL || 'http://kube-prometheus-stack-prometheus.monitoring:9090';
+  private readonly lokiUrl = process.env.LOKI_URL || 'http://loki.monitoring:3100';
+
+  async queryPrometheus(query: string, start?: string, end?: string, step?: string): Promise<unknown> {
+    try {
+      const params = new URLSearchParams({ query });
+      if (start && end) {
+        params.set('start', start);
+        params.set('end', end);
+        params.set('step', step || '60');
+        const res = await fetch(`${this.prometheusUrl}/api/v1/query_range?${params}`);
+        return res.json();
+      }
+      const res = await fetch(`${this.prometheusUrl}/api/v1/query?${params}`);
+      return res.json();
+    } catch (error) {
+      this.logger.error('Prometheus query failed', error);
+      return { status: 'error', error: 'Prometheus unavailable' };
+    }
+  }
+
+  async queryLoki(query: string, limit = 100, start?: string, end?: string): Promise<unknown> {
+    try {
+      const params = new URLSearchParams({ query, limit: String(limit) });
+      if (start) params.set('start', start);
+      if (end) params.set('end', end);
+      const res = await fetch(`${this.lokiUrl}/loki/api/v1/query_range?${params}`);
+      return res.json();
+    } catch (error) {
+      this.logger.error('Loki query failed', error);
+      return { status: 'error', error: 'Loki unavailable' };
+    }
+  }
+
+  async getGrafanaDashboards(): Promise<unknown> {
+    try {
+      const res = await fetch(`${this.grafanaUrl}/api/search?type=dash-db`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      return res.json();
+    } catch (error) {
+      this.logger.error('Grafana API failed', error);
+      return [];
+    }
+  }
+
+  getGrafanaUrl(): string {
+    return this.grafanaUrl;
+  }
+
+  // ── Docs ────────────────────────────────────────────────────────
+
+  private get docsRoot(): string {
+    return path.join(process.env.REPO_ROOT || '/workspace', 'docs');
+  }
+
+  async listDocs(subpath = ''): Promise<{ type: 'file' | 'dir'; name: string; path: string }[]> {
+    const dir = path.join(this.docsRoot, subpath);
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      return entries
+        .filter((e) => e.isDirectory() || e.name.endsWith('.md'))
+        .map((e) => ({
+          type: e.isDirectory() ? 'dir' as const : 'file' as const,
+          name: e.name.replace(/\.md$/, ''),
+          path: path.join(subpath, e.name).replace(/\\/g, '/'),
+        }))
+        .sort((a, b) => {
+          if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+    } catch {
+      return [];
+    }
+  }
+
+  async readDoc(filePath: string): Promise<string | null> {
+    // Prevent path traversal
+    const resolved = path.resolve(this.docsRoot, filePath);
+    if (!resolved.startsWith(path.resolve(this.docsRoot))) return null;
+    try {
+      return await fs.readFile(resolved, 'utf-8');
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Repo info ──────────────────────────────────────────────────
+
+  async getBranch(): Promise<string> {
+    // Return the environment name for the app namespace display
+    // Check explicit env var first, then derive from git branch
+    if (process.env.DEPLOY_ENV) return process.env.DEPLOY_ENV;
+    const repoRoot = process.env.REPO_ROOT || '/workspace';
+    try {
+      const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot });
+      const branch = stdout.trim();
+      // Map known branch patterns to environment names
+      if (branch === 'main' || branch === 'master') return 'main';
+      if (branch.startsWith('env/')) return branch.slice(4); // env/mac-mini → mac-mini
+      // For feature branches, still show "main" since the app namespace deploys from main
+      return 'main';
+    } catch {
+      return 'main';
+    }
   }
 
   async getNamespaces(): Promise<string[]> {
@@ -277,12 +393,13 @@ export class ClusterService {
 
   private formatCpu(nanos: number): string {
     const millicores = Math.round(nanos / 1_000_000);
-    return `${millicores}m`;
+    if (millicores >= 1000) return `${(millicores / 1000).toFixed(1)} cores`;
+    return `${millicores} mcores`;
   }
 
   private formatMemory(ki: number): string {
-    if (ki >= 1024 * 1024) return `${Math.round(ki / (1024 * 1024))}Gi`;
-    if (ki >= 1024) return `${Math.round(ki / 1024)}Mi`;
-    return `${ki}Ki`;
+    if (ki >= 1024 * 1024) return `${Math.round(ki / (1024 * 1024))} GB`;
+    if (ki >= 1024) return `${Math.round(ki / 1024)} MB`;
+    return `${ki} KB`;
   }
 }

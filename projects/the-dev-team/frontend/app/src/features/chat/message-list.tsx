@@ -11,6 +11,7 @@ import type { AgentMessage } from '../shared';
 
 interface MessageListProps {
   messages: AgentMessage[];
+  systemPrompt: string | null;
   isStreaming: boolean;
 }
 
@@ -169,36 +170,6 @@ function MessageBubble({ message }: { message: AgentMessage }) {
     );
   }
 
-  if (type === 'result') {
-    return (
-      <Box
-        sx={{
-          mb: 1.5,
-          p: 1.5,
-          border: '1px solid',
-          borderColor: 'secondary.main',
-          borderRadius: 1,
-          maxWidth: '85%',
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{ color: 'secondary.main', fontWeight: 600, display: 'block', mb: 0.5 }}
-        >
-          Done
-        </Typography>
-        <Box
-          sx={{
-            color: 'text.primary',
-            '& p': { my: 0.5 },
-          }}
-        >
-          <Markdown>{content ?? ''}</Markdown>
-        </Box>
-      </Box>
-    );
-  }
-
   if (type === 'error') {
     return (
       <Box sx={{ mb: 1.5 }}>
@@ -229,14 +200,22 @@ function MessageBubble({ message }: { message: AgentMessage }) {
   );
 }
 
-export function MessageList({ messages, isStreaming }: MessageListProps) {
+function SystemPromptBlock({ prompt }: { prompt: string }) {
+  return (
+    <Box sx={{ mb: 2 }}>
+      <CollapsibleBlock label="System Instructions" content={prompt} />
+    </Box>
+  );
+}
+
+export function MessageList({ messages, systemPrompt, isStreaming }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  if (messages.length === 0) {
+  if (!systemPrompt && messages.length === 0) {
     return (
       <Box
         sx={{
@@ -264,6 +243,7 @@ export function MessageList({ messages, isStreaming }: MessageListProps) {
         scrollbarColor: '#30363d #0d1117',
       }}
     >
+      {systemPrompt && <SystemPromptBlock prompt={systemPrompt} />}
       {messages.map((msg, i) => (
         <MessageBubble key={i} message={msg} />
       ))}

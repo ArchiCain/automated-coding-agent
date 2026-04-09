@@ -9,7 +9,7 @@ backend:
   image:
     repository: backend
     pullPolicy: IfNotPresent
-  port: 8000
+  port: 8080
   env:
     DATABASE_URL: "postgresql://postgres:postgres@{{ .Release.Name }}-database:5432/app"
     KEYCLOAK_URL: "http://{{ .Release.Name }}-keycloak:8080"
@@ -27,7 +27,7 @@ frontend:
   image:
     repository: frontend
     pullPolicy: IfNotPresent
-  port: 3000
+  port: 8080
   resources:
     requests:
       cpu: 50m
@@ -38,8 +38,8 @@ frontend:
 
 database:
   image:
-    repository: postgres
-    tag: "15"
+    repository: pgvector/pgvector
+    tag: "pg16"
     pullPolicy: IfNotPresent
   port: 5432
   auth:
@@ -60,7 +60,8 @@ database:
 keycloak:
   replicaCount: 1
   image:
-    repository: keycloak
+    repository: quay.io/keycloak/keycloak
+    tag: "24.0"
     pullPolicy: IfNotPresent
   port: 8080
   adminUser: admin

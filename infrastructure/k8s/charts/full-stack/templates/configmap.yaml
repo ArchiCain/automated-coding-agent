@@ -14,6 +14,9 @@ data:
   DATABASE_HOST: "{{ .Release.Name }}-database"
   DATABASE_PORT: {{ .Values.database.port | quote }}
   DATABASE_NAME: {{ .Values.database.auth.database | quote }}
+  DATABASE_USERNAME: {{ .Values.database.auth.username | quote }}
+  DATABASE_PASSWORD: {{ .Values.database.auth.password | quote }}
+  PORT: {{ .Values.backend.port | quote }}
   {{- if .Values.global.taskId }}
   TASK_ID: {{ .Values.global.taskId | quote }}
   {{- end }}

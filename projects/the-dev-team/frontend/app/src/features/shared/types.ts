@@ -16,3 +16,9 @@ export interface AgentMessage {
   output?: unknown;
   [key: string]: unknown;
 }
+
+export interface SessionHistory {
+  sessionId: string;
+  systemPrompt: string;
+  messages: AgentMessage[];
+}

@@ -3,6 +3,10 @@ repositories:
     url: https://traefik.github.io/charts
   - name: bitnami
     url: https://charts.bitnami.com/bitnami
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: grafana
+    url: https://grafana.github.io/helm-charts
 
 environments:
   mac-mini:
@@ -278,4 +282,135 @@ releases:
           limits:
             memory: "256Mi"
             cpu: "200m"
+
+  # ===================================================================
+  # Observability Stack (namespace: monitoring)
+  # ===================================================================
+
+  - name: kube-prometheus-stack
+    namespace: monitoring
+    chart: prometheus-community/kube-prometheus-stack
+    version: "72.6.2"
+    createNamespace: true
+    values:
+      - grafana:
+          enabled: true
+          adminUser: admin
+          adminPassword: {{ env "GRAFANA_ADMIN_PASSWORD" | default "admin" }}
+          service:
+            type: ClusterIP
+            port: 3000
+          "grafana.ini":
+            server:
+              root_url: "http://localhost:3000"
+              serve_from_sub_path: false
+            auth.anonymous:
+              enabled: true
+              org_role: Viewer
+            security:
+              allow_embedding: true
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              url: http://loki.monitoring:3100
+              access: proxy
+              isDefault: false
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+        prometheus:
+          prometheusSpec:
+            podMonitorSelectorNilUsesHelmValues: false
+            serviceMonitorSelectorNilUsesHelmValues: false
+            retention: 7d
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "200m"
+              limits:
+                memory: "1Gi"
+                cpu: "1000m"
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+        alertmanager:
+          enabled: false
+        nodeExporter:
+          enabled: true
+        kubeStateMetrics:
+          enabled: true
+
+  - name: loki
+    namespace: monitoring
+    chart: grafana/loki
+    version: "6.29.0"
+    createNamespace: true
+    values:
+      - deploymentMode: SingleBinary
+        loki:
+          auth_enabled: false
+          commonConfig:
+            replication_factor: 1
+          schemaConfig:
+            configs:
+              - from: "2024-01-01"
+                store: tsdb
+                object_store: filesystem
+                schema: v13
+                index:
+                  prefix: index_
+                  period: 24h
+          storage:
+            type: filesystem
+          limits_config:
+            retention_period: 168h
+        singleBinary:
+          replicas: 1
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          persistence:
+            enabled: true
+            size: 10Gi
+        gateway:
+          enabled: false
+        backend:
+          replicas: 0
+        read:
+          replicas: 0
+        write:
+          replicas: 0
+        chunksCache:
+          enabled: false
+        resultsCache:
+          enabled: false
+
+  - name: promtail
+    namespace: monitoring
+    chart: grafana/promtail
+    version: "6.16.6"
+    createNamespace: true
+    values:
+      - config:
+          clients:
+            - url: http://loki.monitoring:3100/loki/api/v1/push
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "25m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
 

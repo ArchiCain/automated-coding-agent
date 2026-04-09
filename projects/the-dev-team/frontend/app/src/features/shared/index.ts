@@ -1,1 +1,1 @@
-export type { Session, AgentMessage } from './types';
+export type { Session, AgentMessage, SessionHistory } from './types';
