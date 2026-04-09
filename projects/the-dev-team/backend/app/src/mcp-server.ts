@@ -45,11 +45,12 @@ async function runCommand(
 }
 
 async function runTask(taskName: string, vars: Record<string, string> = {}): Promise<string> {
-  const args = [taskName];
+  // Taskfile syntax: task TASKNAME VAR1=val1 VAR2=val2
+  const args: string[] = [taskName];
   for (const [key, value] of Object.entries(vars)) {
     args.push(`${key}=${value}`);
   }
-  const result = await runCommand('task', args);
+  const result = await runCommand('task', args, REPO_ROOT);
   if (result.exitCode !== 0) {
     return `Error (exit ${result.exitCode}):\n${result.stderr}\n${result.stdout}`;
   }

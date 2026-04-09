@@ -59,11 +59,9 @@ export class ClaudeCodeProvider implements AgentProvider {
           command: 'node',
           args: [this.mcpServerPath],
           env: {
+            ...process.env as Record<string, string>,
             REPO_ROOT: process.env.REPO_ROOT || '/workspace',
             REGISTRY: process.env.REGISTRY || 'localhost:30500',
-            GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
-            GH_TOKEN: process.env.GH_TOKEN || '',
-            PATH: process.env.PATH || '',
           },
         },
       },

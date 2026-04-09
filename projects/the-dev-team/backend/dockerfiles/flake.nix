@@ -26,6 +26,7 @@
             pkgs.kubernetes-helm
             pkgs.helmfile
             pkgs.openssh
+            pkgs.jq
           ];
 
           shellHook = ''
