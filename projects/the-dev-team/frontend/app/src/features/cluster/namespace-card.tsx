@@ -8,7 +8,7 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
-import type { NamespaceGroup } from './types';
+import type { NamespaceGroup, PodInfo, ServiceInfo } from './types';
 
 function statusColor(status: string, ready: string): string {
   const s = status.toLowerCase();
@@ -29,6 +29,22 @@ function statusColor(status: string, ready: string): string {
   return '#8b949e';
 }
 
+/**
+ * Match a pod to a service by finding a service whose name is a prefix
+ * of the pod name (e.g., service "backend" matches pod "backend-7bd7d4dc5b-849vs").
+ */
+function findServiceForPod(pod: PodInfo, services: ServiceInfo[]): ServiceInfo | undefined {
+  // Sort by name length descending so longer matches win
+  const sorted = [...services].sort((a, b) => b.name.length - a.name.length);
+  return sorted.find((svc) => pod.name.startsWith(svc.name));
+}
+
+function formatPorts(svc: ServiceInfo): string {
+  return svc.ports
+    .map((p) => (p.targetPort ? `${p.port}→${p.targetPort}` : `${p.port}`))
+    .join(', ');
+}
+
 interface NamespaceCardProps {
   group: NamespaceGroup;
 }
@@ -45,7 +61,7 @@ export function NamespaceCard({ group }: NamespaceCardProps) {
     >
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {group.namespace}
           </Typography>
@@ -61,19 +77,17 @@ export function NamespaceCard({ group }: NamespaceCardProps) {
           />
         </Box>
 
-        {/* Pods table */}
+        {/* Unified table */}
         {group.pods.length > 0 && (
-          <Box sx={{ overflowX: 'auto', mb: group.services.length > 0 ? 2 : 0 }}>
+          <Box sx={{ overflowX: 'auto' }}>
             <Table size="small" sx={{ '& td, & th': { border: 0, py: 0.5, px: 1 } }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Name</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Service</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Status</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Ready</TableCell>
-                  <TableCell
-                    sx={{ color: 'text.secondary', fontSize: '0.7rem' }}
-                    align="right"
-                  >
+                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Ports</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }} align="right">
                     Restarts
                   </TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Age</TableCell>
@@ -81,112 +95,92 @@ export function NamespaceCard({ group }: NamespaceCardProps) {
                     CPU
                   </TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }} align="right">
-                    Memory
+                    Mem
                   </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {group.pods.map((pod) => (
-                  <TableRow key={pod.name} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' } }}>
-                    <TableCell
-                      sx={{
-                        fontFamily: 'monospace',
-                        fontSize: '0.75rem',
-                        maxWidth: 220,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
+                {group.pods.map((pod) => {
+                  const svc = findServiceForPod(pod, group.services);
+                  return (
+                    <TableRow
+                      key={pod.name}
+                      sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' } }}
                     >
-                      {pod.name}
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                        <Box
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            bgcolor: statusColor(pod.status, pod.ready),
-                            flexShrink: 0,
-                          }}
-                        />
-                        <Typography
-                          variant="body2"
-                          sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
-                        >
-                          {pod.status}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ fontSize: '0.75rem' }}>{pod.ready}</TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        fontSize: '0.75rem',
-                        color: pod.restarts > 0 ? 'warning.main' : 'text.secondary',
-                      }}
-                    >
-                      {pod.restarts}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                      {pod.age}
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'text.secondary' }}
-                    >
-                      {pod.cpu ?? '-'}
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'text.secondary' }}
-                    >
-                      {pod.memory ?? '-'}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableCell
+                        sx={{
+                          fontFamily: 'monospace',
+                          fontSize: '0.75rem',
+                          maxWidth: 200,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={pod.name}
+                      >
+                        {svc?.name ?? pod.name}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              bgcolor: statusColor(pod.status, pod.ready),
+                              flexShrink: 0,
+                            }}
+                          />
+                          <Typography
+                            variant="body2"
+                            sx={{ fontSize: '0.75rem', color: 'text.secondary' }}
+                          >
+                            {pod.status}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.75rem' }}>{pod.ready}</TableCell>
+                      <TableCell
+                        sx={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'text.secondary' }}
+                      >
+                        {svc ? formatPorts(svc) : '-'}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          fontSize: '0.75rem',
+                          color: pod.restarts > 0 ? 'warning.main' : 'text.secondary',
+                        }}
+                      >
+                        {pod.restarts}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                        {pod.age}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'text.secondary' }}
+                      >
+                        {pod.cpu ?? '-'}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'text.secondary' }}
+                      >
+                        {pod.memory ?? '-'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </Box>
         )}
 
-        {/* Services */}
-        {group.services.length > 0 && (
-          <Box>
-            <Typography
-              variant="caption"
-              sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5, display: 'block' }}
-            >
-              Services
-            </Typography>
-            {group.services.map((svc) => (
-              <Box
-                key={svc.name}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  py: 0.25,
-                  fontSize: '0.75rem',
-                }}
-              >
-                <Typography
-                  sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.primary' }}
-                >
-                  {svc.name}
-                </Typography>
-                <Chip
-                  label={svc.type}
-                  size="small"
-                  sx={{ height: 18, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.06)' }}
-                />
-                <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', ml: 'auto' }}>
-                  {svc.ports.map((p) => `${p.port}:${p.targetPort}/${p.protocol}`).join(', ')}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
+        {group.pods.length === 0 && (
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            No pods
+          </Typography>
         )}
       </CardContent>
     </Card>

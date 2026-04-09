@@ -33,7 +33,13 @@ export function useCluster(refreshInterval = 5000) {
 
       let metricsMap = new Map<string, { cpu: string; memory: string }>();
       if (metricsRes.ok) {
-        const metricsData: MetricsEntry[] = await metricsRes.json();
+        const metricsRaw = await metricsRes.json();
+        // Backend may return { pods: [...] } or [...] depending on metrics availability
+        const metricsData: MetricsEntry[] = Array.isArray(metricsRaw)
+          ? metricsRaw
+          : Array.isArray(metricsRaw?.pods)
+            ? metricsRaw.pods
+            : [];
         metricsMap = new Map(
           metricsData.map((m) => [`${m.namespace}/${m.name}`, { cpu: m.cpu, memory: m.memory }]),
         );

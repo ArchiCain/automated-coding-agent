@@ -53,6 +53,7 @@ export function ClusterPage() {
       sx={{
         pt: '64px',
         minHeight: '100vh',
+        overflow: 'auto',
         bgcolor: 'background.default',
       }}
     >
