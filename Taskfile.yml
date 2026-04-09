@@ -78,9 +78,9 @@ tasks:
         kubectl get svc -A --no-headers 2>/dev/null | grep -v kube-system || echo "No services"
 
   logs:
-    desc: "Show logs for a service (usage: task logs -- coding-agent-backend)"
+    desc: "Show logs for a service (usage: task logs -- the-dev-team-backend)"
     cmds:
-      - kubectl logs -f deployment/{{.CLI_ARGS}} -n coding-agent --tail=100
+      - kubectl logs -f deployment/{{.CLI_ARGS}} -n the-dev-team --tail=100
 
   open:
     desc: "Port-forward frontend and backend for local access"
@@ -270,15 +270,15 @@ tasks:
         vars:
           WORKTREE_PATH: '{{.WORKTREE_PATH}}'
           IMAGE_TAG: '{{.IMAGE_TAG}}'
-      - task: build:coding-agent-backend
+      - task: build:the-dev-team-backend
+        vars:
+          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+      - task: build:the-dev-team-frontend
         vars:
           WORKTREE_PATH: '{{.WORKTREE_PATH}}'
           IMAGE_TAG: '{{.IMAGE_TAG}}'
       - task: build:docs
-        vars:
-          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
-          IMAGE_TAG: '{{.IMAGE_TAG}}'
-      - task: build:dashboard
         vars:
           WORKTREE_PATH: '{{.WORKTREE_PATH}}'
           IMAGE_TAG: '{{.IMAGE_TAG}}'
@@ -310,23 +310,23 @@ tasks:
       - docker build -t ${REGISTRY:-localhost:30500}/keycloak:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/application/keycloak/dockerfiles/Dockerfile {{.WORKTREE_PATH}}/projects/application/keycloak
       - docker push ${REGISTRY:-localhost:30500}/keycloak:{{.IMAGE_TAG}}
 
-  build:coding-agent-backend:
-    desc: Build and push coding-agent-backend image
+  build:the-dev-team-backend:
+    desc: Build and push the-dev-team-backend image
     vars:
       WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
       IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/coding-agent-backend:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/coding-agent/backend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/coding-agent/backend
-      - docker push ${REGISTRY:-localhost:30500}/coding-agent-backend:{{.IMAGE_TAG}}
+      - docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-backend:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/the-dev-team/backend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/the-dev-team/backend
+      - docker push ${REGISTRY:-localhost:30500}/the-dev-team-backend:{{.IMAGE_TAG}}
 
-  build:dashboard:
-    desc: Build and push THE Dev Team dashboard image
+  build:the-dev-team-frontend:
+    desc: Build and push the-dev-team-frontend image
     vars:
       WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
       IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:{{.IMAGE_TAG}} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f {{.WORKTREE_PATH}}/projects/coding-agent/dashboard/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/coding-agent/dashboard
-      - docker push ${REGISTRY:-localhost:30500}/the-dev-team-dashboard:{{.IMAGE_TAG}}
+      - docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-frontend:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/the-dev-team/frontend
+      - docker push ${REGISTRY:-localhost:30500}/the-dev-team-frontend:{{.IMAGE_TAG}}
 
   build:docs:
     desc: Build and push docs image

@@ -131,21 +131,20 @@ services:
       keycloak:
         condition: service_healthy
 
-  coding-agent-backend:
+  the-dev-team-backend:
     init: true
     build:
-      context: ../../projects/coding-agent/backend
+      context: ../../projects/the-dev-team/backend
       dockerfile: dockerfiles/prod.Dockerfile
     ports:
-      - "${CODING_AGENT_BACKEND_PORT}:8080"
+      - "${THE_DEV_TEAM_BACKEND_PORT:-8086}:8080"
     env_file:
       - ../../.env
     environment:
       - NODE_ENV=production
       - PORT=8080
-      - SERVICE_NAME=coding-agent-backend
-      - CODING_AGENT_CORS_ORIGINS=${CODING_AGENT_CORS_ORIGINS}
-      - CODING_AGENT_WORKSPACE_ROOT=${CODING_AGENT_WORKSPACE_ROOT:-/workspace}
+      - SERVICE_NAME=the-dev-team-backend
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - REPO_ROOT=/workspace
     volumes:
       - ../../:/workspace

@@ -188,4 +188,4 @@ Done.
 - [Execution Loop](execution-loop.md)
 - [Validation Gates](validation-gates.md)
 - [Configuration](configuration.md)
-- [Task State & History](../projects/coding-agent/backlog.md)
+- [Task State & History](../projects/the-dev-team/backlog.md)

@@ -89,7 +89,7 @@ This deploys the full stack into Minikube — the same topology as production (K
 
 ```bash
 task status
-# Expect: all pods Running in app and coding-agent namespaces
+# Expect: all pods Running in app and the-dev-team namespaces
 ```
 
 ### Submit a test task
@@ -143,8 +143,8 @@ Unit tests run on your host machine (in the Nix shell) and don't require the sta
 ```bash
 task backend:local:test
 task frontend:local:test
-task coding-agent-backend:local:test
-task dashboard:local:test
+task devteam-backend:local:test
+task devteam-frontend:local:test
 ```
 
 Integration tests connect to the running Minikube stack:

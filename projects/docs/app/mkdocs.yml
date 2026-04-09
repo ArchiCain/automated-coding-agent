@@ -30,9 +30,9 @@ nav:
       - Keycloak: projects/application/keycloak.md
       - E2E Tests: projects/application/e2e.md
     - THE Dev Team:
-      - Orchestrator: projects/coding-agent/backend.md
-      - Dashboard: projects/coding-agent/dashboard.md
-      - Task State & History: projects/coding-agent/backlog.md
+      - Backend: projects/the-dev-team/backend.md
+      - Frontend: projects/the-dev-team/frontend.md
+      - Task State & History: projects/the-dev-team/backlog.md
 
   - THE Dev Team:
     - Overview: the-dev-team/overview.md

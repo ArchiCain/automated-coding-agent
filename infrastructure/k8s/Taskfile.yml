@@ -29,9 +29,9 @@ tasks:
       - kubectl get pods -n ${NAMESPACE:-app}
       - kubectl get ingress -n ${NAMESPACE:-app}
       - echo ""
-      - echo "=== Coding Agent (${CODING_AGENT_NAMESPACE:-coding-agent}) ==="
-      - kubectl get pods -n ${CODING_AGENT_NAMESPACE:-coding-agent}
-      - kubectl get ingress -n ${CODING_AGENT_NAMESPACE:-coding-agent}
+      - echo "=== THE Dev Team (${THE_DEV_TEAM_NAMESPACE:-the-dev-team}) ==="
+      - kubectl get pods -n ${THE_DEV_TEAM_NAMESPACE:-the-dev-team}
+      - kubectl get ingress -n ${THE_DEV_TEAM_NAMESPACE:-the-dev-team}
 
   logs:
     desc: Show logs for a service (usage - task infra:k8s:logs -- backend)

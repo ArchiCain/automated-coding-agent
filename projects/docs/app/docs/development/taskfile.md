@@ -10,7 +10,7 @@ service-name:environment:action
 
 | Segment | Meaning | Examples |
 |---------|---------|----------|
-| Service | Which project or namespace | `backend`, `frontend`, `coding-agent-backend`, `env`, `history`, `minikube`, `dashboard` |
+| Service | Which project or namespace | `backend`, `frontend`, `devteam-backend`, `devteam-frontend`, `env`, `history`, `minikube` |
 | Environment | Where it runs | `local`, `remote` |
 | Action | What to do | `start`, `stop`, `test`, `build`, `lint` |
 
@@ -23,8 +23,8 @@ Taskfile.yml (root)
 ├── projects/application/database/Taskfile.yml
 ├── projects/application/keycloak/Taskfile.yml
 ├── projects/application/e2e/Taskfile.yml
-├── projects/coding-agent/backend/Taskfile.yml        # THE Dev Team orchestrator
-├── projects/coding-agent/dashboard/Taskfile.yml      # Dashboard SPA
+├── projects/the-dev-team/backend/Taskfile.yml        # THE Dev Team orchestrator
+├── projects/the-dev-team/frontend/Taskfile.yml       # Chat UI + cluster visualization
 ├── projects/docs/Taskfile.yml
 └── infrastructure/
     ├── agent-envs/Taskfile.yml                       # env:*
@@ -48,7 +48,7 @@ These are the commands you use most often:
 | `task destroy` | Delete the Minikube cluster and all data |
 | `task setup-secrets` | Create K8s secrets from `.env` (run before first deploy) |
 | `task status` | Show Minikube status, pods, and services across all namespaces |
-| `task logs -- SERVICE` | Tail kubectl logs for a deployment (e.g. `task logs -- coding-agent-backend`) |
+| `task logs -- SERVICE` | Tail kubectl logs for a deployment (e.g. `task logs -- the-dev-team-backend`) |
 
 ## Common commands
 
@@ -116,28 +116,28 @@ Full reference for `infrastructure/history/Taskfile.yml`:
 | `task history:sync` | Trigger an immediate git sync to `the-dev-team/history` |
 | `task history:cleanup -- 90` | Remove transcripts older than N days from the PVC |
 
-See [Task State & History](../projects/coding-agent/backlog.md).
+See [Task State & History](../projects/the-dev-team/backlog.md).
 
-### Dashboard (`dashboard:*`)
+### Frontend (`devteam-frontend:*`)
 
-Convenience commands for the [THE Dev Team Dashboard](../projects/coding-agent/dashboard.md):
-
-| Command | Purpose |
-|---------|---------|
-| `task dashboard:local:run` | Vite dev server |
-| `task dashboard:local:build` | Production bundle |
-| `task dashboard:local:test` | Vitest unit tests |
-| `task dashboard:local:lint` | ESLint |
-
-### Orchestrator (`coding-agent-backend:*`)
+Convenience commands for the [THE Dev Team Frontend](../projects/the-dev-team/frontend.md):
 
 | Command | Purpose |
 |---------|---------|
-| `task coding-agent-backend:local:start` | NestJS dev server |
-| `task coding-agent-backend:local:build` | Compile TypeScript |
-| `task coding-agent-backend:local:test` | Unit tests |
-| `task coding-agent-backend:local:test:integration` | Integration tests |
-| `task coding-agent-backend:local:lint` | ESLint |
+| `task devteam-frontend:local:start` | Vite dev server |
+| `task devteam-frontend:local:build` | Production bundle |
+| `task devteam-frontend:local:test` | Unit tests |
+| `task devteam-frontend:local:lint` | ESLint |
+
+### Backend (`devteam-backend:*`)
+
+| Command | Purpose |
+|---------|---------|
+| `task devteam-backend:local:start` | NestJS dev server |
+| `task devteam-backend:local:build` | Compile TypeScript |
+| `task devteam-backend:local:test` | Unit tests |
+| `task devteam-backend:local:test:integration` | Integration tests |
+| `task devteam-backend:local:lint` | ESLint |
 
 ### Testing
 

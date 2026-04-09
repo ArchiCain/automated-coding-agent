@@ -72,10 +72,10 @@ ingressClassName: traefik
 | keycloak | app | `projects/application/keycloak/chart` | Auth service |
 | frontend | app | `projects/application/frontend/chart` | React SPA |
 | docs | app | `projects/docs/chart` | Documentation site |
-| coding-agent-backend | coding-agent | `projects/coding-agent/backend/chart` | Orchestrator: RBAC, Secrets, Deployment |
-| the-dev-team-dashboard | coding-agent | `projects/coding-agent/dashboard/chart` | Dashboard SPA |
+| the-dev-team-backend | the-dev-team | `projects/the-dev-team/backend/chart` | Orchestrator: RBAC, Secrets, Deployment |
+| the-dev-team-frontend | the-dev-team | `projects/the-dev-team/frontend/chart` | Chat UI + cluster visualization |
 
-The `coding-agent-backend` release is the **orchestrator's own deployment** (ServiceAccount, ClusterRole, secrets, Deployment). It's separate from the agent sandbox environments, which use the `full-stack` umbrella chart.
+The `the-dev-team-backend` release is the **orchestrator's own deployment** (ServiceAccount, ClusterRole, secrets, Deployment). It's separate from the agent sandbox environments, which use the `full-stack` umbrella chart.
 
 ## Sandbox namespaces (`env-*`)
 
