@@ -149,6 +149,52 @@ tasks:
         echo "=== All images built and pushed ==="
       - task: deploy:apply
 
+  reset:
+    desc: "Wipe all K8s state and redeploy from scratch (keeps Minikube VM)"
+    cmds:
+      - |
+        echo "=== Stopping port-forwards ==="
+        pkill -f "port-forward" 2>/dev/null || true
+
+        echo ""
+        echo "=== Uninstalling all Helm releases ==="
+        for ns in $(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}'); do
+          for release in $(helm list -n "$ns" -q 2>/dev/null); do
+            echo "  Uninstalling $release from $ns"
+            helm uninstall "$release" -n "$ns" 2>/dev/null || true
+          done
+        done
+
+        echo ""
+        echo "=== Deleting application namespaces ==="
+        SYSTEM_NS="default kube-system kube-public kube-node-lease"
+        for ns in $(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}'); do
+          if echo "$SYSTEM_NS" | grep -qw "$ns"; then
+            continue
+          fi
+          echo "  Deleting namespace $ns"
+          kubectl delete namespace "$ns" --ignore-not-found --timeout=60s 2>/dev/null || true
+        done
+
+        echo ""
+        echo "=== Pruning Docker images ==="
+        eval $(minikube docker-env)
+        docker system prune -a -f --volumes 2>/dev/null || true
+
+        echo ""
+        echo "=== Cleaning up Minikube PVs ==="
+        kubectl delete pv --all --ignore-not-found 2>/dev/null || true
+
+        echo ""
+        echo "=== Reset complete ==="
+        echo "Run 'task up' to rebuild and deploy everything."
+
+  reset:up:
+    desc: "Full reset and redeploy from scratch"
+    cmds:
+      - task: reset
+      - task: up
+
   down:
     desc: "Stop Minikube cluster (preserves state)"
     cmds:
