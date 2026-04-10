@@ -1,9 +1,6 @@
 version: '3'
 
 includes:
-  docker:
-    taskfile: ./docker/Taskfile.yml
-    dir: ./docker
   terraform:
     taskfile: ./terraform/Taskfile.yml
     dir: ./terraform

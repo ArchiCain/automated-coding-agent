@@ -26,40 +26,6 @@ tasks:
     cmds:
       - task --list
 
-  # ===================================================================
-  # Local Development (Docker Compose) — delegates to infra:docker:*
-  # ===================================================================
-
-  start-local:
-    desc: Start all local services (database, backend, keycloak, frontend, pgweb)
-    cmds:
-      - task: infra:docker:start
-
-  start-local:build:
-    desc: Start all local services with rebuild
-    cmds:
-      - task: infra:docker:start:build
-
-  stop-local:
-    desc: Stop all local services gracefully
-    cmds:
-      - task: infra:docker:stop
-
-  purge-local:
-    desc: Complete teardown of all local services (removes volumes)
-    cmds:
-      - task: infra:docker:purge
-
-  purge-and-restart-local:
-    desc: Complete teardown and fresh restart of all services
-    cmds:
-      - task: infra:docker:purge-and-restart
-
-  logs-local:
-    desc: Show logs from all services
-    cmds:
-      - task: infra:docker:logs
-
   status:
     desc: "Show cluster and service status"
     cmds:
@@ -249,7 +215,7 @@ tasks:
         echo "  DEV_HOSTNAME=$HOSTNAME"
         echo ""
         echo "Then restart your dev environment:"
-        echo "  task stop-local && task start-local"
+        echo "  task reset:up"
 
   # ===================================================================
   # Testing
