@@ -177,6 +177,29 @@ tasks:
         done
 
         echo ""
+        echo "=== Cleaning up cluster-scoped resources ==="
+        for wh in $(kubectl get validatingwebhookconfiguration -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+          case "$wh" in
+            *kube-system*) continue ;;
+            *)
+              echo "  Deleting webhook $wh"
+              kubectl delete validatingwebhookconfiguration "$wh" --ignore-not-found 2>/dev/null || true
+              ;;
+          esac
+        done
+        for mwh in $(kubectl get mutatingwebhookconfiguration -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+          case "$mwh" in
+            *kube-system*) continue ;;
+            *)
+              echo "  Deleting mutating webhook $mwh"
+              kubectl delete mutatingwebhookconfiguration "$mwh" --ignore-not-found 2>/dev/null || true
+              ;;
+          esac
+        done
+        # Note: Prometheus CRDs are intentionally kept — they're cluster-scoped
+        # and harmless, and deleting them causes helmfile diff failures on reinstall.
+
+        echo ""
         echo "=== Pruning Docker images ==="
         eval $(minikube docker-env)
         docker system prune -a -f --volumes 2>/dev/null || true
