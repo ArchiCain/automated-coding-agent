@@ -280,11 +280,6 @@ example-files/.worktrees/
 # Auto Claude data directory
 .auto-claude/
 
-# THE Dev Team runtime data
-.the-dev-team/state/
-.the-dev-team/history/sessions/
-.the-dev-team/history/tasks/
-.the-dev-team/history/orchestrator/
-
-# Legacy coding-agent-data directory (no longer used, replaced by .the-dev-team/)
+# Legacy data directories (no longer used)
 .coding-agent-data/
+.the-dev-team/

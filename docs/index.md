@@ -1,34 +1,35 @@
-# Automated Repo
+# THE Dev Team
 
-A monorepo for building AI-powered applications, driven by **THE Dev Team** — an autonomous multi-role development system that implements, tests, reviews, and ships its own code.
+An autonomous coding agent that runs in Kubernetes. You chat with a Claude Code agent through a web UI, and it can read/write code, manage git branches, deploy sandbox environments, and create PRs -- all through structured MCP tools (no arbitrary bash access).
 
-## What's in this repo
+## Architecture
 
-Three project groups share infrastructure, tooling, and deployment patterns:
+```
+projects/the-dev-team/
+├── backend/         # NestJS API + Claude Code SDK + MCP tools
+└── frontend/        # React chat UI + DevOps dashboard + docs viewer
+```
 
-| Group | Purpose | Services |
-|-------|---------|----------|
-| **Application** | The main product | Backend (NestJS), Frontend (React), Database (PostgreSQL + pgvector), Keycloak |
-| **THE Dev Team** | Autonomous development system | Orchestrator (NestJS), Dashboard (React + MUI), shared `skills/` library |
-| **Docs** | This documentation site | MkDocs Material |
+Both services run in K8s in the `the-dev-team` namespace. The agent operates on a cloned copy of the repo at `/workspace` inside the backend pod (PVC-backed).
 
-All services run on Kubernetes from day one. **Minikube** is the local target; **K3s** is the production target. Same topology, same charts.
+## How it works
 
-## THE Dev Team in one minute
+1. User sends a message in the chat UI (React frontend)
+2. Frontend sends it via WebSocket to the backend
+3. Backend passes it to the Claude Code SDK `query()` function with a system prompt and an allowlist of tools
+4. Claude Code runs its agent loop, calling tools via the MCP server (spawned as a subprocess)
+5. MCP server handles git operations and sandbox deployment through structured tool calls
+6. Messages stream back to the frontend via WebSocket
 
-Instead of a single-agent gateway, THE Dev Team is a role-based orchestrator:
+**No Bash access.** The agent cannot run arbitrary commands. Every operation is a structured tool call.
 
-- A task arrives (REST, GitHub issue, or a decomposed plan)
-- The orchestrator assigns an **agent slot**, creates an isolated git worktree and a sandbox K8s namespace (`env-{task-id}`)
-- It runs a **7-phase execution loop** (setup -> implement -> build+deploy -> test -> review+fix -> submit -> cleanup)
-- Along the way it dispatches work to nine specialised **roles** (architect, implementer, reviewer, tester, designer, bugfixer, documentarian, monitor, devops) using prompts assembled from `skills/soul.md` plus role-specific `SKILL.md` files
-- Every phase runs through **validation gates** (build, unit tests, deployment, integration, log audit, e2e, accessibility, design review, performance)
-- When all gates pass, the agent opens a PR with evidence (tests, screenshots, metrics)
-- A **human** merges — the agent never pushes to `main`
+### Available tools
 
-The [Frontend](projects/the-dev-team/frontend.md) gives you live visibility into every active task. The [Task State & History](projects/the-dev-team/backlog.md) system records every session as JSONL transcripts and markdown summaries, synced to a protected git branch.
+Claude Code has access to:
 
-Start here: [THE Dev Team Overview](the-dev-team/overview.md).
+- **File ops** (built-in): Read, Write, Edit, Glob, Grep
+- **Git** (MCP): git_status, git_diff, git_log, git_checkout, git_add, git_commit, git_push, git_pull, git_stash, git_branch
+- **Workspace** (MCP): create_worktree, deploy_sandbox, destroy_sandbox, list_sandboxes, sandbox_status, sandbox_logs, push_and_pr
 
 ## Quick start
 
@@ -47,22 +48,19 @@ task setup-secrets
 # 4. Start everything (Minikube + build + deploy)
 task up
 
-# 5. In a separate terminal, enable ingress access
-task minikube:tunnel
+# 5. Port-forward to access services locally
+task open
 ```
 
-Default local URLs:
+Key Taskfile commands:
 
-| Service | URL |
-|---------|-----|
-| Dashboard | http://dashboard.localhost |
-| Orchestrator API | http://agent-api.localhost |
-| Application frontend | http://app.localhost |
-| Application API | http://api.localhost |
-| Keycloak | http://auth.localhost |
-| Docs | http://docs.localhost |
-
-See [Environment Setup](getting-started/environment-setup.md) for the full `.env` reference.
+| Command | Purpose |
+|---------|---------|
+| `task up` | Start Minikube, build images, deploy everything |
+| `task reset` | Wipe all K8s state (keeps VM) |
+| `task reset:up` | Full reset and redeploy |
+| `task open` / `task close` | Port-forward management |
+| `task status` | Show cluster status |
 
 ## Repo structure
 
@@ -75,30 +73,33 @@ automated-coding-agent/
 │   │   ├── database/             # PostgreSQL + pgvector
 │   │   ├── keycloak/             # Auth service
 │   │   └── e2e/                  # Playwright tests
-│   ├── the-dev-team/             # THE Dev Team
-│   │   ├── backend/              # Orchestrator + API (NestJS)
-│   │   └── frontend/             # Chat UI + cluster visualization (React)
-│   └── docs/                     # This documentation site
-├── skills/                       # soul.md + 10 role skills
-├── .the-dev-team/                # Runtime state, history, baselines, config
+│   └── the-dev-team/             # THE Dev Team (autonomous coding agent)
+│       ├── backend/              # Agent backend (NestJS + Claude Code SDK)
+│       └── frontend/             # Chat UI + DevOps dashboard
 ├── infrastructure/
-│   ├── agent-envs/               # env:* Taskfile (sandbox lifecycle)
-│   ├── history/                  # history:* Taskfile
-│   ├── minikube/                 # minikube:* Taskfile
-│   ├── k8s/
-│   │   └── charts/
-│   │       ├── full-stack/       # Umbrella chart for sandbox envs
-│   │       └── the-dev-team/     # Orchestrator RBAC + secrets
-│   ├── docker/                   # Docker Compose (deprecated)
-│   └── terraform/                # EC2 + K3s provisioning
+│   ├── k8s/                      # Helmfile, charts, environments
+│   ├── agent-envs/               # Taskfile for sandbox lifecycle
+│   ├── minikube/                 # Local cluster setup
+│   └── terraform/                # AWS/EC2 provisioning
 ├── flake.nix                     # Nix dev shell
 └── Taskfile.yml                  # Root task automation
 ```
 
+## K8s namespaces
+
+| Namespace | Contents |
+|-----------|----------|
+| `app` | Main application (backend, frontend, database, keycloak) |
+| `the-dev-team` | Agent backend + frontend |
+| `env-*` | Sandbox environments (ephemeral, created per worktree) |
+| `dns` | CoreDNS for split DNS |
+| `traefik` | Ingress controller |
+| `registry` | In-cluster container registry |
+| `monitoring` | Prometheus, Grafana, Loki, Promtail |
+
 ## Where to go next
 
-- **Just browsing?** Read [THE Dev Team Overview](the-dev-team/overview.md).
 - **Setting up a machine?** Start with [Prerequisites](getting-started/prerequisites.md) and [Environment Setup](getting-started/environment-setup.md).
 - **Running it locally?** See [Local Workflow](development/local-workflow.md).
-- **Submitting a task?** Jump to [Submitting Tasks](the-dev-team/submitting-tasks.md).
-- **Want to understand the architecture?** The [Backend](projects/the-dev-team/backend.md), [Execution Loop](the-dev-team/execution-loop.md), and [Validation Gates](the-dev-team/validation-gates.md) docs are the core.
+- **Understanding the projects?** Read the [Projects Overview](projects/overview.md).
+- **Want architecture details?** The [Backend](projects/the-dev-team/backend.md) and [Frontend](projects/the-dev-team/frontend.md) docs cover the agent internals.

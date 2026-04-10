@@ -200,30 +200,6 @@ releases:
             cpu: {{ env "FRONTEND_CPU_LIMIT" | default "200m" }}
 
   # ===================================================================
-  # Documentation (namespace: app)
-  # ===================================================================
-
-  - name: docs
-    namespace: {{ env "NAMESPACE" | default "app" }}
-    chart: ../../projects/docs/chart
-    createNamespace: true
-    values:
-      - image:
-          repository: {{ env "DOCS_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/docs") }}
-          tag: {{ env "IMAGE_TAG" | default "latest" }}
-        ingress:
-          enabled: true
-          host: {{ env "DOCS_HOST" | default (print "docs." (env "DEV_HOSTNAME" | default "localhost")) }}
-          tls: {{ .Values | get "ingressTLS" false }}
-        resources:
-          requests:
-            memory: {{ env "DOCS_MEMORY_REQUEST" | default "64Mi" }}
-            cpu: {{ env "DOCS_CPU_REQUEST" | default "25m" }}
-          limits:
-            memory: {{ env "DOCS_MEMORY_LIMIT" | default "128Mi" }}
-            cpu: {{ env "DOCS_CPU_LIMIT" | default "100m" }}
-
-  # ===================================================================
   # THE Dev Team (namespace: the-dev-team)
   # ===================================================================
 

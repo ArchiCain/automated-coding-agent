@@ -1,6 +1,6 @@
 # Projects Overview
 
-All deployable services live under `projects/`, organised into three groups with a shared documentation site.
+All deployable services live under `projects/`, organised into two groups.
 
 ```
 projects/
@@ -10,10 +10,9 @@ projects/
 │   ├── database/
 │   ├── keycloak/
 │   └── e2e/
-├── the-dev-team/        # THE Dev Team (K8s namespace: the-dev-team)
-│   ├── backend/         # Orchestrator + API
-│   └── frontend/        # Chat UI + cluster visualization
-└── docs/                # Documentation site
+└── the-dev-team/        # THE Dev Team (K8s namespace: the-dev-team)
+    ├── backend/         # Agent API + Claude Code SDK + MCP server
+    └── frontend/        # Chat UI + DevOps dashboard + docs viewer
 ```
 
 Each project follows a consistent layout:
@@ -29,7 +28,7 @@ project-name/
 
 ## Application
 
-The main product — a full-stack web application with AI features. Deployed to the `app` K8s namespace.
+The main product -- a full-stack web application with AI features. Deployed to the `app` K8s namespace.
 
 | Project | Stack | Purpose |
 |---------|-------|---------|
@@ -39,25 +38,18 @@ The main product — a full-stack web application with AI features. Deployed to 
 | [Keycloak](application/keycloak.md) | Keycloak 23 | Authentication and authorisation |
 | [E2E Tests](application/e2e.md) | Playwright 1.48 | Browser-based end-to-end tests |
 
-When a task runs, THE Dev Team deploys an entire copy of this stack into an ephemeral namespace (`env-{task-id}`) so the agent can validate its work against a live environment. See [Sandbox Environments](../the-dev-team/sandbox-environments.md).
+When a task runs, THE Dev Team can deploy an entire copy of this stack into an ephemeral namespace (`env-{name}`) so the agent can validate changes against a live environment. See [Sandbox Environments](../the-dev-team/sandbox-environments.md).
 
 ## THE Dev Team
 
-The autonomous development system: an orchestrator, a dashboard, and a shared skills library. Both services are deployed to the `the-dev-team` K8s namespace.
+The autonomous coding agent. A backend service handles Claude Code SDK integration and exposes structured tools via MCP; a frontend provides the chat interface and DevOps observability. Both are deployed to the `the-dev-team` K8s namespace.
 
 | Project | Stack | Purpose |
 |---------|-------|---------|
-| [Backend](the-dev-team/backend.md) | NestJS 11 + Claude Code SDK | Task intake, agent pool, execution loop, validation gates, PR management |
-| [Frontend](the-dev-team/frontend.md) | React 19 + Vite | Chat UI, cluster visualization, real-time observability |
-| [Task State & History](the-dev-team/backlog.md) | File-based + git | Per-task state, findings, session transcripts, searchable archive |
+| [Backend](the-dev-team/backend.md) | NestJS 11 + Claude Code SDK | Session management, WebSocket gateway, MCP tool server, cluster introspection |
+| [Frontend](the-dev-team/frontend.md) | React 19 + Vite + MUI | Chat UI, DevOps dashboard (deployments/metrics/logs), docs viewer |
 
-Both services live under `projects/the-dev-team/`. The runtime data directory is `.the-dev-team/` at the repo root, and the shared skills library is at `skills/`.
-
-Read the [THE Dev Team Overview](../the-dev-team/overview.md) for the mental model before diving into individual services.
-
-## Docs
-
-MkDocs Material site (this one). Deployed to the `app` namespace as `docs.localhost` locally and `docs.mac-mini` (or production domain) in the cluster.
+Both services live under `projects/the-dev-team/`.
 
 ## Conventions
 

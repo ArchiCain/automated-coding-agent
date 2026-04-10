@@ -1,8 +1,0 @@
-version: '3'
-
-tasks:
-  local:serve:
-    desc: Serve docs locally with hot reload (requires mkdocs installed)
-    dir: app
-    cmds:
-      - mkdocs serve
