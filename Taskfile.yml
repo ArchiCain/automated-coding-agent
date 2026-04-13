@@ -44,38 +44,32 @@ tasks:
     cmds:
       - kubectl logs -f deployment/{{.CLI_ARGS}} -n the-dev-team --tail=100
 
-  open:
-    desc: "Port-forward frontend and backend for local access"
-    cmds:
-      - |
-        pkill -f "port-forward.*the-dev-team" 2>/dev/null || true
-        sleep 1
-
-        echo "Waiting for pods to be ready..."
-        kubectl wait --for=condition=Ready pods --all -n the-dev-team --timeout=120s 2>/dev/null || true
-
-        kubectl port-forward -n the-dev-team svc/the-dev-team-frontend 3002:8080 &
-        kubectl port-forward -n the-dev-team svc/the-dev-team-backend 8086:8080 &
-        sleep 2
-        echo "============================================"
-        echo "  Chat UI:  http://localhost:3002"
-        echo "  API:      http://localhost:8086"
-        echo "============================================"
-        echo "Port-forwards running."
-        echo "  Run 'task close' to stop."
-        echo "  Run 'task open' again after pod restarts."
-
   close:
-    desc: "Stop port-forwards"
+    desc: "Stop Traefik port-forward"
     cmds:
-      - pkill -f "port-forward.*the-dev-team" 2>/dev/null || true
       - pkill -f "port-forward.*traefik" 2>/dev/null || true
-      - echo "Port-forwards stopped."
+      - echo "Port-forward stopped."
 
   tunnel:
-    desc: "Expose all services via Traefik on port 8080 (hostname-based, Tailscale-compatible)"
+    desc: "Expose all services via Traefik on port 8080 (requires DEV_HOSTNAME + TAILSCALE_IP in .env)"
     cmds:
       - |
+        if [ -z "${DEV_HOSTNAME:-}" ] || [ "${DEV_HOSTNAME}" = "localhost" ]; then
+          echo "ERROR: DEV_HOSTNAME must be set to your Tailscale machine name in .env"
+          echo "  Run: task tailscale:hostname   to find your machine name"
+          exit 1
+        fi
+
+        if [ -z "${TAILSCALE_IP:-}" ]; then
+          TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || true)
+          if [ -z "$TAILSCALE_IP" ]; then
+            echo "ERROR: TAILSCALE_IP not set in .env and Tailscale is not running"
+            echo "  Install Tailscale: https://tailscale.com/download"
+            echo "  Then add to .env:  TAILSCALE_IP=\$(tailscale ip -4)"
+            exit 1
+          fi
+        fi
+
         pkill -f "port-forward.*traefik" 2>/dev/null || true
         sleep 1
 
@@ -83,45 +77,41 @@ tasks:
         kubectl wait --for=condition=Ready pods --all -n the-dev-team --timeout=120s 2>/dev/null || true
         kubectl wait --for=condition=Ready pods --all -n app --timeout=120s 2>/dev/null || true
 
-        TAILSCALE_IP="${TAILSCALE_IP:-$(tailscale ip -4 2>/dev/null || echo '')}"
-        DEV_HOST="${DEV_HOSTNAME:-localhost}"
-        HOSTS_IP="${TAILSCALE_IP:-127.0.0.1}"
-
         kubectl port-forward -n traefik svc/traefik 8080:80 --address=0.0.0.0 &
         sleep 2
 
-        # Try to update /etc/hosts automatically; if sudo fails, print manual instructions
-        if sudo sed -i '' "/$DEV_HOST/d" /etc/hosts 2>/dev/null && \
-           echo "$HOSTS_IP devteam.$DEV_HOST agent-api.$DEV_HOST app.$DEV_HOST api.$DEV_HOST auth.$DEV_HOST" | sudo tee -a /etc/hosts > /dev/null 2>&1; then
-          echo "  /etc/hosts updated → $HOSTS_IP"
+        MINIKUBE_IP=$(minikube ip)
+
+        # /etc/hosts — needed until Split DNS is configured
+        if grep -q "${DEV_HOSTNAME}" /etc/hosts 2>/dev/null; then
+          HOSTS_STATUS="already set"
         else
-          echo ""
-          echo "  Add to /etc/hosts (run once):"
-          echo "  ! sudo sh -c \"echo '$HOSTS_IP devteam.$DEV_HOST agent-api.$DEV_HOST app.$DEV_HOST api.$DEV_HOST auth.$DEV_HOST' >> /etc/hosts\""
+          HOSTS_STATUS="not set"
         fi
 
         echo ""
         echo "============================================"
         echo "  THE Dev Team:"
-        echo "    Chat UI:   http://devteam.$DEV_HOST:8080"
-        echo "    API:       http://agent-api.$DEV_HOST:8080"
+        echo "    Chat UI:  http://devteam.${DEV_HOSTNAME}:8080"
+        echo "    API:      http://agent-api.${DEV_HOSTNAME}:8080"
         echo "  Application:"
-        echo "    Frontend:  http://app.$DEV_HOST:8080"
-        echo "    API:       http://api.$DEV_HOST:8080"
-        echo "    Auth:      http://auth.$DEV_HOST:8080"
+        echo "    Frontend: http://app.${DEV_HOSTNAME}:8080"
+        echo "    API:      http://api.${DEV_HOSTNAME}:8080"
+        echo "    Auth:     http://auth.${DEV_HOSTNAME}:8080"
         echo "============================================"
-        if [ -n "$TAILSCALE_IP" ]; then
-          MINIKUBE_IP=$(minikube ip)
-          echo "  Accessible from Tailscale devices at :8080"
+        echo ""
+        if [ "$HOSTS_STATUS" = "not set" ]; then
+          echo "  /etc/hosts not configured — run once to use the URLs above:"
+          echo "  ! sudo sh -c \"echo '${TAILSCALE_IP} devteam.${DEV_HOSTNAME} agent-api.${DEV_HOSTNAME} app.${DEV_HOSTNAME} api.${DEV_HOSTNAME} auth.${DEV_HOSTNAME}' >> /etc/hosts\""
           echo ""
-          echo "  For Split DNS across all tailnet devices (one-time):"
-          echo "    1. ! tailscale up --advertise-routes=$MINIKUBE_IP/24"
-          echo "    2. Approve subnet route in Tailscale admin console"
-          echo "    3. Tailscale admin → DNS → Add nameserver:"
-          echo "         IP: $MINIKUBE_IP   Port: 30053   Domain: $DEV_HOST"
         fi
-        echo "============================================"
-        echo "Run 'task close' to stop."
+        echo "  Split DNS (one-time, makes /etc/hosts unnecessary on all tailnet devices):"
+        echo "    1. ! tailscale up --advertise-routes=$MINIKUBE_IP/24"
+        echo "    2. Approve in Tailscale admin console → Machines → this machine"
+        echo "    3. Tailscale admin → DNS → Add nameserver:"
+        echo "         IP: $MINIKUBE_IP   Port: 30053   Domain: ${DEV_HOSTNAME}"
+        echo ""
+        echo "  Run 'task close' to stop."
 
   tailscale:hostname:
     desc: "Print your Tailscale hostname (paste into .env as DEV_HOSTNAME)"
@@ -152,7 +142,7 @@ tasks:
       - task: minikube:start
       - task: setup-secrets
       - task: up:build-and-deploy
-      - task: open
+      - task: tunnel
 
   up:build-and-deploy:
     desc: "Build images into Minikube and deploy (internal)"
@@ -172,7 +162,7 @@ tasks:
             backend)
               docker build -t $REG/$img:$TAG -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend ;;
             frontend)
-              docker build -t $REG/$img:$TAG --build-arg VITE_BACKEND_URL=http://api.${DEV_HOSTNAME:-localhost} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend ;;
+              docker build -t $REG/$img:$TAG --build-arg VITE_BACKEND_URL=http://api.${DEV_HOSTNAME} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend ;;
             keycloak)
               docker build -t $REG/$img:$TAG -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak ;;
             the-dev-team-backend)
