@@ -3,9 +3,6 @@ set -e
 
 echo "Starting backend (production)..."
 
-# Run pending migrations
-echo "Running database migrations..."
-npm run migration:run || echo "Migration run skipped or failed"
-
-# Start production server
+# TypeORM handles migrations on startup via synchronize/autorun.
+# The migration CLI requires source .ts files not present in the production build.
 exec npm run start:prod
