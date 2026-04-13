@@ -26,6 +26,7 @@ export interface ServiceInfo {
   clusterIP: string;
   ports: Array<{ port: number; targetPort: number; protocol: string }>;
   externalIP?: string;
+  ingressHost?: string;
 }
 
 export interface NamespaceGroup {

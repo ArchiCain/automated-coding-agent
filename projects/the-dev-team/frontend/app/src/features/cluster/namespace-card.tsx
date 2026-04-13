@@ -39,10 +39,9 @@ function findServiceForPod(pod: PodInfo, services: ServiceInfo[]): ServiceInfo |
   return sorted.find((svc) => pod.name.startsWith(svc.name));
 }
 
-function formatPorts(svc: ServiceInfo): string {
-  return svc.ports
-    .map((p) => (p.targetPort ? `${p.port}→${p.targetPort}` : `${p.port}`))
-    .join(', ');
+function formatAccess(svc: ServiceInfo): string {
+  if (svc.ingressHost) return svc.ingressHost;
+  return svc.ports.map((p) => `${p.port}`).join(', ');
 }
 
 /** Strip the release/namespace prefix from a service name for cleaner display */
@@ -103,7 +102,7 @@ export function NamespaceCard({ group, onPodClick }: NamespaceCardProps) {
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Service</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Status</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Ready</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Ports</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>Access</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.7rem' }} align="right">
                     Restarts
                   </TableCell>
@@ -164,7 +163,7 @@ export function NamespaceCard({ group, onPodClick }: NamespaceCardProps) {
                       <TableCell
                         sx={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'text.secondary' }}
                       >
-                        {svc ? formatPorts(svc) : '-'}
+                        {svc ? formatAccess(svc) : '-'}
                       </TableCell>
                       <TableCell
                         align="right"

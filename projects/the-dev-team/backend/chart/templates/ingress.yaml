@@ -11,6 +11,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.tls: "true"
     {{- end }}
 spec:
+  ingressClassName: traefik
   {{- if .Values.ingress.tls }}
   tls:
     - hosts:

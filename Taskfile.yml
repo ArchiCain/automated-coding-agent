@@ -50,6 +50,10 @@ tasks:
       - |
         pkill -f "port-forward.*the-dev-team" 2>/dev/null || true
         sleep 1
+
+        echo "Waiting for pods to be ready..."
+        kubectl wait --for=condition=Ready pods --all -n the-dev-team --timeout=120s 2>/dev/null || true
+
         kubectl port-forward -n the-dev-team svc/the-dev-team-frontend 3002:8080 &
         kubectl port-forward -n the-dev-team svc/the-dev-team-backend 8086:8080 &
         sleep 2
@@ -57,13 +61,86 @@ tasks:
         echo "  Chat UI:  http://localhost:3002"
         echo "  API:      http://localhost:8086"
         echo "============================================"
-        echo "Port-forwards running. Run 'task close' to stop."
+        echo "Port-forwards running."
+        echo "  Run 'task close' to stop."
+        echo "  Run 'task open' again after pod restarts."
 
   close:
     desc: "Stop port-forwards"
     cmds:
       - pkill -f "port-forward.*the-dev-team" 2>/dev/null || true
+      - pkill -f "port-forward.*traefik" 2>/dev/null || true
       - echo "Port-forwards stopped."
+
+  tunnel:
+    desc: "Expose all services via Traefik on port 8080 (hostname-based, Tailscale-compatible)"
+    cmds:
+      - |
+        pkill -f "port-forward.*traefik" 2>/dev/null || true
+        sleep 1
+
+        echo "Waiting for pods to be ready..."
+        kubectl wait --for=condition=Ready pods --all -n the-dev-team --timeout=120s 2>/dev/null || true
+        kubectl wait --for=condition=Ready pods --all -n app --timeout=120s 2>/dev/null || true
+
+        TAILSCALE_IP="${TAILSCALE_IP:-$(tailscale ip -4 2>/dev/null || echo '')}"
+        DEV_HOST="${DEV_HOSTNAME:-localhost}"
+        HOSTS_IP="${TAILSCALE_IP:-127.0.0.1}"
+
+        kubectl port-forward -n traefik svc/traefik 8080:80 --address=0.0.0.0 &
+        sleep 2
+
+        # Try to update /etc/hosts automatically; if sudo fails, print manual instructions
+        if sudo sed -i '' "/$DEV_HOST/d" /etc/hosts 2>/dev/null && \
+           echo "$HOSTS_IP devteam.$DEV_HOST agent-api.$DEV_HOST app.$DEV_HOST api.$DEV_HOST auth.$DEV_HOST" | sudo tee -a /etc/hosts > /dev/null 2>&1; then
+          echo "  /etc/hosts updated → $HOSTS_IP"
+        else
+          echo ""
+          echo "  Add to /etc/hosts (run once):"
+          echo "  ! sudo sh -c \"echo '$HOSTS_IP devteam.$DEV_HOST agent-api.$DEV_HOST app.$DEV_HOST api.$DEV_HOST auth.$DEV_HOST' >> /etc/hosts\""
+        fi
+
+        echo ""
+        echo "============================================"
+        echo "  THE Dev Team:"
+        echo "    Chat UI:   http://devteam.$DEV_HOST:8080"
+        echo "    API:       http://agent-api.$DEV_HOST:8080"
+        echo "  Application:"
+        echo "    Frontend:  http://app.$DEV_HOST:8080"
+        echo "    API:       http://api.$DEV_HOST:8080"
+        echo "    Auth:      http://auth.$DEV_HOST:8080"
+        echo "============================================"
+        if [ -n "$TAILSCALE_IP" ]; then
+          MINIKUBE_IP=$(minikube ip)
+          echo "  Accessible from Tailscale devices at :8080"
+          echo ""
+          echo "  For Split DNS across all tailnet devices (one-time):"
+          echo "    1. ! tailscale up --advertise-routes=$MINIKUBE_IP/24"
+          echo "    2. Approve subnet route in Tailscale admin console"
+          echo "    3. Tailscale admin → DNS → Add nameserver:"
+          echo "         IP: $MINIKUBE_IP   Port: 30053   Domain: $DEV_HOST"
+        fi
+        echo "============================================"
+        echo "Run 'task close' to stop."
+
+  tailscale:hostname:
+    desc: "Print your Tailscale hostname (paste into .env as DEV_HOSTNAME)"
+    cmds:
+      - |
+        HOSTNAME=$(./scripts/detect-tailscale-hostname.sh)
+        if [ -z "$HOSTNAME" ]; then
+          echo "Tailscale not installed or not running."
+          echo "Install: https://tailscale.com/download"
+          exit 1
+        fi
+        echo ""
+        echo "Your Tailscale hostname: $HOSTNAME"
+        echo ""
+        echo "To use it, set in .env:"
+        echo "  DEV_HOSTNAME=$HOSTNAME"
+        echo ""
+        echo "Then restart your dev environment:"
+        echo "  task reset:up"
 
   # ===================================================================
   # THE Dev Team — Minikube-based full stack
@@ -197,25 +274,6 @@ tasks:
     desc: "Create K8s secrets from .env (run before first deploy)"
     cmds:
       - scripts/setup-k8s-secrets.sh
-
-  tailscale:hostname:
-    desc: "Print your Tailscale hostname (paste into .env as DEV_HOSTNAME)"
-    cmds:
-      - |
-        HOSTNAME=$(./scripts/detect-tailscale-hostname.sh)
-        if [ -z "$HOSTNAME" ]; then
-          echo "Tailscale not installed or not running."
-          echo "Install: https://tailscale.com/download"
-          exit 1
-        fi
-        echo ""
-        echo "Your Tailscale hostname: $HOSTNAME"
-        echo ""
-        echo "To use it, set in .env:"
-        echo "  DEV_HOSTNAME=$HOSTNAME"
-        echo ""
-        echo "Then restart your dev environment:"
-        echo "  task reset:up"
 
   # ===================================================================
   # Testing

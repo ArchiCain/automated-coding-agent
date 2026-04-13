@@ -11,14 +11,8 @@ service:
 
 ingress:
   enabled: false
-  className: ""
-  annotations: {}
-  hosts:
-    - host: the-dev-team.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
+  host: ""
+  tls: false
 
 resources:
   limits:

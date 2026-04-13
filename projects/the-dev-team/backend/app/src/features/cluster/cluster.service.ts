@@ -35,6 +35,7 @@ export interface ServiceInfo {
   clusterIP: string;
   ports: Array<{ port: number; targetPort: number; protocol: string }>;
   externalIP?: string;
+  ingressHost?: string;
 }
 
 export interface PodMetrics {
@@ -48,12 +49,14 @@ export interface PodMetrics {
 export class ClusterService {
   private readonly logger = new Logger(ClusterService.name);
   private coreApi: k8s.CoreV1Api;
+  private networkingApi: k8s.NetworkingV1Api;
   private metricsApi: k8s.CustomObjectsApi;
 
   constructor() {
     const kc = new k8s.KubeConfig();
     kc.loadFromDefault();
     this.coreApi = kc.makeApiClient(k8s.CoreV1Api);
+    this.networkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
     this.metricsApi = kc.makeApiClient(k8s.CustomObjectsApi);
   }
 
@@ -200,17 +203,41 @@ export class ClusterService {
 
   async getServices(namespace?: string): Promise<ServiceInfo[]> {
     try {
-      const response = namespace
-        ? await this.coreApi.listNamespacedService({ namespace })
-        : await this.coreApi.listServiceForAllNamespaces();
+      const [svcResponse, ingressResponse] = await Promise.all([
+        namespace
+          ? this.coreApi.listNamespacedService({ namespace })
+          : this.coreApi.listServiceForAllNamespaces(),
+        namespace
+          ? this.networkingApi.listNamespacedIngress({ namespace })
+          : this.networkingApi.listIngressForAllNamespaces(),
+      ]);
 
-      return (response.items ?? [])
+      // Build a map of service name → ingress host
+      const ingressMap = new Map<string, string>();
+      for (const ing of ingressResponse.items ?? []) {
+        const ns = ing.metadata?.namespace ?? '';
+        for (const rule of ing.spec?.rules ?? []) {
+          for (const path of rule.http?.paths ?? []) {
+            const svcName = path.backend?.service?.name;
+            if (svcName && rule.host) {
+              ingressMap.set(`${ns}/${svcName}`, rule.host);
+            }
+          }
+        }
+      }
+
+      return (svcResponse.items ?? [])
         .filter(
           (svc) =>
             namespace ||
             !SYSTEM_NAMESPACES.includes(svc.metadata?.namespace ?? ''),
         )
-        .map((svc) => this.mapService(svc));
+        .map((svc) => {
+          const mapped = this.mapService(svc);
+          const host = ingressMap.get(`${mapped.namespace}/${mapped.name}`);
+          if (host) mapped.ingressHost = host;
+          return mapped;
+        });
     } catch (error) {
       this.logger.error('Failed to list services', error);
       return [];
