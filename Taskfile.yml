@@ -92,7 +92,7 @@ tasks:
         fi
 
         # Redirect port 80 → 8080 on loopback so URLs don't need :8080
-        echo "rdr pass on lo0 proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080" | sudo pfctl -ef - 2>/dev/null
+        echo "rdr pass on lo0 proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080" | sudo pfctl -ef - 2>&1 || echo "  (pfctl redirect failed — use :8080 in URLs)"
 
         # Start the port-forward in a named tmux session
         tmux new-session -d -s tunnel "kubectl port-forward -n traefik svc/traefik 8080:80 --address=0.0.0.0"
