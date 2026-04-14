@@ -46,8 +46,137 @@ Mastra is a TypeScript AI agent framework that replaces both SDKs with one orche
 
 The provider-registry pattern we built is essentially what Mastra already does at a more mature level. We'd delete boilerplate and gain model flexibility.
 
+## Local Model Strategy (Mac Mini Worker)
+
+### Hardware
+- Intel i7-8700B (6 cores / 12 threads, 4.6GHz turbo)
+- 64GB RAM
+- 1.82TB NVMe (needs LVM expansion — 1.72TB currently unallocated)
+- No discrete GPU — CPU-only inference
+- Ubuntu
+
+### Models
+
+**Primary: Qwen 2.5 Coder 32B Q4_K_M (~18GB)**
+- Best open-source coding model that fits this hardware
+- Beats general-purpose 70B models on coding tasks despite being half the size
+- Strong instruction following and tool use — critical for the structured decomp pipeline
+- ~2-3 tokens/sec on CPU — slow but accurate
+- Use for: decomp agents (plan -> projects -> features -> concerns)
+
+**Secondary: Qwen 2.5 Coder 14B Q4_K_M (~8GB)**
+- Good coding accuracy, roughly double the throughput of 32B
+- Can run 2 instances in parallel (~16GB total)
+- Use for: execution agents (implementing concern-level tasks)
+
+**Mixed strategy (recommended):** One 32B instance for decomp + one 14B instance for execution = ~26GB total, plenty of headroom.
+
+### Runtime
+
+Ollama — simplest path, exposes OpenAI-compatible API that Mastra talks to natively:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen2.5-coder:32b-instruct-q4_K_M
+ollama pull qwen2.5-coder:14b-instruct-q4_K_M
+```
+
+Mastra connects to `http://mac-mini:11434` as an OpenAI-compatible provider.
+
+### Throughput Estimates
+
+- A typical concern-level task (~2000 tokens output, few tool call rounds): ~10-15 min on 32B
+- Full decomp pipeline (plan -> projects -> features -> concerns): ~30 min per plan on 32B
+- Overnight batch (8 hours): ~30-40 concern tasks sequential on 32B, or ~50-60 tasks with parallel 14B instances
+
+### Overnight Batch Workflow
+
+```
+Developer (local Claude Code) → brainstorm → plan.md → git push
+                                                          ↓
+Mac Mini (Mastra + Ollama) ← cron picks up new plans
+  ├─ Decomp 1-3 (32B, sequential) → ~30 min per plan
+  └─ Execution (14B x2 parallel) → chews through concerns all night
+                                                          ↓
+Morning → git pull, review results, run review agent
+```
+
+This is a "let it cook" setup. The 2-3 t/s speed doesn't matter when you're not waiting interactively. The decomp pipeline gives each agent a focused, well-scoped task with concrete acceptance criteria, which is exactly where smaller models excel — they don't need to hold full project context, just follow structured instructions.
+
+### LVM Expansion (prerequisite)
+
+The root LV is only 100GB of the 1.82TB volume group. Expand before pulling models:
+
+```bash
+sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+sudo resize2fs /dev/ubuntu-vg/ubuntu-lv
+```
+
+## GPU Upgrade Path: NVIDIA DGX Spark
+
+### Hardware
+
+- NVIDIA Grace Blackwell GB110 Superchip
+- 128GB unified memory (shared CPU/GPU — no VRAM wall)
+- Up to 1 PFLOPS at FP4
+- ARM-based Grace CPU
+- Compact desktop form factor
+
+### What this unlocks
+
+128GB unified memory eliminates the quantization-or-nothing tradeoff. Models that required heavy quantization on the Mac Mini can run at full or near-full precision:
+
+| Model | Q4 | Q8 | FP16 | Fits in 128GB? |
+|-------|----|----|------|----------------|
+| Qwen 2.5 Coder 32B | ~18GB | ~34GB | ~64GB | All three |
+| Llama 3.3 70B | ~40GB | ~70GB | ~140GB | Q4 and Q8 |
+| DeepSeek-V2.5 (236B MoE) | ~80GB | — | — | Q4 yes |
+| Qwen 2.5 72B | ~40GB | ~72GB | — | Q4 and Q8 |
+
+Inference speed jumps from 2-3 t/s (CPU) to 50-100+ t/s on Blackwell.
+
+### Models (DGX Spark)
+
+**Decomp + Review agents: Llama 3.3 70B Q8 (~70GB)**
+- Near-lossless quantization of a much larger model
+- Superior reasoning for architectural decomposition and code review
+- 40-60 t/s on Blackwell
+- One instance, used sequentially for planning and review stages
+
+**Execution agents: Qwen 2.5 Coder 32B FP16 (~64GB) x2 parallel**
+- Full precision — zero quantization loss, maximum coding accuracy
+- With the 70B not loaded simultaneously, two 32B instances fit comfortably
+- Parallel execution of concern-level tasks
+
+**Recommended strategy:** Load the 70B for decomp, swap to dual 32B instances for execution, swap back to 70B for review. Ollama handles model loading/unloading automatically.
+
+### Throughput Estimates (DGX Spark)
+
+- Concern-level task: ~1-2 min (vs 10-15 min on Mac Mini CPU)
+- Full decomp pipeline: ~5-10 min per plan (vs 30 min)
+- Overnight batch (8 hours): could process an entire project — hundreds of concern tasks
+- Real-time interactive workflow becomes viable — no longer a "let it cook" compromise
+
+### Workflow Change
+
+The DGX Spark shifts from overnight batch to real-time:
+
+```
+Developer (local Claude Code) → brainstorm → plan.md → git push
+                                                          ↓
+DGX Spark (Mastra + Ollama)
+  ├─ Decomp 1-3 (70B Q8) → ~5-10 min per plan
+  ├─ Execution (32B FP16 x2 parallel) → tasks complete in minutes
+  └─ Review (70B Q8) → immediate feedback
+                                                          ↓
+Developer can watch progress in real-time, iterate same day
+```
+
+The parallel dev team vision becomes fully viable — not as an overnight compromise, but as a real-time workflow where you brainstorm in the morning and review working code by lunch.
+
 ## Risks
 
 - Mastra is still relatively young (post-1.0 but evolving fast). We'd be trading Anthropic's SDK stability for a more feature-rich but faster-moving dependency.
 - Need to verify their streaming event format maps cleanly to what our `AgentGateway` expects before committing.
 - The `Edit` tool's diff-based editing logic (find unique old_string, replace with new_string) needs to be reimplemented in our MCP server — straightforward but worth getting right to avoid token waste and edit errors.
+- CPU-only inference is slow — viable for overnight batch work, not for interactive use. If interactive speed becomes a priority, adding a discrete GPU (e.g. RTX 3090, 24GB VRAM, ~$700 used) would give 10-20x throughput.
