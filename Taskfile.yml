@@ -45,9 +45,10 @@ tasks:
       - kubectl logs -f deployment/{{.CLI_ARGS}} -n the-dev-team --tail=100
 
   close:
-    desc: "Stop the tunnel"
+    desc: "Stop the tunnel and port redirect"
     cmds:
       - tmux kill-session -t tunnel 2>/dev/null || true
+      - sudo pfctl -d 2>/dev/null || true
       - echo "Tunnel stopped."
 
   tunnel:
@@ -85,6 +86,9 @@ tasks:
           sudo sh -c "echo '${TAILSCALE_IP} devteam.${DEV_HOSTNAME} agent-api.${DEV_HOSTNAME} app.${DEV_HOSTNAME} api.${DEV_HOSTNAME} auth.${DEV_HOSTNAME}' >> /etc/hosts"
         fi
 
+        # Redirect port 80 → 8080 so URLs don't need :8080
+        echo "rdr pass proto tcp from any to any port 80 -> 127.0.0.1 port 8080" | sudo pfctl -ef - 2>/dev/null
+
         # Start the port-forward in a named tmux session
         tmux new-session -d -s tunnel "kubectl port-forward -n traefik svc/traefik 8080:80 --address=0.0.0.0"
         sleep 2
@@ -92,12 +96,12 @@ tasks:
         echo ""
         echo "============================================"
         echo "  THE Dev Team:"
-        echo "    Chat UI:  http://devteam.${DEV_HOSTNAME}:8080"
-        echo "    API:      http://agent-api.${DEV_HOSTNAME}:8080"
+        echo "    Chat UI:  http://devteam.${DEV_HOSTNAME}"
+        echo "    API:      http://agent-api.${DEV_HOSTNAME}"
         echo "  Application:"
-        echo "    Frontend: http://app.${DEV_HOSTNAME}:8080"
-        echo "    API:      http://api.${DEV_HOSTNAME}:8080"
-        echo "    Auth:     http://auth.${DEV_HOSTNAME}:8080"
+        echo "    Frontend: http://app.${DEV_HOSTNAME}"
+        echo "    API:      http://api.${DEV_HOSTNAME}"
+        echo "    Auth:     http://auth.${DEV_HOSTNAME}"
         echo "============================================"
         echo "  Tunnel running in tmux session 'tunnel'."
         echo "  tmux attach -t tunnel   to view"
