@@ -74,9 +74,9 @@ tasks:
         # Kill any existing tunnel session
         tmux kill-session -t tunnel 2>/dev/null || true
 
-        echo "Waiting for pods to be ready..."
-        kubectl wait --for=condition=Ready pods -l app=the-dev-team-frontend -n the-dev-team --timeout=120s 2>/dev/null || true
-        kubectl wait --for=condition=Ready pods -l app=the-dev-team-backend -n the-dev-team --timeout=120s 2>/dev/null || true
+        echo "Waiting for deployments to be ready..."
+        kubectl rollout status deployment/the-dev-team-backend -n the-dev-team --timeout=120s 2>/dev/null || true
+        kubectl rollout status deployment/the-dev-team-frontend -n the-dev-team --timeout=120s 2>/dev/null || true
 
         HOSTS_LINE="127.0.0.1 devteam.${DEV_HOSTNAME} agent-api.${DEV_HOSTNAME} app.${DEV_HOSTNAME} api.${DEV_HOSTNAME} auth.${DEV_HOSTNAME}"
 
