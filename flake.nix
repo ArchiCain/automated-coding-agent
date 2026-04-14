@@ -35,6 +35,8 @@
             pkgs.kubernetes-helm
             pkgs.helmfile
 
+            pkgs.tmux
+
             nodeVersion
             nodeVersion.pkgs.npm
 

@@ -40,27 +40,31 @@ direnv allow
 
 # 2. Configure environment
 cp .env.template .env
-# Edit .env with your credentials
+# Fill in DEV_HOSTNAME, TAILSCALE_IP, and credentials (see docs/getting-started/)
 
-# 3. Set up K8s secrets (first time only)
-task setup-secrets
-
-# 4. Start everything (Minikube + build + deploy)
+# 3. Start everything
 task up
-
-# 5. Port-forward to access services locally
-task open
 ```
 
-Key Taskfile commands:
+`task up` starts Minikube, builds all images, deploys via Helmfile, configures `/etc/hosts` (prompts for sudo), and starts a Traefik tunnel in a tmux session. Services are then available at:
+
+| Service | URL |
+|---------|-----|
+| THE Dev Team chat UI | `http://devteam.{DEV_HOSTNAME}:8080` |
+| THE Dev Team API | `http://agent-api.{DEV_HOSTNAME}:8080` |
+| Application frontend | `http://app.{DEV_HOSTNAME}:8080` |
+| Application API | `http://api.{DEV_HOSTNAME}:8080` |
+| Keycloak | `http://auth.{DEV_HOSTNAME}:8080` |
+
+Key commands:
 
 | Command | Purpose |
 |---------|---------|
-| `task up` | Start Minikube, build images, deploy everything |
-| `task reset` | Wipe all K8s state (keeps VM) |
-| `task reset:up` | Full reset and redeploy |
-| `task open` / `task close` | Port-forward management |
+| `task up` | Start Minikube, build images, deploy, start tunnel |
+| `task tunnel` | Restart the tunnel (after reboot or pod restart) |
+| `task close` | Stop the tunnel |
 | `task status` | Show cluster status |
+| `task reset:up` | Full reset and redeploy from scratch |
 
 ## Repo structure
 
@@ -81,7 +85,7 @@ automated-coding-agent/
 │   ├── agent-envs/               # Taskfile for sandbox lifecycle
 │   ├── minikube/                 # Local cluster setup
 │   └── terraform/                # AWS/EC2 provisioning
-├── flake.nix                     # Nix dev shell
+├── flake.nix                     # Nix dev shell (includes tmux)
 └── Taskfile.yml                  # Root task automation
 ```
 
@@ -92,7 +96,7 @@ automated-coding-agent/
 | `app` | Main application (backend, frontend, database, keycloak) |
 | `the-dev-team` | Agent backend + frontend |
 | `env-*` | Sandbox environments (ephemeral, created per worktree) |
-| `dns` | CoreDNS for split DNS |
+| `dns` | CoreDNS for Tailscale Split DNS |
 | `traefik` | Ingress controller |
 | `registry` | In-cluster container registry |
 | `monitoring` | Prometheus, Grafana, Loki, Promtail |

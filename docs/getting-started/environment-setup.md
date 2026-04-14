@@ -22,9 +22,7 @@ DATABASE_PASSWORD=<something>
 KEYCLOAK_ADMIN_PASSWORD=<something>
 
 # THE Dev Team agent
-ANTHROPIC_API_KEY=sk-ant-...
-CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...   # claude setup-token (requires Max plan)
-GITHUB_TOKEN=<fine-grained PAT>
+CLAUDE_CODE_OAUTH_TOKEN=...          # claude setup-token (requires Max plan)
 
 # GitHub App (for issue/PR automation)
 GITHUB_APP_ID=
@@ -40,54 +38,48 @@ task tailscale:hostname   # → shawns-macbook-pro
 tailscale ip -4           # → 100.64.158.57
 ```
 
-## K8s secrets setup (first time only)
-
-```bash
-task setup-secrets
-```
-
-Creates the GitHub App private key secret in Kubernetes. Re-run if the key changes.
-
-## Deploy
+## Start everything
 
 ```bash
 task up
 ```
 
-Starts Minikube, builds all images, deploys via Helmfile, then runs `task tunnel`.
+This single command:
 
-## Accessing services
+1. Starts Minikube (4 CPU, 8 GB RAM, 50 GB disk)
+2. Creates K8s secrets from `.env`
+3. Builds all Docker images into the cluster
+4. Deploys everything via Helmfile
+5. Adds `/etc/hosts` entries (prompts for sudo once, skips if already set)
+6. Starts a Traefik tunnel in a tmux session
 
-`task tunnel` port-forwards Traefik to `0.0.0.0:8080` and prints your URLs:
+On completion you'll see:
 
 ```
-http://devteam.shawns-macbook-pro:8080     → THE Dev Team chat UI
-http://agent-api.shawns-macbook-pro:8080   → THE Dev Team API
-http://app.shawns-macbook-pro:8080         → Application frontend
-http://api.shawns-macbook-pro:8080         → Application API
-http://auth.shawns-macbook-pro:8080        → Keycloak
+============================================
+  THE Dev Team:
+    Chat UI:  http://devteam.shawns-macbook-pro:8080
+    API:      http://agent-api.shawns-macbook-pro:8080
+  Application:
+    Frontend: http://app.shawns-macbook-pro:8080
+    API:      http://api.shawns-macbook-pro:8080
+    Auth:     http://auth.shawns-macbook-pro:8080
+============================================
+  Tunnel running in tmux session 'tunnel'.
+  tmux attach -t tunnel   to view
+  task close              to stop
 ```
 
-On first run, `task tunnel` prints a one-liner to add `/etc/hosts` entries — paste it to enable hostname resolution on this machine until Split DNS is configured.
-
-## Split DNS (one-time, replaces /etc/hosts on all devices)
-
-Once configured, every device on your tailnet resolves `*.shawns-macbook-pro` automatically.
+## Day-to-day commands
 
 ```bash
-# 1. Expose the minikube subnet to your tailnet
-! tailscale up --advertise-routes=192.168.49.0/24
-
-# 2. Approve in Tailscale admin → Machines → this machine → Edit route settings
-
-# 3. Tailscale admin → DNS → Add nameserver:
-#      Type: Custom
-#      Nameserver: 192.168.49.2
-#      Port: 30053
-#      Domain: shawns-macbook-pro
+task tunnel       # restart tunnel after reboot or pod restart
+task close        # stop the tunnel
+task status       # check what's running
+task reset:up     # nuclear option: wipe K8s state + redeploy
 ```
 
-After this, all tailnet devices resolve `*.shawns-macbook-pro` via the in-cluster CoreDNS, which points to your Tailscale IP. No `/etc/hosts` needed anywhere.
+The tunnel runs in a tmux session called `tunnel`. You can attach to it with `tmux attach -t tunnel` to see connection logs, and detach with `Ctrl-b d`.
 
 ## Changing machines
 
@@ -100,4 +92,7 @@ TAILSCALE_IP=100.x.x.x
 
 # Redeploy ingresses and CoreDNS
 task deploy:apply
+
+# Restart the tunnel
+task tunnel
 ```

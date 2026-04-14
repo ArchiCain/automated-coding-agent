@@ -45,13 +45,13 @@ tasks:
       - kubectl logs -f deployment/{{.CLI_ARGS}} -n the-dev-team --tail=100
 
   close:
-    desc: "Stop Traefik port-forward"
+    desc: "Stop the tunnel"
     cmds:
-      - pkill -f "port-forward.*traefik" 2>/dev/null || true
-      - echo "Port-forward stopped."
+      - tmux kill-session -t tunnel 2>/dev/null || true
+      - echo "Tunnel stopped."
 
   tunnel:
-    desc: "Start Traefik ingress tunnel and configure /etc/hosts"
+    desc: "Start Traefik ingress tunnel in a tmux session"
     cmds:
       - |
         if [ -z "${DEV_HOSTNAME:-}" ] || [ "${DEV_HOSTNAME}" = "localhost" ]; then
@@ -70,8 +70,8 @@ tasks:
           fi
         fi
 
-        pkill -f "port-forward.*traefik" 2>/dev/null || true
-        sleep 1
+        # Kill any existing tunnel session
+        tmux kill-session -t tunnel 2>/dev/null || true
 
         echo "Waiting for pods to be ready..."
         kubectl wait --for=condition=Ready pods -l app=the-dev-team-frontend -n the-dev-team --timeout=120s 2>/dev/null || true
@@ -85,7 +85,8 @@ tasks:
           sudo sh -c "echo '${TAILSCALE_IP} devteam.${DEV_HOSTNAME} agent-api.${DEV_HOSTNAME} app.${DEV_HOSTNAME} api.${DEV_HOSTNAME} auth.${DEV_HOSTNAME}' >> /etc/hosts"
         fi
 
-        kubectl port-forward -n traefik svc/traefik 8080:80 --address=0.0.0.0 &
+        # Start the port-forward in a named tmux session
+        tmux new-session -d -s tunnel "kubectl port-forward -n traefik svc/traefik 8080:80 --address=0.0.0.0"
         sleep 2
 
         echo ""
@@ -98,7 +99,9 @@ tasks:
         echo "    API:      http://api.${DEV_HOSTNAME}:8080"
         echo "    Auth:     http://auth.${DEV_HOSTNAME}:8080"
         echo "============================================"
-        echo "  Run 'task close' to stop."
+        echo "  Tunnel running in tmux session 'tunnel'."
+        echo "  tmux attach -t tunnel   to view"
+        echo "  task close              to stop"
 
   tailscale:hostname:
     desc: "Print your Tailscale hostname (paste into .env as DEV_HOSTNAME)"

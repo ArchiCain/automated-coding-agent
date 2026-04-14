@@ -1,4 +1,4 @@
-# Prerequisites & Nix
+# Prerequisites
 
 All tooling is managed through a Nix flake, so you don't need to install Node.js, Terraform, kubectl, Helm, Minikube, or any other dependency manually.
 
@@ -18,13 +18,6 @@ All tooling is managed through a Nix flake, so you don't need to install Node.js
     ```
     Restart your terminal after installation.
 
-=== "Windows (WSL2)"
-
-    Ensure WSL2 is installed with an Ubuntu distribution, then:
-    ```bash
-    sh <(curl -L https://nixos.org/nix/install)
-    ```
-
 ## Install direnv
 
 direnv automatically activates the Nix shell when you `cd` into the repo.
@@ -41,12 +34,15 @@ direnv automatically activates the Nix shell when you `cd` into the repo.
 
     ```bash
     sudo apt-get install direnv   # Debian/Ubuntu
-    # or: sudo dnf install direnv  # Fedora
-    # or: sudo pacman -S direnv    # Arch
-
     echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
     source ~/.bashrc
     ```
+
+## Install Tailscale
+
+Tailscale is required. All services are accessed via Tailscale hostnames — there is no localhost fallback.
+
+Install from [tailscale.com/download](https://tailscale.com/download), then join the tailnet.
 
 ## What Nix provides
 
@@ -54,7 +50,7 @@ When you enter the dev shell, the following tools are available:
 
 | Tool | Purpose |
 |------|---------|
-| Node.js 20 | Runtime for backend, frontend, orchestrator, dashboard |
+| Node.js 20 | Runtime for backend and frontend |
 | npm | Package management |
 | Python 3.11 | For MkDocs and scripting |
 | Terraform | Production infrastructure provisioning |
@@ -63,11 +59,11 @@ When you enter the dev shell, the following tools are available:
 | Helm | Kubernetes package management |
 | Helmfile | Declarative Helm chart orchestration |
 | Minikube | Local Kubernetes cluster |
-| Colima | Lightweight Docker runtime for macOS (alternative to Docker Desktop) |
+| Colima | Lightweight Docker runtime for macOS |
 | go-task | Task automation (Taskfile runner) |
+| tmux | Terminal multiplexer (runs the tunnel session) |
 | Docker CLI | Container interactions |
 | Git | Version control |
-| gh | GitHub CLI |
 
 The shell also installs the `helm-diff` plugin (required by Helmfile) and enables Task shell completion.
 
@@ -94,26 +90,16 @@ task minikube:start
 eval $(minikube docker-env)   # Point Docker CLI at Minikube's internal daemon
 ```
 
-No separate Docker Desktop or Colima is strictly required — Minikube brings its own Docker. This is the simplest setup and is the default path documented across this site.
+No separate Docker Desktop or Colima is strictly required — Minikube brings its own Docker.
 
-## Minikube (required for local dev)
+## Minikube
 
-Minikube is the primary local Kubernetes target. Everything runs on K8s from day one — the main application stack, THE Dev Team orchestrator, and agent sandbox environments.
+Minikube is the local Kubernetes target. Everything runs on K8s from day one — the main application stack, THE Dev Team agent, and sandbox environments.
 
-Start the cluster:
+`task up` handles Minikube startup automatically. If you need to start it manually:
 
 ```bash
 task minikube:start
 ```
 
 This runs `scripts/setup-minikube.sh`, which provisions a cluster with 4 CPUs, 8 GB RAM, 50 GB disk, and the `ingress`, `registry`, `metrics-server`, and `storage-provisioner` addons.
-
-See [Kubernetes](../infrastructure/kubernetes.md) for the full setup.
-
-## Tailscale (optional)
-
-If you want to reach local services from other devices (another laptop, phone, CI runner), install [Tailscale](https://tailscale.com/download) on each device and set `DEV_HOSTNAME` to the machine running Minikube. See [Environment Setup → Tailscale hostname use case](environment-setup.md#tailscale-hostname-use-case) and [Networking](../infrastructure/networking.md) for the full setup.
-
-## Docker Compose (deprecated fallback)
-
-Docker Compose is kept for backward compatibility but is **not the primary path**. New features (agent sandbox environments, the dashboard's per-task ingress routing) only work on Kubernetes. If you must use Compose — for example on a machine that can't virtualise — see [Docker Compose](../infrastructure/docker-compose.md) for the reduced set of services it still supports.
