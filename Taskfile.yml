@@ -78,18 +78,11 @@ tasks:
         kubectl rollout status deployment/the-dev-team-backend -n the-dev-team --timeout=120s 2>/dev/null || true
         kubectl rollout status deployment/the-dev-team-frontend -n the-dev-team --timeout=120s 2>/dev/null || true
 
+        # /etc/hosts — always update (idempotent, requires sudo)
         HOSTS_LINE="127.0.0.1 devteam.${DEV_HOSTNAME} agent-api.${DEV_HOSTNAME} app.${DEV_HOSTNAME} api.${DEV_HOSTNAME} auth.${DEV_HOSTNAME}"
-
-        # /etc/hosts — use 127.0.0.1 so pfctl rdr on lo0 works for port 80
-        if grep -q "${DEV_HOSTNAME}" /etc/hosts 2>/dev/null; then
-          # Update existing entry to use 127.0.0.1 (may have been set to Tailscale IP previously)
-          sudo sed -i '' "/${DEV_HOSTNAME}/d" /etc/hosts 2>/dev/null
-          echo "$HOSTS_LINE" | sudo tee -a /etc/hosts > /dev/null
-          echo "/etc/hosts updated."
-        else
-          echo "Adding ${DEV_HOSTNAME} entries to /etc/hosts (requires sudo)..."
-          echo "$HOSTS_LINE" | sudo tee -a /etc/hosts > /dev/null
-        fi
+        sudo sed -i '' "/${DEV_HOSTNAME}/d" /etc/hosts || true
+        echo "$HOSTS_LINE" | sudo tee -a /etc/hosts > /dev/null
+        echo "/etc/hosts configured."
 
         # Redirect port 80 → 8080 on loopback so URLs don't need :8080
         echo "rdr pass on lo0 proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080" | sudo pfctl -ef - 2>&1 || echo "  (pfctl redirect failed — use :8080 in URLs)"
