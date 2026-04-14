@@ -51,7 +51,7 @@ tasks:
       - echo "Port-forward stopped."
 
   tunnel:
-    desc: "Expose all services via Traefik on port 8080 (requires DEV_HOSTNAME + TAILSCALE_IP in .env)"
+    desc: "Start Traefik ingress tunnel and configure /etc/hosts"
     cmds:
       - |
         if [ -z "${DEV_HOSTNAME:-}" ] || [ "${DEV_HOSTNAME}" = "localhost" ]; then
@@ -74,20 +74,19 @@ tasks:
         sleep 1
 
         echo "Waiting for pods to be ready..."
-        kubectl wait --for=condition=Ready pods --all -n the-dev-team --timeout=120s 2>/dev/null || true
-        kubectl wait --for=condition=Ready pods --all -n app --timeout=120s 2>/dev/null || true
+        kubectl wait --for=condition=Ready pods -l app=the-dev-team-frontend -n the-dev-team --timeout=120s 2>/dev/null || true
+        kubectl wait --for=condition=Ready pods -l app=the-dev-team-backend -n the-dev-team --timeout=120s 2>/dev/null || true
+
+        # /etc/hosts — add entries if not already present
+        if grep -q "${DEV_HOSTNAME}" /etc/hosts 2>/dev/null; then
+          echo "/etc/hosts already configured."
+        else
+          echo "Adding ${DEV_HOSTNAME} entries to /etc/hosts (requires sudo)..."
+          sudo sh -c "echo '${TAILSCALE_IP} devteam.${DEV_HOSTNAME} agent-api.${DEV_HOSTNAME} app.${DEV_HOSTNAME} api.${DEV_HOSTNAME} auth.${DEV_HOSTNAME}' >> /etc/hosts"
+        fi
 
         kubectl port-forward -n traefik svc/traefik 8080:80 --address=0.0.0.0 &
         sleep 2
-
-        MINIKUBE_IP=$(minikube ip)
-
-        # /etc/hosts — needed until Split DNS is configured
-        if grep -q "${DEV_HOSTNAME}" /etc/hosts 2>/dev/null; then
-          HOSTS_STATUS="already set"
-        else
-          HOSTS_STATUS="not set"
-        fi
 
         echo ""
         echo "============================================"
@@ -99,18 +98,6 @@ tasks:
         echo "    API:      http://api.${DEV_HOSTNAME}:8080"
         echo "    Auth:     http://auth.${DEV_HOSTNAME}:8080"
         echo "============================================"
-        echo ""
-        if [ "$HOSTS_STATUS" = "not set" ]; then
-          echo "  /etc/hosts not configured — run once to use the URLs above:"
-          echo "  ! sudo sh -c \"echo '${TAILSCALE_IP} devteam.${DEV_HOSTNAME} agent-api.${DEV_HOSTNAME} app.${DEV_HOSTNAME} api.${DEV_HOSTNAME} auth.${DEV_HOSTNAME}' >> /etc/hosts\""
-          echo ""
-        fi
-        echo "  Split DNS (one-time, makes /etc/hosts unnecessary on all tailnet devices):"
-        echo "    1. ! tailscale up --advertise-routes=$MINIKUBE_IP/24"
-        echo "    2. Approve in Tailscale admin console → Machines → this machine"
-        echo "    3. Tailscale admin → DNS → Add nameserver:"
-        echo "         IP: $MINIKUBE_IP   Port: 30053   Domain: ${DEV_HOSTNAME}"
-        echo ""
         echo "  Run 'task close' to stop."
 
   tailscale:hostname:
