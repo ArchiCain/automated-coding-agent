@@ -4,3 +4,4 @@
 
 - Estimation capabilities for potential clients and SOWs. 
 
+- Implement rock solid linters in all projects so that the agents code consistently and make syntax mistakes less often
