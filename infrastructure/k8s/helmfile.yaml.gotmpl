@@ -69,6 +69,25 @@ releases:
           general:
             level: {{ env "TRAEFIK_LOG_LEVEL" | default "INFO" }}
 
+  # Tailscale gateway — gives minikube its own tailnet IP so all devices
+  # can reach services by hostname without /etc/hosts entries.
+  # Only deployed when TS_AUTHKEY is set (local dev only, not remote servers).
+  {{- if env "TS_AUTHKEY" }}
+  - name: tailscale-gateway
+    namespace: tailscale
+    chart: charts/tailscale-gateway
+    createNamespace: true
+    needs:
+      - traefik/traefik
+    values:
+      - hostname: {{ env "TS_GATEWAY_HOSTNAME" | default "macbook-dev-team" }}
+        authKey: {{ requiredEnv "TS_AUTHKEY" }}
+        domain: {{ requiredEnv "DEV_HOSTNAME" }}
+        gatewayIP: {{ env "TS_GATEWAY_IP" | default "" }}
+        traefik:
+          clusterIP: {{ env "TRAEFIK_CLUSTER_IP" | default "" }}
+  {{- end }}
+
   # ===================================================================
   # Application Services (namespace: app)
   # ===================================================================

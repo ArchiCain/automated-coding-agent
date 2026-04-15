@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-corefile
+data:
+  Corefile: |
+    {{ .Values.domain }} {
+        template IN A {
+            answer "{{"{{"}} .Name {{"}}"}} 60 IN A {{ .Values.gatewayIP }}"
+        }
+        log
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-scripts
+data:
+  # Custom entrypoint: starts tailscale, then adds iptables rules
+  # to forward only HTTP/HTTPS (not all traffic like TS_DEST_IP does).
+  start-tailscale.sh: |
+    #!/bin/sh
+    set -e
+    DEST_IP="{{ .Values.traefik.clusterIP }}"
+
+    /usr/local/bin/containerboot &
+    BOOT_PID=$!
+
+    # Wait for tailscale to be up
+    while true; do
+      TS_IP=$(/usr/local/bin/tailscale ip -4 2>/dev/null || true)
+      if [ -n "$TS_IP" ]; then
+        echo "Tailscale IP: $TS_IP"
+        break
+      fi
+      sleep 2
+    done
+
+    # Forward only ports 80 and 443 to Traefik (leave 53 for CoreDNS)
+    iptables -t nat -A PREROUTING -d "$TS_IP" -p tcp --dport 80 -j DNAT --to-destination "$DEST_IP:80"
+    iptables -t nat -A PREROUTING -d "$TS_IP" -p tcp --dport 443 -j DNAT --to-destination "$DEST_IP:443"
+    iptables -t nat -A POSTROUTING -d "$DEST_IP" -j MASQUERADE
+    echo "iptables rules installed for ports 80/443 -> $DEST_IP"
+
+    wait $BOOT_PID
