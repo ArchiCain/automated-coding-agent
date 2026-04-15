@@ -67,39 +67,42 @@ If the secret is compromised or expires:
 
 ## Split DNS for Service Hostnames
 
-Tailscale MagicDNS resolves device names (e.g., `mac-mini`) but not subdomains (e.g., `app.mac-mini`). To make service hostnames like `app.mac-mini`, `api.mac-mini`, and `auth.mac-mini` resolve on all tailnet devices (laptop, phone, etc.), we run a CoreDNS instance in the cluster and configure Tailscale Split DNS to route queries to it.
+Tailscale MagicDNS resolves device names (e.g., `macbook-dev-team`) but not subdomains (e.g., `app.shawns-macbook-pro`). To make service hostnames resolve on all tailnet devices, we use a CoreDNS sidecar on the Tailscale gateway pod and configure Tailscale Split DNS to route queries to it.
 
-### How it works
+### How it works (local dev — minikube)
 
-1. A CoreDNS pod runs in the K3s cluster, bound to port 53 on the host via `hostPort`
-2. It's configured to resolve any `*.mac-mini` query to the Mac Mini's Tailscale IP
-3. Tailscale Split DNS routes all `mac-mini` domain queries to this CoreDNS instance
-4. Every device on the tailnet automatically resolves `app.mac-mini`, `api.mac-mini`, etc.
+1. A Tailscale gateway pod runs in minikube with its own tailnet IP
+2. A CoreDNS sidecar resolves any `*.{DEV_HOSTNAME}` query to the gateway's Tailscale IP
+3. Tailscale Split DNS routes all `{DEV_HOSTNAME}` domain queries to the gateway
+4. The gateway forwards HTTP/HTTPS traffic to Traefik via iptables
+5. Every device on the tailnet automatically resolves all service hostnames — including dynamically created sandbox hostnames
 
 ### Setup
 
-The CoreDNS pod is deployed automatically by helmfile (the `dns` release). The only manual step is configuring Split DNS in Tailscale:
+The gateway pod is deployed automatically by helmfile when `TS_AUTHKEY` is set. The manual steps are:
 
-1. Go to [Tailscale DNS settings](https://login.tailscale.com/admin/dns)
-2. Scroll to **Nameservers** and click **Add nameserver** > **Custom**
-3. Enter the Mac Mini's Tailscale IP: `100.71.239.27`
-4. Check **Restrict to domain**
-5. Enter the domain: `mac-mini`
-6. Click **Save**
+1. Generate a reusable (not ephemeral) Tailscale auth key at [Tailscale auth keys](https://login.tailscale.com/admin/settings/keys)
+2. Add `TS_AUTHKEY` to `.env`
+3. Run `task up` — the gateway joins your tailnet
+4. Find the gateway's IP in the [Tailscale admin console](https://login.tailscale.com/admin/machines), add as `TS_GATEWAY_IP` in `.env`, and redeploy
+5. Configure Split DNS in [Tailscale DNS settings](https://login.tailscale.com/admin/dns):
+   - Nameserver: the gateway's Tailscale IP
+   - Restrict to domain: your `DEV_HOSTNAME`
 
-After this, all tailnet devices will resolve `*.mac-mini` hostnames.
+See [Environment Setup](../getting-started/environment-setup.md) for detailed first-time steps.
 
-### Adding a new deployment target with DNS
+### How it works (remote servers)
 
-For a new K3s node (e.g., an EC2 instance with domain `prod`):
+Remote servers have their own Tailscale node and manage their own DNS. The gateway pod is not deployed on remote servers. Each server needs:
 
-1. Set `TAILSCALE_IP` and `DNS_DOMAIN` in the target's `.env` file
-2. The helmfile `dns` release deploys CoreDNS with the correct config
-3. Add another Split DNS entry in Tailscale for the new domain (e.g., `prod` → EC2's Tailscale IP)
+1. Tailscale installed and joined to the tailnet
+2. CoreDNS deployed via helmfile (the `dns` release)
+3. A Split DNS entry in Tailscale pointing `{server-domain}` to the server's Tailscale IP
 
 ### Adding a new deployment target
 
-When adding another K3s node (e.g., an EC2 instance):
+When adding another server (e.g., an EC2 instance):
 1. Install Tailscale on the new node
 2. The existing `tag:ci` ACL rule already grants access (if using allow-all, or add the new hostname)
 3. No OAuth client changes needed — the same client works for all targets
+4. Add a Split DNS entry in Tailscale for the new domain

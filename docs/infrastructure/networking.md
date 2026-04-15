@@ -2,7 +2,7 @@
 
 ## Traefik ingress
 
-Traefik handles all HTTP routing into the cluster. Every ingress uses `ingressClassName: traefik` explicitly. The tunnel (`task tunnel`) port-forwards Traefik to `0.0.0.0:8080`, making all services accessible via hostname on port 8080.
+Traefik handles all HTTP routing into the cluster. Every ingress uses `ingressClassName: traefik` explicitly.
 
 ## Service hostnames
 
@@ -15,56 +15,35 @@ Every service gets a subdomain under `DEV_HOSTNAME`. This is set in `.env` to yo
 | Application frontend | `app.{DEV_HOSTNAME}` |
 | Application API | `api.{DEV_HOSTNAME}` |
 | Keycloak | `auth.{DEV_HOSTNAME}` |
-| Sandbox frontend | `app.{task-id}.{DEV_HOSTNAME}` |
-| Sandbox API | `api.{task-id}.{DEV_HOSTNAME}` |
+| Sandbox frontend | `app.env-{name}.{DEV_HOSTNAME}` |
+| Sandbox API | `api.env-{name}.{DEV_HOSTNAME}` |
 
-## How access works
+## How access works (local dev)
 
-```
-Browser → http://devteam.shawns-macbook-pro:8080
-       → /etc/hosts resolves to Tailscale IP (100.64.158.57)
-       → kubectl port-forward on 0.0.0.0:8080 picks it up
-       → Traefik routes by Host header to the-dev-team-frontend service
-       → nginx in the frontend container proxies /api/ to the backend
-```
-
-The tunnel runs in a tmux session (`tmux attach -t tunnel` to view). `task close` kills it.
-
-## /etc/hosts
-
-`task tunnel` (called automatically by `task up`) adds entries to `/etc/hosts` on first run:
+A Tailscale gateway pod runs inside minikube and joins your tailnet as an independent device. It has its own Tailscale IP and forwards HTTP traffic to Traefik.
 
 ```
-100.64.158.57 devteam.shawns-macbook-pro agent-api.shawns-macbook-pro app.shawns-macbook-pro api.shawns-macbook-pro auth.shawns-macbook-pro
+Browser → http://devteam.shawns-macbook-pro
+       → Tailscale Split DNS resolves to gateway IP (100.106.115.13)
+       → Tailscale routes to the gateway pod in minikube
+       → iptables forwards port 80 to Traefik's ClusterIP
+       → Traefik routes by Host header to the correct service
 ```
 
-This requires sudo — the developer is prompted for their password once. On subsequent runs, the task detects existing entries and skips.
+This works from any device on your tailnet — laptop, phone, another computer. No `/etc/hosts` entries or tunnels needed.
 
-## Tailscale Split DNS (multi-device access)
+## Tailscale gateway
 
-The `/etc/hosts` entries only work on the machine running Minikube. To access services from other tailnet devices (phone, another laptop), configure Tailscale Split DNS:
+The gateway pod (`infrastructure/k8s/charts/tailscale-gateway/`) runs two containers:
 
-### In-cluster CoreDNS
+1. **Tailscale** — joins your tailnet, sets up iptables rules to forward ports 80/443 to Traefik
+2. **CoreDNS** — resolves `*.{DEV_HOSTNAME}` to the gateway's Tailscale IP
 
-A CoreDNS pod runs in the `dns` namespace (deployed by Helmfile). It resolves any `*.{DEV_HOSTNAME}` query to the Tailscale IP configured in `.env`:
+The gateway is only deployed when `TS_AUTHKEY` is set in `.env` (local dev only — remote servers manage their own Tailscale and DNS).
 
-```
-*.shawns-macbook-pro → 100.64.158.57
-```
+### Split DNS
 
-### Setup (one-time)
-
-1. Advertise the minikube subnet so other tailnet devices can reach the CoreDNS:
-   ```bash
-   tailscale up --advertise-routes=$(minikube ip)/24
-   ```
-2. Approve the route in [Tailscale admin console](https://login.tailscale.com/admin/machines) → your machine → Edit route settings
-3. Add a nameserver in [Tailscale DNS settings](https://login.tailscale.com/admin/dns):
-   - Type: Custom
-   - Nameserver IP: `$(minikube ip)` (e.g. `192.168.49.2`)
-   - Restrict to domain: `{DEV_HOSTNAME}` (e.g. `shawns-macbook-pro`)
-
-After this, all tailnet devices resolve `*.shawns-macbook-pro` via the in-cluster CoreDNS. No `/etc/hosts` needed on any device.
+Tailscale Split DNS is configured in the [admin console](https://login.tailscale.com/admin/dns) to route all `{DEV_HOSTNAME}` domain queries to the gateway's CoreDNS sidecar. This means every tailnet device automatically resolves any hostname under `*.{DEV_HOSTNAME}` — including dynamically created sandbox hostnames.
 
 ## The `DEV_HOSTNAME` variable
 
@@ -74,15 +53,15 @@ After this, all tailnet devices resolve `*.shawns-macbook-pro` via the in-cluste
 task tailscale:hostname
 ```
 
-Helmfile reads `DEV_HOSTNAME` and templates it into every ingress resource. After changing it:
+Helmfile reads `DEV_HOSTNAME` and templates it into every ingress resource. It is a required variable — deploys fail fast if it's missing.
 
-```bash
-task deploy:apply    # Update ingresses and CoreDNS
-task tunnel          # Restart the tunnel
-```
+## Remote servers
+
+Remote servers (EC2, dedicated hosts, etc.) have their own Tailscale node and DNS. The gateway pod is not deployed on remote servers. Each server manages its own Split DNS entry in the Tailscale admin console.
 
 ## Related reading
 
+- [Tailscale Setup](tailscale-setup.md)
 - [Kubernetes](kubernetes.md)
 - [Sandbox Environments](../the-dev-team/sandbox-environments.md)
 - [Environment Setup](../getting-started/environment-setup.md)

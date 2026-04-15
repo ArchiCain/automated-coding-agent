@@ -39,9 +39,7 @@ These are the commands you use most often:
 
 | Command | Purpose |
 |---------|---------|
-| `task up` | Start Minikube, build images, deploy everything, start tunnel |
-| `task tunnel` | Restart the Traefik tunnel (tmux session) |
-| `task close` | Stop the tunnel |
+| `task up` | Start Minikube, build images, deploy everything |
 | `task down` | Stop Minikube (preserves state for fast resume) |
 | `task destroy` | Delete the Minikube cluster and all data |
 | `task reset` | Wipe all K8s state (keeps Minikube VM) |

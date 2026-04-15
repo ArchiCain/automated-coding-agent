@@ -13,19 +13,17 @@ Everything runs in Kubernetes (Minikube locally, K3s in production) with the sam
 task up
 ```
 
-This single command starts Minikube, builds all images, deploys via Helmfile, configures `/etc/hosts` (sudo prompt on first run), and starts a Traefik tunnel in a tmux session.
-
-Once complete:
+This single command starts Minikube, builds all images, and deploys everything via Helmfile. With the Tailscale gateway configured (see [Environment Setup](../getting-started/environment-setup.md)), services are available at:
 
 | Service | URL |
 |---------|-----|
-| THE Dev Team chat UI | `http://devteam.{DEV_HOSTNAME}:8080` |
-| THE Dev Team API | `http://agent-api.{DEV_HOSTNAME}:8080` |
-| Application frontend | `http://app.{DEV_HOSTNAME}:8080` |
-| Application API | `http://api.{DEV_HOSTNAME}:8080` |
-| Keycloak | `http://auth.{DEV_HOSTNAME}:8080` |
+| THE Dev Team chat UI | `http://devteam.{DEV_HOSTNAME}` |
+| THE Dev Team API | `http://agent-api.{DEV_HOSTNAME}` |
+| Application frontend | `http://app.{DEV_HOSTNAME}` |
+| Application API | `http://api.{DEV_HOSTNAME}` |
+| Keycloak | `http://auth.{DEV_HOSTNAME}` |
 
-The tunnel runs in a tmux session. Use `tmux attach -t tunnel` to view connection logs, `Ctrl-b d` to detach.
+These URLs work from any device on your tailnet — laptop, phone, etc.
 
 ## Login credentials
 
@@ -72,7 +70,6 @@ task status
 ## Stopping and cleaning up
 
 ```bash
-task close               # Stop the tunnel
 task down                # Stop Minikube (preserves state, fast resume)
 task destroy             # Delete the cluster entirely
 ```

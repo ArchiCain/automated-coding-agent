@@ -46,23 +46,21 @@ cp .env.template .env
 task up
 ```
 
-`task up` starts Minikube, builds all images, deploys via Helmfile, configures `/etc/hosts` (prompts for sudo), and starts a Traefik tunnel in a tmux session. Services are then available at:
+`task up` starts Minikube, builds all images, and deploys via Helmfile. With the Tailscale gateway configured (see [Environment Setup](getting-started/environment-setup.md)), services are available at:
 
 | Service | URL |
 |---------|-----|
-| THE Dev Team chat UI | `http://devteam.{DEV_HOSTNAME}:8080` |
-| THE Dev Team API | `http://agent-api.{DEV_HOSTNAME}:8080` |
-| Application frontend | `http://app.{DEV_HOSTNAME}:8080` |
-| Application API | `http://api.{DEV_HOSTNAME}:8080` |
-| Keycloak | `http://auth.{DEV_HOSTNAME}:8080` |
+| THE Dev Team chat UI | `http://devteam.{DEV_HOSTNAME}` |
+| THE Dev Team API | `http://agent-api.{DEV_HOSTNAME}` |
+| Application frontend | `http://app.{DEV_HOSTNAME}` |
+| Application API | `http://api.{DEV_HOSTNAME}` |
+| Keycloak | `http://auth.{DEV_HOSTNAME}` |
 
 Key commands:
 
 | Command | Purpose |
 |---------|---------|
-| `task up` | Start Minikube, build images, deploy, start tunnel |
-| `task tunnel` | Restart the tunnel (after reboot or pod restart) |
-| `task close` | Stop the tunnel |
+| `task up` | Start Minikube, build images, deploy everything |
 | `task status` | Show cluster status |
 | `task reset:up` | Full reset and redeploy from scratch |
 
@@ -96,7 +94,8 @@ automated-coding-agent/
 | `app` | Main application (backend, frontend, database, keycloak) |
 | `the-dev-team` | Agent backend + frontend |
 | `env-*` | Sandbox environments (ephemeral, created per worktree) |
-| `dns` | CoreDNS for Tailscale Split DNS |
+| `tailscale` | Tailscale gateway (local dev only — gives minikube a tailnet IP) |
+| `dns` | CoreDNS for Tailscale Split DNS (remote servers only) |
 | `traefik` | Ingress controller |
 | `registry` | In-cluster container registry |
 | `monitoring` | Prometheus, Grafana, Loki, Promtail |
