@@ -60,7 +60,9 @@ Key commands:
 
 | Command | Purpose |
 |---------|---------|
-| `task up` | Start Minikube, build images, deploy everything |
+| `task up` | Start Minikube, build images, deploy, start tunnel |
+| `task tunnel` | Restart the tunnel (after reboot or pod restart) |
+| `task close` | Stop the tunnel |
 | `task status` | Show cluster status |
 | `task reset:up` | Full reset and redeploy from scratch |
 

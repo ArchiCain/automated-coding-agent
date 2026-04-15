@@ -39,7 +39,9 @@ These are the commands you use most often:
 
 | Command | Purpose |
 |---------|---------|
-| `task up` | Start Minikube, build images, deploy everything |
+| `task up` | Start Minikube, build images, deploy everything, start tunnel |
+| `task tunnel` | Restart the tunnel + dnsmasq (after reboot or pod restart) |
+| `task close` | Stop the tunnel |
 | `task down` | Stop Minikube (preserves state for fast resume) |
 | `task destroy` | Delete the Minikube cluster and all data |
 | `task reset` | Wipe all K8s state (keeps Minikube VM) |

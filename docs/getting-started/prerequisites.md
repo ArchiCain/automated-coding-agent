@@ -44,6 +44,16 @@ Tailscale is required. All services are accessed via Tailscale hostnames — the
 
 Install from [tailscale.com/download](https://tailscale.com/download), then join the tailnet.
 
+## Install dnsmasq
+
+dnsmasq provides wildcard DNS resolution for service hostnames (e.g., `*.shawns-macbook-pro`). This is what makes dynamically created sandbox URLs work without manual DNS entries.
+
+```bash
+brew install dnsmasq
+```
+
+`task up` configures dnsmasq automatically — no manual config needed.
+
 ## What Nix provides
 
 When you enter the dev shell, the following tools are available:
