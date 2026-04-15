@@ -174,6 +174,88 @@ Developer can watch progress in real-time, iterate same day
 
 The parallel dev team vision becomes fully viable — not as an overnight compromise, but as a real-time workflow where you brainstorm in the morning and review working code by lunch.
 
+## Memory & Knowledge Layer
+
+### The Problem with Current Context Management
+
+Agents currently receive context through distilled markdown files (plan.md, task.md) at each decomposition level, and docs/ content is hardcoded into system prompts. This has three limitations:
+
+1. **Static context** — agents get what was written into their task file, nothing more. No access to sibling agent discoveries.
+2. **Docs burn context** — ~3-5K tokens of architectural docs injected into every system prompt, whether needed or not. On a 32K context window, that's 10-15% wasted.
+3. **No cross-session learning** — when an execution agent discovers a pattern or gotcha, that knowledge dies with the session.
+
+### Inspiration: Karpathy's LLM Wiki + agentmemory
+
+**Karpathy's thesis**: Stop doing RAG (re-deriving knowledge every query). Maintain a persistent, LLM-curated wiki instead. Three operations: *ingest* (process source, update wiki pages), *query* (search and synthesize), *lint* (find contradictions and stale info).
+
+**agentmemory extends this for multi-agent systems**:
+- Confidence scoring — facts carry reliability weights that decay over time
+- Consolidation tiers — Working memory → Episodic → Semantic → Procedural (each more compressed, longer-lived)
+- Knowledge graph — typed entities and relationships for traversal
+- Multi-agent coordination — shared vs private scoping, mesh sync between parallel agents
+
+### Mastra's Built-in Memory (maps directly to these concepts)
+
+| Mechanism | What It Does | Maps To |
+|-----------|-------------|---------|
+| **Working Memory** | Structured scratchpad in system prompt, updated between turns | Working memory tier |
+| **Semantic Recall** | Embeds messages into vector store, retrieves by similarity | Episodic/semantic tiers |
+| **Observational Memory** | Background agents compress old messages (5-40x ratio) | Consolidation pipeline |
+| **RAG Pipeline** | Chunk, embed, store, retrieve from document corpus | Karpathy's wiki query |
+
+### Architecture
+
+```
+Mastra Orchestrator
+  ├─ Agents (brainstorm, decomp, execution, review)
+  │    ├─ Working Memory (per-agent task state)
+  │    ├─ Semantic Recall (cross-agent, shared by feature)
+  │    └─ Observational Memory (context compression)
+  │
+  ├─ RAG Corpus
+  │    ├─ docs/ directory (architecture, patterns, conventions)
+  │    └─ Plan digests (accumulated execution knowledge)
+  │
+  ├─ Storage: pgvector (reuse existing PostgreSQL)
+  └─ Embeddings: Ollama + nomic-embed-text (local, CPU, 0.5GB)
+```
+
+### How It Maps to the Agent Pipeline
+
+**Docs as RAG (Phase 1 — highest impact, lowest effort)**
+- Chunk and embed the ~25 files in docs/ with nomic-embed-text via Ollama
+- Store in pgvector (already in the stack)
+- Give agents a `query_docs` tool — they pull what they need, when they need it
+- Remove hardcoded docs from system prompts
+- Saves 3-5K tokens per agent, making the 32K Mac Mini context window much more usable
+
+**Observational Memory (Phase 2 — critical for Mac Mini)**
+- Execution agents run long conversations (read, edit, read again, fix, retry)
+- On a 32K window, raw history fills up fast
+- OM compresses older messages automatically — agent remembers what it did without full token cost
+- Difference between an execution agent that can do 3 edit cycles vs 10
+- Configure threshold at ~15-20K tokens to trigger compression early
+
+**Cross-agent Semantic Recall (Phase 3)**
+- All agents working on the same Feature share a `resourceId` (e.g., `feature-auth`)
+- When the `service` concern agent discovers a pattern, the `controller` concern agent can query it
+- Review agents query all execution agent observations for holistic review
+- Context flows sideways (between siblings), not just downward (parent to child)
+
+**Plan History as Compiled Knowledge (Phase 4 — Karpathy pattern)**
+- After each plan execution completes, auto-generate a digest: what was built, what patterns worked, what failed
+- Embed these digests into the RAG corpus alongside docs
+- Over time, the system accumulates procedural knowledge about the codebase
+- Future brainstorm and decomp agents benefit from past execution experience
+- The system gets smarter over time — month 3 agents know things month 1 agents didn't
+
+### Resource Cost
+
+- Embedding model: nomic-embed-text via Ollama, 0.5GB RAM, CPU-friendly — runs alongside everything else on Mac Mini
+- Vector storage: pgvector, minimal overhead on existing PostgreSQL
+- Observational Memory background agents: small model or cheap API (Gemini Flash ~$0.15/M tokens)
+- Embedding latency: ~100-500ms per query on CPU — negligible vs LLM response times
+
 ## Risks
 
 - Mastra is still relatively young (post-1.0 but evolving fast). We'd be trading Anthropic's SDK stability for a more feature-rich but faster-moving dependency.
