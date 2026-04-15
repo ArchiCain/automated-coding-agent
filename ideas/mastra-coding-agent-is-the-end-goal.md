@@ -249,12 +249,105 @@ Mastra Orchestrator
 - Future brainstorm and decomp agents benefit from past execution experience
 - The system gets smarter over time — month 3 agents know things month 1 agents didn't
 
+### How Mastra Memory Actually Works (Internal Pipeline)
+
+When `agent.stream()` or `agent.generate()` is called, Mastra runs this pipeline automatically — no hooks, no middleware, no "then/finally" code:
+
+```
+USER MESSAGE
+  ↓
+prepare-memory-step (BEFORE LLM)
+  ├─ Load thread from storage (getThreadById)
+  ├─ WorkingMemory processor → prepend persisted state as system message
+  ├─ MessageHistory processor → load last N messages
+  ├─ SemanticRecall processor → query vector DB, inject top-K similar past messages
+  └─ [PREPARED CONTEXT] → LLM
+  ↓
+stream-step (LLM EXECUTION)
+  ├─ Model generates response + tool calls
+  └─ Agent can call `updateWorkingMemory` tool (auto-injected by Mastra)
+  ↓
+output-processing (AFTER LLM)
+  ├─ Persist all new messages to storage
+  └─ Embed messages into vector DB for future semantic recall
+  ↓
+observational-memory-check (BACKGROUND, ASYNC)
+  ├─ If raw messages > threshold → Observer LLM compresses to observations
+  └─ If observations > threshold → Reflector LLM condenses further
+```
+
+**Semantic Recall** — fully automatic. Messages are embedded after every response. Before every turn, current input queries the vector DB for similar past messages, which are injected into context. No tool calls needed — it's an input processor.
+
+**Working Memory** — semi-automatic. Mastra injects an `updateWorkingMemory` tool into the agent's tool list. The agent decides when to call it (like any other tool). Retrieval is automatic — content is prepended as a system message on every future turn.
+
+**Observational Memory** — fully automatic. Two background LLM agents:
+- **Observer**: When raw messages exceed threshold (configurable, default 30K), a separate async LLM call compresses conversation into dense observations (5-40x compression). Non-blocking by default.
+- **Reflector**: When observations exceed their threshold (default 40K), another LLM call condenses further into meta-reflections.
+- Safety: `blockAfter` threshold forces synchronous processing if async buffering can't keep pace.
+
+### Multi-Agent Memory Sharing Mechanics
+
+Agents sharing the same `resourceId` see each other's memory **immediately on the next turn** because memory loads fresh from storage during `prepare-memory-step`:
+
+```typescript
+// Both agents share resourceId "feature-auth" but have separate threads
+await serviceAgent.stream("implement auth service", {
+  resourceId: "feature-auth",
+  threadId: "service-concern-123"
+});
+
+// Controller agent sees service agent's semantic recall + working memory
+await controllerAgent.stream("implement auth controller", {
+  resourceId: "feature-auth",
+  threadId: "controller-concern-456"
+});
+```
+
+Shared via `resourceId`: observational memory, working memory, semantic embeddings.
+Not shared (per `threadId`): raw message history.
+
+### Configuration for Our Stack
+
+```typescript
+const memory = new Memory({
+  storage: new MastraPostgres({ connectionString: process.env.DATABASE_URL }),
+  vector: vectorStore,
+  embedder: "ollama/nomic-embed-text",  // local, CPU, 0.5GB
+  options: {
+    observationalMemory: {
+      model: "ollama/qwen2.5-coder:14b",  // local observer model
+      observation: {
+        messageTokens: 15000,     // trigger early for 32K context window
+        reflectionTokens: 25000,
+        bufferTokens: 3000
+      }
+    },
+    semanticRecall: { topK: 4 },
+    workingMemory: { enabled: true, scope: "resource" },
+    lastMessages: 10
+  }
+});
+```
+
+Key tuning for Mac Mini: set `messageTokens` to 15K (half the default 30K) so the Observer triggers compression well before hitting the 32K practical context limit. On a DGX Spark with full 128K context, the defaults would be fine.
+
+### Why This Can't Be Done with Claude Code SDK
+
+The SDK owns the agentic loop and doesn't expose the prepare/output processor pipeline. Specifically:
+- **Observational Memory** requires intercepting the conversation to run background compression — the SDK doesn't allow middleware in the conversation flow
+- **Semantic Recall** requires automatic embedding after every turn and retrieval before every turn — would need a wrapper around the SDK that pre-processes each turn
+- **Working Memory** has no SDK equivalent of persistent scratchpad state — could fake it with MCP tools but the agent must remember to call them explicitly
+- **Cross-agent sharing** has no `resourceId` scoping — would require manual orchestration through MCP tools
+
+You can bolt on memory via MCP tools with the SDK, but it's manual — the agent has to explicitly decide to store and recall. With Mastra, memory is infrastructure that happens automatically at the orchestration layer.
+
 ### Resource Cost
 
 - Embedding model: nomic-embed-text via Ollama, 0.5GB RAM, CPU-friendly — runs alongside everything else on Mac Mini
 - Vector storage: pgvector, minimal overhead on existing PostgreSQL
-- Observational Memory background agents: small model or cheap API (Gemini Flash ~$0.15/M tokens)
+- Observational Memory background agents: local 14B model via Ollama, or cheap API (Gemini Flash ~$0.15/M tokens)
 - Embedding latency: ~100-500ms per query on CPU — negligible vs LLM response times
+- Storage backends supported: @mastra/pg, @mastra/libsql, @mastra/mongodb (we'd use pg since it's already in the stack)
 
 ## Risks
 
