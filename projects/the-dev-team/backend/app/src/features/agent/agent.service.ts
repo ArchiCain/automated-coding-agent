@@ -1,5 +1,7 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ProviderRegistry } from './providers/provider-registry';
 import { AgentMessage } from './providers/provider.interface';
 
@@ -39,12 +41,89 @@ export interface SessionInfo {
   isActive: boolean;
 }
 
+/** Fields persisted to disk (excludes runtime-only state) */
+interface PersistedSession {
+  id: string;
+  provider: string;
+  model: string;
+  createdAt: string;
+  lastMessageAt: string;
+  claudeSessionId?: string;
+  systemPrompt: string;
+  messages: NormalizedMessage[];
+}
+
 @Injectable()
-export class AgentService {
+export class AgentService implements OnModuleInit {
   private readonly logger = new Logger(AgentService.name);
   private readonly sessions = new Map<string, Session>();
+  private readonly sessionsDir: string;
 
-  constructor(private readonly providerRegistry: ProviderRegistry) {}
+  constructor(private readonly providerRegistry: ProviderRegistry) {
+    const repoRoot = process.env.REPO_ROOT || '/workspace';
+    this.sessionsDir = path.join(repoRoot, '.dev-team', 'sessions');
+  }
+
+  onModuleInit(): void {
+    this.loadSessions();
+  }
+
+  private loadSessions(): void {
+    try {
+      if (!fs.existsSync(this.sessionsDir)) return;
+      const files = fs.readdirSync(this.sessionsDir).filter(f => f.endsWith('.json'));
+      for (const file of files) {
+        try {
+          const raw = fs.readFileSync(path.join(this.sessionsDir, file), 'utf-8');
+          const data: PersistedSession = JSON.parse(raw);
+          const session: Session = {
+            ...data,
+            createdAt: new Date(data.createdAt),
+            lastMessageAt: new Date(data.lastMessageAt),
+            isActive: false,
+            abortController: null,
+          };
+          this.sessions.set(session.id, session);
+        } catch (err) {
+          this.logger.warn(`Failed to load session file ${file}`, err);
+        }
+      }
+      this.logger.log(`Restored ${this.sessions.size} sessions from disk`);
+    } catch (err) {
+      this.logger.warn('Failed to load sessions from disk', err);
+    }
+  }
+
+  private persistSession(session: Session): void {
+    try {
+      fs.mkdirSync(this.sessionsDir, { recursive: true });
+      const data: PersistedSession = {
+        id: session.id,
+        provider: session.provider,
+        model: session.model,
+        createdAt: session.createdAt.toISOString(),
+        lastMessageAt: session.lastMessageAt.toISOString(),
+        claudeSessionId: session.claudeSessionId,
+        systemPrompt: session.systemPrompt,
+        messages: session.messages,
+      };
+      fs.writeFileSync(
+        path.join(this.sessionsDir, `${session.id}.json`),
+        JSON.stringify(data, null, 2),
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to persist session ${session.id}`, err);
+    }
+  }
+
+  private deleteSessionFile(sessionId: string): void {
+    try {
+      const filePath = path.join(this.sessionsDir, `${sessionId}.json`);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (err) {
+      this.logger.warn(`Failed to delete session file ${sessionId}`, err);
+    }
+  }
 
   private buildSystemPrompt(): string {
     const repoRoot = process.env.REPO_ROOT || '/workspace';
@@ -103,6 +182,7 @@ export class AgentService {
       messages: [],
     };
     this.sessions.set(id, session);
+    this.persistSession(session);
     this.logger.log(`Session created: ${id} (provider: ${session.provider}, model: ${session.model})`);
     return this.toSessionInfo(session);
   }
@@ -111,6 +191,7 @@ export class AgentService {
   addMessage(sessionId: string, message: NormalizedMessage): void {
     const session = this.getSessionInternal(sessionId);
     session.messages.push(message);
+    this.persistSession(session);
   }
 
   /** Get the system prompt and full message history for a session */
@@ -159,6 +240,7 @@ export class AgentService {
     } finally {
       session.isActive = false;
       session.abortController = null;
+      this.persistSession(session);
     }
   }
 
@@ -187,6 +269,7 @@ export class AgentService {
       session.abortController.abort();
     }
     this.sessions.delete(sessionId);
+    this.deleteSessionFile(sessionId);
     this.logger.log(`Session ${sessionId} deleted`);
   }
 

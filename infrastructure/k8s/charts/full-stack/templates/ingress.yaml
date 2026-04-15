@@ -43,4 +43,16 @@ spec:
                 name: {{ .Release.Name }}-keycloak
                 port:
                   number: {{ .Values.keycloak.port }}
+    {{- if .Values.pgweb.enabled }}
+    - host: db.{{ include "full-stack.hostPrefix" . }}.{{ .Values.global.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-database-pgweb
+                port:
+                  number: 8081
+    {{- end }}
 {{- end }}

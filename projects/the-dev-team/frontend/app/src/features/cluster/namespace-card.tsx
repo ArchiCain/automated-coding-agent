@@ -46,7 +46,8 @@ function findServiceForPod(pod: PodInfo, services: ServiceInfo[]): ServiceInfo |
 
 function formatAccess(svc: ServiceInfo): string {
   if (svc.ingressHost) return svc.ingressHost;
-  return svc.ports.map((p) => `${p.port}`).join(', ');
+  const portStr = svc.ports.map((p) => p.port).join(', ');
+  return `${svc.name}.${svc.namespace}:${portStr}`;
 }
 
 /** Strip the release/namespace prefix from a service name for cleaner display */
@@ -71,7 +72,26 @@ function AccessCell({ svc }: { svc: ServiceInfo }) {
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(access);
+    const text = hasIngress ? `http://${access}` : access;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
+        () => fallbackCopy(text),
+      );
+    } else {
+      fallbackCopy(text);
+    }
+  };
+
+  const fallbackCopy = (text: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };

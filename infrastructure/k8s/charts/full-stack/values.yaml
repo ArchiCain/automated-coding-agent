@@ -74,6 +74,20 @@ keycloak:
       cpu: 1000m
       memory: 1Gi
 
+pgweb:
+  enabled: true
+  image:
+    repository: sosedoff/pgweb
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
 ingress:
   enabled: true
   className: nginx

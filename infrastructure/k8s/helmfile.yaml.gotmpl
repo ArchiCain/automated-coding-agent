@@ -114,6 +114,12 @@ releases:
           limits:
             memory: {{ env "DATABASE_MEMORY_LIMIT" | default "512Mi" }}
             cpu: {{ env "DATABASE_CPU_LIMIT" | default "500m" }}
+        pgweb:
+          enabled: true
+          ingress:
+            enabled: true
+            host: {{ env "PGWEB_HOST" | default (print "db." (requiredEnv "DEV_HOSTNAME")) }}
+            tls: {{ .Values | get "ingressTLS" false }}
 
   - name: backend
     namespace: {{ env "NAMESPACE" | default "app" }}

@@ -24,3 +24,21 @@ resources:
 healthCheck:
   initialDelaySeconds: 10
   periodSeconds: 5
+
+pgweb:
+  enabled: false
+  image:
+    repository: sosedoff/pgweb
+    tag: latest
+    pullPolicy: IfNotPresent
+  ingress:
+    enabled: true
+    host: ""
+    tls: false
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "25m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"

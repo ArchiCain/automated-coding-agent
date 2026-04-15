@@ -1,0 +1,41 @@
+{{- if .Values.pgweb.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-database-pgweb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "full-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pgweb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "full-stack.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: pgweb
+  template:
+    metadata:
+      labels:
+        {{- include "full-stack.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: pgweb
+    spec:
+      containers:
+        - name: pgweb
+          image: "{{ .Values.pgweb.image.repository }}:{{ .Values.pgweb.image.tag }}"
+          imagePullPolicy: {{ .Values.pgweb.image.pullPolicy }}
+          ports:
+            - containerPort: 8081
+          env:
+            - name: PGWEB_DATABASE_URL
+              value: "postgres://{{ .Values.database.auth.username }}:{{ .Values.database.auth.password }}@{{ .Release.Name }}-database:{{ .Values.database.port }}/{{ .Values.database.auth.database }}?sslmode=disable"
+            - name: PGWEB_LISTEN_PORT
+              value: "8081"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.pgweb.resources | nindent 12 }}
+{{- end }}

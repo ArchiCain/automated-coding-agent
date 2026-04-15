@@ -1,0 +1,31 @@
+{{- if and .Values.pgweb.enabled .Values.pgweb.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-pgweb
+  labels:
+    app: {{ .Release.Name }}-pgweb
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web{{ if .Values.pgweb.ingress.tls }},websecure{{ end }}
+    {{- if .Values.pgweb.ingress.tls }}
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    {{- end }}
+spec:
+  {{- if .Values.pgweb.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.pgweb.ingress.host }}
+      secretName: {{ .Release.Name }}-pgweb-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.pgweb.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-pgweb
+                port:
+                  number: 8081
+{{- end }}
