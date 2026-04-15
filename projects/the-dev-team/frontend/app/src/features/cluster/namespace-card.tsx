@@ -1,13 +1,18 @@
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import { useState } from 'react';
 import type { NamespaceGroup, PodInfo, ServiceInfo } from './types';
 
 function statusColor(status: string, ready: string): string {
@@ -50,6 +55,49 @@ function shortServiceName(name: string, namespace: string): string {
   const prefix = `${namespace}-`;
   if (name.startsWith(prefix)) return name.slice(prefix.length);
   return name;
+}
+
+const iconButtonSx = {
+  p: 0.25,
+  '& .MuiSvgIcon-root': { fontSize: '0.85rem' },
+  color: 'text.secondary',
+  '&:hover': { color: 'text.primary' },
+} as const;
+
+function AccessCell({ svc }: { svc: ServiceInfo }) {
+  const [copied, setCopied] = useState(false);
+  const access = formatAccess(svc);
+  const hasIngress = !!svc.ingressHost;
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(access);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleNavigate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open(`http://${svc.ingressHost}`, '_blank', 'noopener');
+  };
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <span>{access}</span>
+      {hasIngress && (
+        <Tooltip title="Open in new tab">
+          <IconButton size="small" sx={iconButtonSx} onClick={handleNavigate}>
+            <OpenInNewIcon />
+          </IconButton>
+        </Tooltip>
+      )}
+      <Tooltip title={copied ? 'Copied!' : 'Copy'}>
+        <IconButton size="small" sx={iconButtonSx} onClick={handleCopy}>
+          <ContentCopyIcon />
+        </IconButton>
+      </Tooltip>
+    </Box>
+  );
 }
 
 interface NamespaceCardProps {
@@ -163,7 +211,7 @@ export function NamespaceCard({ group, onPodClick }: NamespaceCardProps) {
                       <TableCell
                         sx={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'text.secondary' }}
                       >
-                        {svc ? formatAccess(svc) : '-'}
+                        {svc ? <AccessCell svc={svc} /> : '-'}
                       </TableCell>
                       <TableCell
                         align="right"

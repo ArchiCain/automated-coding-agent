@@ -32,10 +32,11 @@ export function SessionSidebar({
   return (
     <Box
       sx={{
-        width: 240,
+        width: 260,
+        minWidth: 260,
         borderRight: '1px solid',
         borderColor: 'divider',
-        bgcolor: 'background.paper',
+        bgcolor: '#0d1117',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',

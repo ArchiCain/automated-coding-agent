@@ -46,7 +46,7 @@ releases:
     chart: charts/dns
     createNamespace: true
     values:
-      - domain: {{ env "DNS_DOMAIN" | default (env "DEV_HOSTNAME" | default "localhost") }}
+      - domain: {{ env "DNS_DOMAIN" | default (requiredEnv "DEV_HOSTNAME") }}
         tailscaleIP: {{ env "TAILSCALE_IP" | default "127.0.0.1" }}
 
   - name: traefik
@@ -108,7 +108,7 @@ releases:
         replicas: {{ env "BACKEND_REPLICAS" | default "1" }}
         ingress:
           enabled: true
-          host: {{ env "BACKEND_HOST" | default (print "api." (env "DEV_HOSTNAME" | default "localhost")) }}
+          host: {{ env "BACKEND_HOST" | default (print "api." (requiredEnv "DEV_HOSTNAME")) }}
           tls: {{ .Values | get "ingressTLS" false }}
         env:
           NODE_ENV: {{ env "NODE_ENV" | default "production" }}
@@ -147,7 +147,7 @@ releases:
           tag: {{ env "IMAGE_TAG" | default "latest" }}
         ingress:
           enabled: true
-          host: {{ env "KEYCLOAK_HOST" | default (print "auth." (env "DEV_HOSTNAME" | default "localhost")) }}
+          host: {{ env "KEYCLOAK_HOST" | default (print "auth." (requiredEnv "DEV_HOSTNAME")) }}
           tls: {{ .Values | get "ingressTLS" false }}
         env:
           KC_DB: {{ env "KC_DB" | default "postgres" }}
@@ -185,7 +185,7 @@ releases:
         replicas: {{ env "FRONTEND_REPLICAS" | default "1" }}
         ingress:
           enabled: true
-          host: {{ env "FRONTEND_HOST" | default (print "app." (env "DEV_HOSTNAME" | default "localhost")) }}
+          host: {{ env "FRONTEND_HOST" | default (print "app." (requiredEnv "DEV_HOSTNAME")) }}
           tls: {{ .Values | get "ingressTLS" false }}
         apiProxy:
           enabled: true
@@ -213,13 +213,14 @@ releases:
           tag: {{ env "IMAGE_TAG" | default "latest" }}
         ingress:
           enabled: true
-          host: {{ env "THE_DEV_TEAM_BACKEND_HOST" | default (print "agent-api." (env "DEV_HOSTNAME" | default "localhost")) }}
+          host: {{ env "THE_DEV_TEAM_BACKEND_HOST" | default (print "agent-api." (requiredEnv "DEV_HOSTNAME")) }}
           tls: {{ .Values | get "ingressTLS" false }}
         env:
           NODE_ENV: {{ env "NODE_ENV" | default "production" }}
           PORT: "8080"
           REPO_ROOT: /workspace
           CORS_ORIGINS: "{{ env "CORS_ORIGINS" | default "*" }}"
+          DEV_HOSTNAME: {{ requiredEnv "DEV_HOSTNAME" }}
         secretEnv:
           CLAUDE_CODE_OAUTH_TOKEN: {{ env "CLAUDE_CODE_OAUTH_TOKEN" | default "" }}
           GITHUB_TOKEN: {{ env "GITHUB_TOKEN" | default "" }}
@@ -250,7 +251,7 @@ releases:
           tag: {{ env "IMAGE_TAG" | default "latest" }}
         ingress:
           enabled: true
-          host: {{ env "THE_DEV_TEAM_FRONTEND_HOST" | default (print "devteam." (env "DEV_HOSTNAME" | default "localhost")) }}
+          host: {{ env "THE_DEV_TEAM_FRONTEND_HOST" | default (print "devteam." (requiredEnv "DEV_HOSTNAME")) }}
         resources:
           requests:
             memory: "128Mi"

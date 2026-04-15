@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import { useChat } from './use-chat';
 import { SessionSidebar } from './session-sidebar';
@@ -11,12 +12,22 @@ export function ChatPage() {
     activeMessages,
     activeSystemPrompt,
     isStreaming,
+    sessionsLoaded,
     createSession,
     deleteSession,
     sendMessage,
     cancelMessage,
     setActiveSessionId,
   } = useChat();
+
+  // Auto-create a session if none exist after loading
+  const autoCreated = useRef(false);
+  useEffect(() => {
+    if (sessionsLoaded && sessions.length === 0 && !autoCreated.current) {
+      autoCreated.current = true;
+      createSession();
+    }
+  }, [sessionsLoaded, sessions.length, createSession]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', pt: '48px' }}>

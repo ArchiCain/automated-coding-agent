@@ -61,6 +61,7 @@ tasks:
           --namespace env-${NAME} \
           --values {{.VALUES_PATH}} \
           --set global.imageTag=${TAG} \
+          --set global.domain=${DEV_HOSTNAME:?DEV_HOSTNAME is required} \
           --wait --timeout 5m
 
         echo ""
@@ -89,6 +90,7 @@ tasks:
         --namespace env-{{.TASK_ID}}
         --values {{.VALUES_PATH}}
         --set global.taskId={{.TASK_ID}}
+        --set global.domain=${DEV_HOSTNAME:?DEV_HOSTNAME is required}
         --wait --timeout 5m
       - task: wait-healthy
         vars:

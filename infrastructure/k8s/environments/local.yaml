@@ -1,6 +1,6 @@
 global:
   registry: localhost:30500
-  domain: localhost
+  domain: ""
   storageClass: standard
   resourceProfile: minimal
 

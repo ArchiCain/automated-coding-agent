@@ -1,7 +1,7 @@
 global:
   registry: localhost:30500
   imageTag: latest
-  domain: localhost
+  domain: ""
   taskId: ""
 
 backend:
@@ -48,4 +48,4 @@ keycloak:
 
 ingress:
   enabled: true
-  className: nginx
+  className: traefik

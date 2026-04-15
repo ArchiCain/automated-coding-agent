@@ -8,7 +8,23 @@ export function useChat() {
   const [messages, setMessages] = useState<Map<string, AgentMessage[]>>(new Map());
   const [systemPrompts, setSystemPrompts] = useState<Map<string, string>>(new Map());
   const [isStreaming, setIsStreaming] = useState(false);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+
+  // Load existing sessions on mount
+  useEffect(() => {
+    fetch('/api/agent/sessions')
+      .then((res) => res.json())
+      .then((data: Session[]) => {
+        setSessions(data);
+        const first = data[0];
+        if (first) {
+          setActiveSessionId(first.id);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSessionsLoaded(true));
+  }, []);
 
   useEffect(() => {
     const socket = io('/agent', { transports: ['websocket', 'polling'] });
@@ -147,6 +163,7 @@ export function useChat() {
     activeMessages,
     activeSystemPrompt,
     isStreaming,
+    sessionsLoaded,
     createSession,
     deleteSession,
     sendMessage,

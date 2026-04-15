@@ -29,7 +29,7 @@ export function MessageInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
@@ -62,10 +62,17 @@ export function MessageInput({
         size="small"
         sx={{
           '& .MuiOutlinedInput-root': {
-            bgcolor: '#0d1117',
-            '& fieldset': { borderColor: 'divider' },
+            bgcolor: '#161b22',
+            color: 'text.primary',
+            '& fieldset': { borderColor: '#30363d' },
             '&:hover fieldset': { borderColor: 'primary.main' },
             '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+          },
+          '& .MuiOutlinedInput-input': {
+            '&::placeholder': {
+              color: '#8b949e',
+              opacity: 1,
+            },
           },
         }}
       />
