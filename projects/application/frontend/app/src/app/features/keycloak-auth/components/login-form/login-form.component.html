@@ -1,7 +1,7 @@
 <form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
   <mat-form-field appearance="outline">
     <mat-label>Username</mat-label>
-    <input matInput formControlName="username" autocomplete="username" />
+    <input matInput formControlName="username" autocomplete="username" [disabled]="isLoading()" />
     @if (form.get('username')?.hasError('required') && form.get('username')?.touched) {
       <mat-error>Username is required</mat-error>
     }
@@ -12,13 +12,28 @@
 
   <mat-form-field appearance="outline">
     <mat-label>Password</mat-label>
-    <input matInput type="password" formControlName="password" autocomplete="current-password" />
+    <input matInput type="password" formControlName="password" autocomplete="current-password" [disabled]="isLoading()" />
     @if (form.get('password')?.hasError('required') && form.get('password')?.touched) {
       <mat-error>Password is required</mat-error>
     }
   </mat-form-field>
 
-  <button mat-flat-button type="submit" [disabled]="form.invalid" class="submit-button">
-    Sign In
+  <div class="forgot-password-container">
+    <a href="#" class="forgot-password-link" (click)="onForgotPassword($event)">Forgot your password?</a>
+  </div>
+
+  <button
+    mat-flat-button
+    color="primary"
+    type="submit"
+    [disabled]="form.invalid || isLoading()"
+    class="submit-button"
+  >
+    @if (isLoading()) {
+      <mat-spinner diameter="20" class="spinner"></mat-spinner>
+      <span class="button-text">Signing in...</span>
+    } @else {
+      Sign In
+    }
   </button>
 </form>
