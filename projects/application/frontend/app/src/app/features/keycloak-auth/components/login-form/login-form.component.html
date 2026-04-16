@@ -1,24 +1,71 @@
-<form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form"
+      role="form" aria-label="Sign in form" novalidate>
   <mat-form-field appearance="outline">
     <mat-label>Username</mat-label>
-    <input matInput formControlName="username" autocomplete="username" />
-    @if (form.get('username')?.hasError('required') && form.get('username')?.touched) {
-      <mat-error>Username is required</mat-error>
-    }
-    @if (form.get('username')?.hasError('minlength') && form.get('username')?.touched) {
-      <mat-error>Username must be at least 3 characters</mat-error>
-    }
+    <input matInput formControlName="username"
+           autocomplete="username"
+           [readonly]="auth.isLoading()"
+           aria-label="Enter your username"
+           aria-required="true"
+           [attr.aria-invalid]="form.get('username')?.invalid && form.get('username')?.touched ? 'true' : 'false'"
+           [attr.aria-describedby]="form.get('username')?.hasError('required') || form.get('username')?.hasError('minlength') ? 'username-error' : null" />
+    <div id="username-error" aria-live="polite">
+      @if (form.get('username')?.hasError('required') && form.get('username')?.touched) {
+        <mat-error>Username is required</mat-error>
+      }
+      @if (form.get('username')?.hasError('minlength') && form.get('username')?.touched) {
+        <mat-error>Username must be at least 3 characters</mat-error>
+      }
+    </div>
   </mat-form-field>
 
   <mat-form-field appearance="outline">
     <mat-label>Password</mat-label>
-    <input matInput type="password" formControlName="password" autocomplete="current-password" />
-    @if (form.get('password')?.hasError('required') && form.get('password')?.touched) {
-      <mat-error>Password is required</mat-error>
-    }
+    <input matInput type="password"
+           formControlName="password"
+           autocomplete="current-password"
+           [readonly]="auth.isLoading()"
+           aria-label="Enter your password"
+           aria-required="true"
+           [attr.aria-invalid]="form.get('password')?.invalid && form.get('password')?.touched ? 'true' : 'false'"
+           [attr.aria-describedby]="form.get('password')?.hasError('required') ? 'password-error' : null" />
+    <div id="password-error" aria-live="polite">
+      @if (form.get('password')?.hasError('required') && form.get('password')?.touched) {
+        <mat-error>Password is required</mat-error>
+      }
+    </div>
   </mat-form-field>
 
-  <button mat-flat-button type="submit" [disabled]="form.invalid" class="submit-button">
-    Sign In
+  <div class="form-options">
+    <mat-checkbox formControlName="rememberMe"
+                  class="remember-me"
+                  [disabled]="auth.isLoading()"
+                  aria-label="Keep me signed in on this device">
+      Remember me
+    </mat-checkbox>
+    <a href="#" class="forgot-password"
+       role="button"
+       (click)="onForgotPassword($event)"
+       [class.disabled]="auth.isLoading()"
+       [tabindex]="auth.isLoading() ? -1 : 0"
+       [attr.aria-disabled]="auth.isLoading()"
+       aria-label="Reset your password"
+       title="Click to reset your forgotten password">
+      Forgot password?
+    </a>
+  </div>
+
+  <button mat-flat-button type="submit"
+          [disabled]="form.invalid || auth.isLoading()"
+          class="submit-button"
+          [attr.aria-label]="auth.isLoading() ? 'Signing in, please wait' : 'Sign in to your account'"
+          [attr.aria-busy]="auth.isLoading()">
+    @if (auth.isLoading()) {
+      <mat-spinner diameter="20" color="primary" aria-hidden="true"></mat-spinner>
+      <span class="button-text">Signing in...</span>
+      <span class="sr-only">Please wait while we sign you in</span>
+    } @else {
+      <span class="button-text">Sign In</span>
+    }
   </button>
 </form>
