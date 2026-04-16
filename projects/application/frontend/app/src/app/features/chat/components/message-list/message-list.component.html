@@ -1,0 +1,39 @@
+<div class="message-list" #scrollContainer>
+  @for (message of messages(); track $index) {
+    <div class="message" [class]="'message-' + message.type">
+      @switch (message.type) {
+        @case ('user') {
+          <div class="bubble user-bubble">{{ message.content }}</div>
+        }
+        @case ('assistant') {
+          <div class="bubble assistant-bubble">{{ message.content }}</div>
+        }
+        @case ('tool_use') {
+          <div class="tool-message tool-use">
+            <mat-icon>build</mat-icon>
+            <span class="tool-name">{{ message.tool }}</span>
+          </div>
+        }
+        @case ('tool_result') {
+          <div class="tool-message tool-result">
+            <mat-icon>check_circle</mat-icon>
+            <span class="tool-output">{{ message.output }}</span>
+          </div>
+        }
+        @case ('error') {
+          <div class="error-message">
+            <mat-icon>error</mat-icon>
+            {{ message.content }}
+          </div>
+        }
+      }
+    </div>
+  }
+
+  @if (isStreaming()) {
+    <div class="streaming-indicator">
+      <mat-spinner diameter="20" />
+      <span>Agent is working...</span>
+    </div>
+  }
+</div>

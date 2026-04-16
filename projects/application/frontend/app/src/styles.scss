@@ -1,0 +1,102 @@
+@use '@angular/material' as mat;
+@use './styles/themes/light-theme' as light;
+@use './styles/themes/dark-theme' as dark;
+
+// Light theme (default)
+html {
+  height: 100%;
+
+  @include mat.theme(light.$light-theme);
+}
+
+// Dark theme override
+html.dark-theme {
+  @include mat.theme(dark.$dark-theme);
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  background-color: var(--app-bg-default);
+  color: var(--app-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+}
+
+// Dark mode scrollbar styling
+.dark-theme {
+  body,
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+
+    &::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: var(--app-scrollbar-track);
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--app-scrollbar-thumb);
+      border-radius: 4px;
+
+      &:hover {
+        background: var(--app-scrollbar-thumb-hover);
+      }
+    }
+  }
+}
+
+// Global component customizations
+// Buttons
+.mat-mdc-button,
+.mat-mdc-raised-button,
+.mat-mdc-flat-button,
+.mat-mdc-outlined-button {
+  border-radius: 10px !important;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+}
+
+// Cards
+.mat-mdc-card {
+  border-radius: 12px !important;
+  transition: all 0.3s ease-in-out;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+// Icon buttons
+.mat-mdc-icon-button {
+  border-radius: 8px !important;
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    background-color: var(--app-hover-overlay);
+    transform: scale(1.05);
+  }
+}
+
+// Chips
+.mat-mdc-chip {
+  border-radius: 8px !important;
+  font-weight: 600;
+}
+
+// Form fields
+.mat-mdc-form-field {
+  .mdc-text-field--outlined .mdc-notched-outline > * {
+    border-radius: 10px;
+  }
+}

@@ -1,0 +1,24 @@
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
+  <mat-form-field appearance="outline">
+    <mat-label>Username</mat-label>
+    <input matInput formControlName="username" autocomplete="username" />
+    @if (form.get('username')?.hasError('required') && form.get('username')?.touched) {
+      <mat-error>Username is required</mat-error>
+    }
+    @if (form.get('username')?.hasError('minlength') && form.get('username')?.touched) {
+      <mat-error>Username must be at least 3 characters</mat-error>
+    }
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Password</mat-label>
+    <input matInput type="password" formControlName="password" autocomplete="current-password" />
+    @if (form.get('password')?.hasError('required') && form.get('password')?.touched) {
+      <mat-error>Password is required</mat-error>
+    }
+  </mat-form-field>
+
+  <button mat-flat-button type="submit" [disabled]="form.invalid" class="submit-button">
+    Sign In
+  </button>
+</form>

@@ -1,0 +1,47 @@
+@use '@angular/material' as mat;
+
+// Light theme palette — extracted from the design system
+// Primary: #007FFF (MUI vibrant blue)
+// See docs/design/color-system.md for full reference
+
+$light-theme: mat.define-theme(
+  (
+    color: (
+      theme-type: light,
+      primary: mat.$blue-palette,
+      tertiary: mat.$green-palette,
+    ),
+  )
+);
+
+// Custom CSS properties for light mode (values not in Material tokens)
+:root .light-theme {
+  // Backgrounds
+  --app-bg-default: #ffffff;
+  --app-bg-paper: #ffffff;
+  --app-bg-chat-user: #f3f6f9;
+  --app-bg-chat-assistant: #ffffff;
+
+  // Text
+  --app-text-primary: #1a2027;
+  --app-text-secondary: #3e5060;
+
+  // Primary
+  --app-primary: #007fff;
+  --app-primary-light: #66b2ff;
+  --app-primary-dark: #0059b2;
+
+  // Semantic
+  --app-success: #1aa251;
+  --app-warning: #dea500;
+  --app-error: #eb0014;
+
+  // Borders
+  --app-divider: rgba(194, 224, 255, 0.08);
+  --app-border-subtle: rgba(0, 0, 0, 0.08);
+
+  // Interaction
+  --app-hover-overlay: rgba(0, 127, 255, 0.08);
+  --app-hover-shadow: 0 4px 12px rgba(51, 153, 255, 0.3);
+  --app-focus-ring: #3399ff;
+}

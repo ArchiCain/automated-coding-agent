@@ -1,0 +1,24 @@
+<div class="app-layout">
+  <app-header (menuToggle)="layout.toggleDrawer()" />
+
+  <mat-sidenav-container class="layout-container">
+    @if (layout.showPersistentSidebar()) {
+      <mat-sidenav mode="side" [opened]="true" class="persistent-sidebar">
+        <app-left-navigation-sidebar />
+      </mat-sidenav>
+    } @else {
+      <mat-sidenav
+        [opened]="layout.drawerOpen()"
+        mode="over"
+        (closed)="layout.closeDrawer()"
+        class="drawer-sidebar"
+      >
+        <app-left-navigation-sidebar />
+      </mat-sidenav>
+    }
+
+    <mat-sidenav-content class="main-content">
+      <router-outlet />
+    </mat-sidenav-content>
+  </mat-sidenav-container>
+</div>

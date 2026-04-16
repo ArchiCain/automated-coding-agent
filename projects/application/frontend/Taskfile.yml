@@ -57,71 +57,48 @@ tasks:
       - docker compose -f infrastructure/docker/compose.yml exec frontend sh
 
   local:run:
-    desc: Run Frontend Service locally outside of Docker
+    desc: Run Frontend Service locally outside of Docker (ng serve)
     deps: [local:install]
     dir: '{{.TASKFILE_DIR}}/app'
     cmds:
-      - npm run dev
+      - npx ng serve
 
   # Testing Tasks
   local:lint:
     desc: Lint the Frontend code
     dir: '{{.TASKFILE_DIR}}/app'
     cmds:
-      - npm run lint
+      - npx ng lint
 
   local:type-check:
     desc: Run TypeScript type checking
     dir: '{{.TASKFILE_DIR}}/app'
     cmds:
-      - npm run type-check
+      - npx tsc --noEmit -p tsconfig.app.json
 
   local:clean:
     desc: Clean build artifacts and node_modules
     dir: '{{.TASKFILE_DIR}}/app'
     cmds:
-      - rm -rf dist node_modules
+      - rm -rf dist node_modules .angular
 
   local:test:
-    desc: Run unit tests (mocked, no backend required)
+    desc: Run unit tests
     deps: [local:install]
     dir: '{{.TASKFILE_DIR}}/app'
     cmds:
-      - npm run test
+      - npx ng test --watch=false
 
   local:test:watch:
     desc: Run unit tests in watch mode
     deps: [local:install]
     dir: '{{.TASKFILE_DIR}}/app'
     cmds:
-      - npm run test:watch
+      - npx ng test
 
   local:test:coverage:
     desc: Run unit tests with coverage report
     deps: [local:install]
     dir: '{{.TASKFILE_DIR}}/app'
     cmds:
-      - npm run test:coverage
-
-  local:test:ui:
-    desc: Run unit tests with Vitest UI
-    deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/app'
-    cmds:
-      - npm run test:ui
-
-  local:test:integration:
-    desc: Run integration tests (requires backend at localhost:8085)
-    deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/app'
-    cmds:
-      - echo "Integration tests require all services running. If not started, run 'task start-local' first."
-      - npm run test:integration
-
-  local:test:integration:watch:
-    desc: Run integration tests in watch mode
-    deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/app'
-    cmds:
-      - echo "Integration tests require all services running. If not started, run 'task start-local' first."
-      - npm run test:integration:watch
+      - npx ng test --watch=false --coverage
