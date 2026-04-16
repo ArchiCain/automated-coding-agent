@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ProviderRegistry } from './providers/provider-registry';
 import { AgentMessage } from './providers/provider.interface';
+import { RoleRegistry } from './roles/role-registry';
 
 /** Normalized message stored in session history */
 export interface NormalizedMessage {
@@ -19,6 +20,7 @@ export interface Session {
   id: string;
   provider: string;
   model: string;
+  role: string;
   createdAt: Date;
   lastMessageAt: Date;
   isActive: boolean;
@@ -36,6 +38,7 @@ export interface SessionInfo {
   id: string;
   provider: string;
   model: string;
+  role: string;
   createdAt: Date;
   lastMessageAt: Date;
   isActive: boolean;
@@ -46,6 +49,7 @@ interface PersistedSession {
   id: string;
   provider: string;
   model: string;
+  role: string;
   createdAt: string;
   lastMessageAt: string;
   claudeSessionId?: string;
@@ -59,7 +63,10 @@ export class AgentService implements OnModuleInit {
   private readonly sessions = new Map<string, Session>();
   private readonly sessionsDir: string;
 
-  constructor(private readonly providerRegistry: ProviderRegistry) {
+  constructor(
+    private readonly providerRegistry: ProviderRegistry,
+    private readonly roleRegistry: RoleRegistry,
+  ) {
     const repoRoot = process.env.REPO_ROOT || '/workspace';
     this.sessionsDir = path.join(repoRoot, '.dev-team', 'sessions');
   }
@@ -78,6 +85,7 @@ export class AgentService implements OnModuleInit {
           const data: PersistedSession = JSON.parse(raw);
           const session: Session = {
             ...data,
+            role: data.role || 'default',
             createdAt: new Date(data.createdAt),
             lastMessageAt: new Date(data.lastMessageAt),
             isActive: false,
@@ -101,6 +109,7 @@ export class AgentService implements OnModuleInit {
         id: session.id,
         provider: session.provider,
         model: session.model,
+        role: session.role,
         createdAt: session.createdAt.toISOString(),
         lastMessageAt: session.lastMessageAt.toISOString(),
         claudeSessionId: session.claudeSessionId,
@@ -125,55 +134,15 @@ export class AgentService implements OnModuleInit {
     }
   }
 
-  private buildSystemPrompt(): string {
-    const repoRoot = process.env.REPO_ROOT || '/workspace';
-    return [
-      `You have access to a repository at ${repoRoot}.`,
-      '',
-      '## Available Tools',
-      'You have file operations (Read, Write, Edit, Glob, Grep) and MCP tools.',
-      'You do NOT have Bash access. Use the provided tools for all operations.',
-      '',
-      '### Git Tools',
-      '- git_status: Show working tree status',
-      '- git_diff: Show changes (supports staged flag and specific paths)',
-      '- git_log: Show commit history',
-      '- git_checkout: Switch or create branches',
-      '- git_add: Stage files for commit',
-      '- git_commit: Commit staged changes',
-      '- git_push: Push branch to remote',
-      '- git_pull: Pull latest from remote',
-      '- git_stash: Stash/pop/list uncommitted changes',
-      '- git_branch: List, create, or delete branches',
-      '',
-      '### Workspace Tools',
-      '- create_worktree: Create a git worktree with a new branch for isolated work',
-      '- deploy_sandbox: Build and deploy changes to a K8s sandbox environment',
-      '- destroy_sandbox: Tear down a sandbox when done',
-      '- list_sandboxes: Show active sandbox environments',
-      '- sandbox_status: Check health of a sandbox',
-      '- sandbox_logs: View logs from a sandbox service',
-      '- push_and_pr: Commit, push, and create a pull request',
-      '',
-      '## Workflow',
-      '1. Use create_worktree to start a new feature (creates branch + isolated directory)',
-      '2. Use Read/Write/Edit to make code changes in the worktree',
-      '3. Use git_status and git_diff to review your changes',
-      '4. Use deploy_sandbox to test against a live K8s environment',
-      '5. Use push_and_pr when ready for review',
-      '6. Use destroy_sandbox to clean up the sandbox',
-      '',
-      'Never push to main directly. Always work on branches.',
-    ].join('\n');
-  }
-
-  createSession(model?: string, provider?: string): SessionInfo {
+  createSession(model?: string, provider?: string, role?: string): SessionInfo {
     const id = uuidv4();
-    const systemPrompt = this.buildSystemPrompt();
+    const agentRole = this.roleRegistry.getRole(role || 'default');
+    const systemPrompt = agentRole.buildSystemPrompt();
     const session: Session = {
       id,
       provider: provider || 'claude-code',
       model: model || 'claude-sonnet-4-20250514',
+      role: role || 'default',
       createdAt: new Date(),
       lastMessageAt: new Date(),
       isActive: false,
@@ -214,6 +183,7 @@ export class AgentService implements OnModuleInit {
     session.lastMessageAt = new Date();
 
     const repoRoot = process.env.REPO_ROOT || '/workspace';
+    const agentRole = this.roleRegistry.getRole(session.role);
 
     try {
       const stream = provider.query(message, {
@@ -222,6 +192,9 @@ export class AgentService implements OnModuleInit {
         systemPrompt: session.systemPrompt,
         abortController,
         resume: session.claudeSessionId,
+        allowedTools: agentRole.allowedTools,
+        disallowedTools: agentRole.disallowedTools,
+        mcpServers: agentRole.mcpServers,
       });
 
       for await (const msg of stream) {
@@ -281,11 +254,16 @@ export class AgentService implements OnModuleInit {
     return session;
   }
 
+  listRoles(): Array<{ name: string; displayName: string; description: string }> {
+    return this.roleRegistry.listRoles();
+  }
+
   private toSessionInfo(session: Session): SessionInfo {
     return {
       id: session.id,
       provider: session.provider,
       model: session.model,
+      role: session.role,
       createdAt: session.createdAt,
       lastMessageAt: session.lastMessageAt,
       isActive: session.isActive,

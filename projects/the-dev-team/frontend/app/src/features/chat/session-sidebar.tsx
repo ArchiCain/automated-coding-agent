@@ -1,17 +1,23 @@
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import IconButton from '@mui/material/IconButton';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import type { Session } from '../shared';
+import type { Session, AgentRoleInfo } from '../shared';
 
 interface SessionSidebarProps {
   sessions: Session[];
   activeSessionId: string | null;
+  roles: AgentRoleInfo[];
+  selectedRole: string;
+  onRoleChange: (role: string) => void;
   onSelect: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
@@ -25,6 +31,9 @@ function formatTime(iso: string): string {
 export function SessionSidebar({
   sessions,
   activeSessionId,
+  roles,
+  selectedRole,
+  onRoleChange,
   onSelect,
   onCreate,
   onDelete,
@@ -42,6 +51,32 @@ export function SessionSidebar({
         height: '100%',
       }}
     >
+      {roles.length > 0 && (
+        <Box sx={{ px: 1.5, pt: 1.5, pb: 0.5 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', mb: 0.5, display: 'block' }}>
+            Agent Role
+          </Typography>
+          <Select
+            value={selectedRole}
+            onChange={e => onRoleChange(e.target.value)}
+            size="small"
+            fullWidth
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.05)',
+              '.MuiSelect-select': { py: 0.75, fontSize: '0.85rem' },
+              '.MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
+              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
+            }}
+          >
+            {roles.map(role => (
+              <MenuItem key={role.name} value={role.name}>
+                {role.displayName}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+      )}
+
       <Box sx={{ p: 1.5 }}>
         <Button
           fullWidth
@@ -90,12 +125,22 @@ export function SessionSidebar({
                 </Typography>
               }
               secondary={
-                <Typography
-                  variant="caption"
-                  sx={{ color: 'text.secondary', fontSize: '0.7rem' }}
-                >
-                  {formatTime(session.createdAt)}
-                </Typography>
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    component="span"
+                    sx={{ color: 'text.secondary', fontSize: '0.7rem' }}
+                  >
+                    {formatTime(session.createdAt)}
+                  </Typography>
+                  {session.role && session.role !== 'default' && (
+                    <Chip
+                      label={session.role}
+                      size="small"
+                      sx={{ height: 16, fontSize: '0.6rem', '& .MuiChip-label': { px: 0.5 } }}
+                    />
+                  )}
+                </Box>
               }
             />
             <IconButton

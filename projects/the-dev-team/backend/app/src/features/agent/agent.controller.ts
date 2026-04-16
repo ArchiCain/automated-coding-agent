@@ -6,8 +6,13 @@ export class AgentController {
   constructor(private readonly agentService: AgentService) {}
 
   @Post('sessions')
-  createSession(@Body() body: { model?: string; provider?: string }) {
-    return this.agentService.createSession(body?.model, body?.provider);
+  createSession(@Body() body: { model?: string; provider?: string; role?: string }) {
+    return this.agentService.createSession(body?.model, body?.provider, body?.role);
+  }
+
+  @Get('roles')
+  listRoles() {
+    return this.agentService.listRoles();
   }
 
   @Get('sessions')

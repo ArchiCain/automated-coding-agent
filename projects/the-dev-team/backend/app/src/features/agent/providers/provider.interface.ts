@@ -7,6 +7,9 @@ export interface AgentQueryOptions {
   systemPrompt?: string;
   abortController: AbortController;
   resume?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+  mcpServers?: Record<string, unknown>;
 }
 
 /**

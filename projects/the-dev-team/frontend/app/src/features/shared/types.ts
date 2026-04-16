@@ -1,9 +1,16 @@
 export interface Session {
   id: string;
   model: string;
+  role?: string;
   createdAt: string;
   lastMessageAt?: string;
   isActive: boolean;
+}
+
+export interface AgentRoleInfo {
+  name: string;
+  displayName: string;
+  description: string;
 }
 
 export interface AgentMessage {

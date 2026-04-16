@@ -432,6 +432,31 @@ server.tool(
   },
 );
 
+// ── Tool: create_github_issue ─────────────────────────────────────
+
+server.tool(
+  'create_github_issue',
+  'Create a GitHub issue in the repository. Use labels to route to the right team member.',
+  {
+    title: z.string().describe('Issue title'),
+    body: z.string().describe('Issue body (markdown)'),
+    labels: z.array(z.string()).optional().describe('Labels (e.g. ["frontend", "design", "bug"])'),
+  },
+  async ({ title, body, labels }) => {
+    const args = ['issue', 'create', '--title', title, '--body', body];
+    if (labels && labels.length > 0) {
+      for (const label of labels) {
+        args.push('--label', label);
+      }
+    }
+    const result = await runCommand('gh', args, REPO_ROOT);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Failed to create issue:\n${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: result.stdout.trim() }] };
+  },
+);
+
 // ── Start server ───────────────────────────────────────────────────
 
 async function main() {

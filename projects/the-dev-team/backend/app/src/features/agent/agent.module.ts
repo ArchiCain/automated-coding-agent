@@ -6,6 +6,7 @@ import { GitHubTokenService } from './github-token.service';
 import { ClaudeCodeProvider } from './providers/claude-code.provider';
 import { OpenCodeProvider } from './providers/opencode.provider';
 import { ProviderRegistry } from './providers/provider-registry';
+import { RoleRegistry } from './roles/role-registry';
 
 @Module({
   controllers: [AgentController],
@@ -16,6 +17,7 @@ import { ProviderRegistry } from './providers/provider-registry';
     ClaudeCodeProvider,
     OpenCodeProvider,
     ProviderRegistry,
+    RoleRegistry,
   ],
   exports: [AgentService],
 })

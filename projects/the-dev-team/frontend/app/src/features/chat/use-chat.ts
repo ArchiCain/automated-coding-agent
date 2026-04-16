@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { Session, AgentMessage, SessionHistory } from '../shared';
+import type { Session, AgentMessage, SessionHistory, AgentRoleInfo } from '../shared';
 
 export function useChat() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -9,7 +9,17 @@ export function useChat() {
   const [systemPrompts, setSystemPrompts] = useState<Map<string, string>>(new Map());
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const [roles, setRoles] = useState<AgentRoleInfo[]>([]);
+  const [selectedRole, setSelectedRole] = useState<string>('default');
   const socketRef = useRef<Socket | null>(null);
+
+  // Load available roles on mount
+  useEffect(() => {
+    fetch('/api/agent/roles')
+      .then(res => res.json())
+      .then(data => setRoles(data))
+      .catch(err => console.error('Failed to load roles:', err));
+  }, []);
 
   // Load existing sessions on mount
   useEffect(() => {
@@ -94,11 +104,15 @@ export function useChat() {
   }, [activeSessionId]);
 
   const createSession = useCallback(async () => {
-    const res = await fetch('/api/agent/sessions', { method: 'POST' });
+    const res = await fetch('/api/agent/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: selectedRole }),
+    });
     const session = (await res.json()) as Session;
     setSessions((prev) => [session, ...prev]);
     setActiveSessionId(session.id);
-  }, []);
+  }, [selectedRole]);
 
   const deleteSession = useCallback(
     async (sessionId: string) => {
@@ -164,6 +178,9 @@ export function useChat() {
     activeSystemPrompt,
     isStreaming,
     sessionsLoaded,
+    roles,
+    selectedRole,
+    setSelectedRole,
     createSession,
     deleteSession,
     sendMessage,

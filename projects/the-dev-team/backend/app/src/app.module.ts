@@ -5,6 +5,7 @@ import { HealthModule } from './features/health';
 import { CorsModule } from './features/cors';
 import { AgentModule } from './features/agent';
 import { ClusterModule } from './features/cluster';
+import { TaskRunnerModule } from './features/task-runner';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ClusterModule } from './features/cluster';
     CorsModule,
     AgentModule,
     ClusterModule,
+    TaskRunnerModule,
   ],
 })
 export class AppModule {}

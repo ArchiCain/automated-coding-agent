@@ -13,6 +13,9 @@ export function ChatPage() {
     activeSystemPrompt,
     isStreaming,
     sessionsLoaded,
+    roles,
+    selectedRole,
+    setSelectedRole,
     createSession,
     deleteSession,
     sendMessage,
@@ -30,11 +33,13 @@ export function ChatPage() {
   }, [sessionsLoaded, sessions.length, createSession]);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', pt: '48px' }}>
-      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SessionSidebar
           sessions={sessions}
           activeSessionId={activeSessionId}
+          roles={roles}
+          selectedRole={selectedRole}
+          onRoleChange={setSelectedRole}
           onSelect={setActiveSessionId}
           onCreate={createSession}
           onDelete={deleteSession}
@@ -57,7 +62,6 @@ export function ChatPage() {
             disabled={!activeSessionId}
           />
         </Box>
-      </Box>
     </Box>
   );
 }
