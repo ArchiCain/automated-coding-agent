@@ -18,7 +18,13 @@
     }
   </mat-form-field>
 
-  <button mat-flat-button type="submit" [disabled]="form.invalid" class="submit-button">
+  @if (form.invalid && (form.get('username')?.touched || form.get('password')?.touched)) {
+    <div class="validation-hint">
+      Please fill in all required fields to continue.
+    </div>
+  }
+
+  <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid" class="submit-button">
     Sign In
   </button>
 </form>
