@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -10,12 +10,30 @@ import * as path from 'path';
  * so that git push and gh CLI commands work.
  */
 @Injectable()
-export class GitHubTokenService implements OnModuleInit {
+export class GitHubTokenService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GitHubTokenService.name);
   private tokenExpiresAt: Date | null = null;
+  private refreshTimer: NodeJS.Timeout | null = null;
+
+  /**
+   * GitHub App installation tokens have a 1-hour TTL. Refresh every 50 minutes
+   * so we always have a valid token with a 10-minute safety margin.
+   */
+  private static readonly REFRESH_INTERVAL_MS = 50 * 60 * 1000;
 
   async onModuleInit(): Promise<void> {
     await this.refresh();
+    // Periodic refresh — only meaningful when we have GitHub App credentials.
+    // For static GITHUB_TOKEN setups the refresh is a no-op but harmless.
+    this.refreshTimer = setInterval(() => {
+      this.refresh().catch((err) => {
+        this.logger.warn(`Scheduled token refresh failed: ${(err as Error).message}`);
+      });
+    }, GitHubTokenService.REFRESH_INTERVAL_MS);
+  }
+
+  onModuleDestroy(): void {
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
   }
 
   async refresh(): Promise<void> {
