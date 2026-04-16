@@ -7,10 +7,50 @@
 
   mat-form-field {
     width: 100%;
+
+    // Enhanced Material Design focus states
+    &.mat-form-field-appearance-outline {
+      .mat-mdc-form-field-outline {
+        border-radius: 10px;
+      }
+
+      // Focus state styling
+      &.mat-focused .mat-mdc-form-field-outline-thick {
+        border-color: #3399FF;
+        border-width: 2px;
+      }
+
+      // Hover state
+      &:hover:not(.mat-focused) .mat-mdc-form-field-outline {
+        border-color: #3399FF;
+      }
+    }
+
+    // Input element focus ring
+    .mat-mdc-input-element {
+      transition: all 0.2s ease-in-out;
+
+      &:focus {
+        outline: none;
+      }
+    }
   }
 
   .submit-button {
     height: 48px;
     font-size: 1rem;
+    border-radius: 10px;
+    font-weight: 700;
+    transition: all 0.2s ease-in-out;
+
+    // Hover effect following design patterns
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(51, 153, 255, 0.3);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
   }
 }
