@@ -213,7 +213,7 @@ server.tool(
 
 server.tool(
   'push_and_pr',
-  'Commit all changes, push the branch to origin, and create a pull request. When closesIssue is set, the PR will auto-close that issue on merge via "Closes #N" in the body.',
+  'Commit all changes, push the branch to origin, and create a new pull request. One PR per issue — every issue gets its own branch, sandbox, and PR. closesIssue is required and adds "Closes #N" to the PR body so the issue auto-closes when the PR merges.',
   {
     title: z.string().describe('PR title'),
     description: z.string().optional().describe('PR description/body (markdown)'),
