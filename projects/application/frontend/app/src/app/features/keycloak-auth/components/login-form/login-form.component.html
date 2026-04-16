@@ -1,7 +1,8 @@
-<form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
-  <mat-form-field appearance="outline">
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form" novalidate>
+  <mat-form-field appearance="outline" class="username-field">
     <mat-label>Username</mat-label>
-    <input matInput formControlName="username" autocomplete="username" />
+    <input matInput formControlName="username" autocomplete="username" [readonly]="auth.isLoading()" />
+    <mat-icon matPrefix>person</mat-icon>
     @if (form.get('username')?.hasError('required') && form.get('username')?.touched) {
       <mat-error>Username is required</mat-error>
     }
@@ -10,15 +11,33 @@
     }
   </mat-form-field>
 
-  <mat-form-field appearance="outline">
+  <mat-form-field appearance="outline" class="password-field">
     <mat-label>Password</mat-label>
-    <input matInput type="password" formControlName="password" autocomplete="current-password" />
+    <input matInput [type]="hidePassword() ? 'password' : 'text'" formControlName="password" autocomplete="current-password" [readonly]="auth.isLoading()" />
+    <mat-icon matPrefix>lock</mat-icon>
+    <button mat-icon-button matSuffix (click)="togglePasswordVisibility()" type="button" [disabled]="auth.isLoading()" [attr.aria-label]="hidePassword() ? 'Show password' : 'Hide password'">
+      <mat-icon>{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
+    </button>
     @if (form.get('password')?.hasError('required') && form.get('password')?.touched) {
       <mat-error>Password is required</mat-error>
     }
   </mat-form-field>
 
-  <button mat-flat-button type="submit" [disabled]="form.invalid" class="submit-button">
-    Sign In
+  <div class="form-options">
+    <mat-checkbox formControlName="rememberMe" color="primary">
+      Remember me
+    </mat-checkbox>
+    <a href="#" class="forgot-password-link" (click)="$event.preventDefault()">
+      Forgot password?
+    </a>
+  </div>
+
+  <button mat-flat-button type="submit" [disabled]="form.invalid || auth.isLoading()" class="submit-button" color="primary">
+    @if (auth.isLoading()) {
+      <mat-spinner diameter="20"></mat-spinner>
+      Signing In...
+    } @else {
+      Sign In
+    }
   </button>
 </form>
