@@ -1,16 +1,89 @@
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px; // Using standard spacing
   width: 100%;
   max-width: 400px;
 
   mat-form-field {
     width: 100%;
+
+    // Ensure proper input sizing on mobile
+    .mat-mdc-text-field-wrapper {
+      min-height: 56px;
+    }
+  }
+
+  .remember-me-checkbox {
+    margin: -8px 0; // Adjust spacing to align with form elements
+
+    // Better touch targets on mobile
+    .mdc-checkbox {
+      padding: 12px;
+    }
+
+    .mdc-form-field {
+      align-items: center;
+    }
   }
 
   .submit-button {
     height: 48px;
     font-size: 1rem;
+    font-weight: 500;
+    margin-top: 8px; // Add extra space above button
+    min-height: 48px; // Ensure minimum touch target size
+
+    // Enhanced visual states
+    &:not([disabled]) {
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        transition: all 0.2s ease;
+      }
+
+      &:focus {
+        outline: 2px solid var(--mat-sys-primary);
+        outline-offset: 2px;
+      }
+    }
+
+    &[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+  }
+}
+
+// Responsive improvements
+@media (max-width: 480px) {
+  .login-form {
+    gap: 20px; // Slightly tighter spacing on mobile
+
+    .submit-button {
+      height: 52px; // Larger touch target on mobile
+      font-size: 1.1rem; // Slightly larger text on mobile
+    }
+  }
+}
+
+// Enhanced focus visibility for accessibility
+@media (prefers-reduced-motion: no-preference) {
+  .login-form {
+    .submit-button:not([disabled]):hover {
+      transition: all 0.2s ease;
+    }
+  }
+}
+
+// High contrast mode support
+@media (prefers-contrast: high) {
+  .login-form {
+    .submit-button:focus {
+      outline-width: 3px;
+    }
   }
 }

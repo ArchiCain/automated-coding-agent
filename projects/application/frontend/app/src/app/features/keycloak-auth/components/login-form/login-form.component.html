@@ -18,7 +18,11 @@
     }
   </mat-form-field>
 
-  <button mat-flat-button type="submit" [disabled]="form.invalid" class="submit-button">
+  <mat-checkbox formControlName="rememberMe" class="remember-me-checkbox">
+    Remember me
+  </mat-checkbox>
+
+  <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid" class="submit-button">
     Sign In
   </button>
 </form>

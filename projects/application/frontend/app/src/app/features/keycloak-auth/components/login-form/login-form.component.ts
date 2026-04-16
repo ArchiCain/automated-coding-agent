@@ -4,6 +4,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 
 import { LoginCredentials } from '../../types';
 
@@ -15,6 +16,7 @@ import { LoginCredentials } from '../../types';
     MatInputModule,
     MatButtonModule,
     MatProgressSpinnerModule,
+    MatCheckboxModule,
   ],
   templateUrl: './login-form.component.html',
   styleUrl: './login-form.component.scss',
@@ -28,6 +30,7 @@ export class LoginFormComponent {
   readonly form = this.fb.group({
     username: ['', [Validators.required, Validators.minLength(3)]],
     password: ['', [Validators.required]],
+    rememberMe: [false],
   });
 
   onSubmit(): void {

@@ -12,12 +12,12 @@ import { LoginCredentials } from '../types';
     <div class="login-container">
       <mat-card class="login-card">
         <mat-card-header>
-          <mat-card-title>Sign In</mat-card-title>
-          <mat-card-subtitle>RTS AI Platform</mat-card-subtitle>
+          <mat-card-title class="mat-headline-4">Sign In</mat-card-title>
+          <mat-card-subtitle class="mat-body-2">RTS AI Platform</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           @if (auth.error()) {
-            <p class="error-message">{{ auth.error() }}</p>
+            <div class="error-message mat-body-1" role="alert">{{ auth.error() }}</div>
           }
           <app-login-form (submitCredentials)="onLogin($event)" />
         </mat-card-content>
@@ -31,15 +31,31 @@ import { LoginCredentials } from '../types';
       align-items: center;
       min-height: 100vh;
       background-color: var(--app-bg-default);
+      padding: 16px; // Add padding for mobile
     }
     .login-card {
       width: 100%;
       max-width: 440px;
       padding: 32px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); // Enhanced card shadow
+      border-radius: 12px; // Rounded corners for modern look
     }
     .error-message {
-      color: var(--app-error);
-      margin-bottom: 16px;
+      color: var(--mat-sys-error);
+      background-color: var(--mat-sys-error-container);
+      border-left: 4px solid var(--mat-sys-error);
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      border-radius: 4px;
+    }
+
+    // Enhanced focus styles for better accessibility
+    mat-form-field, mat-checkbox, button {
+      &:focus-within {
+        outline: 2px solid var(--mat-sys-primary);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
