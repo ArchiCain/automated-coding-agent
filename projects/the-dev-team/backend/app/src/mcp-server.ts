@@ -15,11 +15,30 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { execFile as execFileCb } from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs';
 
 const execFile = promisify(execFileCb);
 
 const REPO_ROOT = process.env.REPO_ROOT || '/workspace';
 const REGISTRY = process.env.REGISTRY || 'localhost:30500';
+
+// Ensure GH_TOKEN is set — read from git credentials file as fallback
+// (the entrypoint writes it there from GITHUB_TOKEN at startup)
+function ensureGhToken(): void {
+  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) return;
+  try {
+    const home = process.env.HOME || '/home/agent';
+    const creds = fs.readFileSync(`${home}/.git-credentials`, 'utf-8').trim();
+    const match = creds.match(/x-access-token:([^@]+)@/);
+    if (match) {
+      process.env.GH_TOKEN = match[1];
+      process.env.GITHUB_TOKEN = match[1];
+    }
+  } catch {
+    // ignore — gh will fail loudly if token is needed
+  }
+}
+ensureGhToken();
 
 async function runCommand(
   command: string,
@@ -185,13 +204,14 @@ server.tool(
 
 server.tool(
   'push_and_pr',
-  'Commit all changes, push the branch to origin, and create a pull request. Run this when your changes are ready for review.',
+  'Commit all changes, push the branch to origin, and create a pull request. When closesIssue is set, the PR will auto-close that issue on merge via "Closes #N" in the body.',
   {
     title: z.string().describe('PR title'),
-    description: z.string().optional().describe('PR description/body'),
+    description: z.string().optional().describe('PR description/body (markdown)'),
+    closesIssue: z.number().optional().describe('GitHub issue number this PR closes — adds "Closes #N" to the PR body so the issue auto-closes when the PR merges'),
     worktree: z.string().optional().describe('Worktree path (auto-detected from current branch if not provided)'),
   },
-  async ({ title, description, worktree }) => {
+  async ({ title, description, closesIssue, worktree }) => {
     const cwd = worktree || process.cwd();
 
     // Get current branch
@@ -219,15 +239,20 @@ server.tool(
       return { content: [{ type: 'text' as const, text: `Push failed: ${pushResult.stderr}` }] };
     }
 
-    // Create PR
+    // Build PR body — append "Closes #N" if linking an issue
+    let body = description || '';
+    if (closesIssue) {
+      body = body ? `${body}\n\nCloses #${closesIssue}` : `Closes #${closesIssue}`;
+    }
+
     const prArgs = [
       'pr', 'create',
       '--title', title,
       '--base', 'main',
       '--head', branch,
     ];
-    if (description) {
-      prArgs.push('--body', description);
+    if (body) {
+      prArgs.push('--body', body);
     }
 
     const prResult = await runCommand('gh', prArgs, cwd);
@@ -243,9 +268,50 @@ server.tool(
           `Branch pushed and PR created:`,
           `  Branch: ${branch}`,
           `  PR: ${prResult.stdout.trim()}`,
-        ].join('\n'),
+          closesIssue ? `  Will close issue #${closesIssue} on merge` : '',
+        ].filter(Boolean).join('\n'),
       }],
     };
+  },
+);
+
+server.tool(
+  'read_github_issue',
+  'Read a GitHub issue by number — returns title, body, labels, state, and metadata.',
+  {
+    number: z.number().describe('GitHub issue number (e.g., 10)'),
+  },
+  async ({ number }) => {
+    process.stderr.write(`[workspace MCP] read_github_issue #${number}, GH_TOKEN set: ${!!process.env.GH_TOKEN}\n`);
+    ensureGhToken();
+    const result = await runCommand('gh', [
+      'issue', 'view', String(number),
+      '--json', 'number,title,body,state,labels,author,createdAt,url',
+    ]);
+    process.stderr.write(`[workspace MCP] gh exit: ${result.exitCode}, stdout len: ${result.stdout.length}, stderr: ${result.stderr.slice(0, 200)}\n`);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Failed to read issue #${number}:\n${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: result.stdout.trim() }] };
+  },
+);
+
+server.tool(
+  'comment_github_issue',
+  'Add a comment to a GitHub issue — useful for posting progress updates or noting that work has been deployed.',
+  {
+    number: z.number().describe('GitHub issue number'),
+    body: z.string().describe('Comment body (markdown)'),
+  },
+  async ({ number, body }) => {
+    const result = await runCommand('gh', [
+      'issue', 'comment', String(number),
+      '--body', body,
+    ]);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Failed to comment on issue #${number}:\n${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: result.stdout.trim() }] };
   },
 );
 

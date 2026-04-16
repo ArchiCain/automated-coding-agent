@@ -8,13 +8,18 @@ export class FrontendOwnerRole implements AgentRole {
 
   readonly allowedTools = [
     'Read', 'Write', 'Edit', 'Glob', 'Grep',
+    // Sandbox lifecycle (will move to DevOps agent later)
     'mcp__workspace__create_worktree',
     'mcp__workspace__deploy_sandbox',
     'mcp__workspace__destroy_sandbox',
     'mcp__workspace__list_sandboxes',
     'mcp__workspace__sandbox_status',
     'mcp__workspace__sandbox_logs',
+    // PR + GitHub issue tools
     'mcp__workspace__push_and_pr',
+    'mcp__workspace__read_github_issue',
+    'mcp__workspace__comment_github_issue',
+    // Git ops
     'mcp__workspace__git_status',
     'mcp__workspace__git_diff',
     'mcp__workspace__git_log',
@@ -27,12 +32,17 @@ export class FrontendOwnerRole implements AgentRole {
     'mcp__workspace__git_branch',
   ];
 
+  // Block tools that aren't needed and add noise
+  readonly disallowedTools = [
+    'Bash', 'Agent', 'ToolSearch', 'WebSearch', 'WebFetch', 'NotebookEdit', 'Skill',
+  ];
+
   get mcpServers(): Record<string, McpServerConfig> {
     return {
       workspace: {
         type: 'stdio',
         command: 'node',
-        args: [path.join(__dirname, '..', '..', '..', '..', 'mcp-server.js')],
+        args: [path.join(__dirname, '..', '..', '..', 'mcp-server.js')],
         env: {
           ...process.env as Record<string, string>,
           REPO_ROOT: process.env.REPO_ROOT || '/workspace',
@@ -87,8 +97,29 @@ export class FrontendOwnerRole implements AgentRole {
       '## What you do',
       '- Implement features and fix bugs in the Angular frontend',
       '- Follow the angular standards and design guide',
-      '- Deploy to sandbox for testing',
-      '- Create PRs when ready',
+      '- Pick up GitHub issues, work them in sandbox environments, and create PRs',
+      '',
+      '## Workflow when picking up a GitHub issue',
+      'You ALWAYS work on issues in their own sandbox — never edit main directly.',
+      '',
+      '1. **Read the issue first** — call mcp__workspace__read_github_issue with the issue number to get title, body, labels, env context',
+      '2. **Create a worktree+branch** — call mcp__workspace__create_worktree with a name derived from the issue:',
+      '   - Format: `issue-N-short-kebab-description` (e.g., `issue-10-login-redesign`)',
+      '   - This creates a worktree at .worktrees/<name>/ on a branch `the-dev-team/<name>`',
+      '3. **Make your code changes** in the worktree (use Read/Write/Edit/Glob/Grep, all paths under .worktrees/<name>/projects/application/frontend/)',
+      '4. **Deploy to sandbox** — call mcp__workspace__deploy_sandbox with the same name to build images and deploy to a fresh sandbox namespace. URL becomes http://app-<name>.{DEV_HOSTNAME}/',
+      '5. **Verify your work** by checking sandbox_status and sandbox_logs',
+      '6. **Create the PR** — call mcp__workspace__push_and_pr with:',
+      '   - title: clear description of the fix',
+      '   - description: summary of changes, test plan',
+      '   - closesIssue: the issue number (REQUIRED — this auto-closes the issue when the PR merges)',
+      '   - worktree: the worktree path (.worktrees/<name>)',
+      '7. (Optional) Comment on the issue with sandbox URL so the user/Designer can review live',
+      '',
+      '## Critical rules',
+      '- NEVER work directly in main — always create a worktree+branch',
+      '- ALWAYS pass closesIssue when creating a PR for an issue',
+      '- Branch/worktree/sandbox name MUST start with `issue-N-` so the work is traceable to the issue',
       '',
       '## Environment',
       `- DEV_HOSTNAME: ${devHostname}`,

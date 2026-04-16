@@ -75,15 +75,30 @@ const server = new McpServer({
 
 server.tool(
   'create_github_issue',
-  'Create a GitHub issue in the repository. Use labels to route to the right team member.',
+  'Create a GitHub issue in the repository. Labels are required for routing to the right agent. Environment context fields are appended to the body so the picking-up agent knows what was reviewed.',
   {
-    title: z.string().describe('Issue title'),
-    body: z.string().describe('Issue body (markdown)'),
-    labels: z.array(z.string()).optional().describe('Labels (e.g. ["frontend", "design", "bug"])'),
+    title: z.string().describe('Issue title — be specific and actionable'),
+    body: z.string().describe('Issue body (markdown) — describe the problem, what you observed, and recommendations'),
+    labels: z.array(z.string()).min(1).describe('REQUIRED labels for routing. At minimum include a domain label (frontend, backend, devops) and a type label (design, bug, enhancement). Example: ["frontend", "design"]'),
+    environmentReviewed: z.string().describe('The environment that was reviewed (e.g., "main", "sandbox-dark-mode") — required so the picking-up agent knows the context'),
+    reviewedUrl: z.string().describe('The exact URL that was reviewed (e.g., "http://app.shawns-macbook-pro/login") — required so the picking-up agent can verify their fix in the same place'),
+    suggestedFixApproach: z.string().optional().describe('Optional: suggest how/where to fix this (e.g., "Create a sandbox to redesign the login page without affecting main"). Helps the picking-up agent plan their work.'),
   },
-  async ({ title, body, labels }) => {
+  async ({ title, body, labels, environmentReviewed, reviewedUrl, suggestedFixApproach }) => {
     // Log to stderr so it shows up in backend logs
     process.stderr.write(`[github_issues MCP] Creating issue: ${title}\n`);
+
+    // Format the body with env context appended at the bottom
+    const contextSection = [
+      '',
+      '---',
+      '## Context',
+      `- **Environment reviewed**: \`${environmentReviewed}\``,
+      `- **URL reviewed**: ${reviewedUrl}`,
+      suggestedFixApproach ? `- **Suggested approach**: ${suggestedFixApproach}` : null,
+    ].filter(Boolean).join('\n');
+
+    const fullBody = `${body}\n${contextSection}`;
 
     // Ensure GH_TOKEN is available — read from git credentials if not in env
     if (!process.env.GH_TOKEN && !process.env.GITHUB_TOKEN) {
@@ -111,11 +126,9 @@ server.tool(
     process.env.PATH = [process.env.PATH, ...extraPaths].filter(Boolean).join(':');
 
     process.stderr.write(`[github_issues MCP] Using gh binary: ${GH_BIN}\n`);
-    const args = ['issue', 'create', '--title', title, '--body', body];
-    if (labels && labels.length > 0) {
-      for (const label of labels) {
-        args.push('--label', label);
-      }
+    const args = ['issue', 'create', '--title', title, '--body', fullBody];
+    for (const label of labels) {
+      args.push('--label', label);
     }
     const result = await runCommand(GH_BIN, args);
     process.stderr.write(`[github_issues MCP] gh result: exit=${result.exitCode} stdout=${result.stdout.slice(0, 200)} stderr=${result.stderr.slice(0, 200)}\n`);

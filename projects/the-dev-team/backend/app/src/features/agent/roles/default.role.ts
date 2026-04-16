@@ -32,7 +32,7 @@ export class DefaultRole implements AgentRole {
       workspace: {
         type: 'stdio',
         command: 'node',
-        args: [path.join(__dirname, '..', '..', '..', '..', 'mcp-server.js')],
+        args: [path.join(__dirname, '..', '..', '..', 'mcp-server.js')],
         env: {
           ...process.env as Record<string, string>,
           REPO_ROOT: process.env.REPO_ROOT || '/workspace',
