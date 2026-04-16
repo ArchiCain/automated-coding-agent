@@ -1,3 +1,14 @@
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .login-form {
   display: flex;
   flex-direction: column;
@@ -33,10 +44,28 @@
       display: flex;
       align-items: center;
       gap: 4px;
+      animation: slideIn 0.2s ease-out;
 
       &::before {
         content: '⚠';
         color: var(--mdc-theme-error, #f44336);
+        font-size: 0.875rem;
+      }
+    }
+
+    &.mat-form-field-invalid {
+      .mdc-text-field--outlined {
+        box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+      }
+    }
+
+    &.mat-form-field-valid:not(.mat-form-field-disabled) {
+      .mat-mdc-form-field-icon-prefix {
+        color: var(--mdc-theme-primary, #1976d2);
+      }
+
+      .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+        border-color: var(--mdc-theme-primary, #1976d2);
       }
     }
   }
@@ -48,14 +77,24 @@
     margin-top: -8px;
 
     .forgot-password-link {
+      background: none;
+      border: none;
+      padding: 0;
       color: var(--mdc-theme-primary, #1976d2);
       text-decoration: none;
       font-size: 0.875rem;
+      cursor: pointer;
       transition: color 0.2s ease;
 
       &:hover {
         color: var(--mdc-theme-primary, #1565c0);
         text-decoration: underline;
+      }
+
+      &:focus {
+        outline: 2px solid var(--mdc-theme-primary, #1976d2);
+        outline-offset: 2px;
+        border-radius: 2px;
       }
     }
   }

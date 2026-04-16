@@ -18,6 +18,8 @@ export class AuthService {
   private readonly _user = signal<User | null>(null);
   private readonly _isLoading = signal(false);
   private readonly _error = signal<string | null>(null);
+  private lastCheckTime = 0;
+  private readonly CHECK_CACHE_DURATION = 5000; // 5 seconds
 
   readonly user = this._user.asReadonly();
   readonly isLoading = this._isLoading.asReadonly();
@@ -36,7 +38,14 @@ export class AuthService {
     this._isLoading.set(true);
     this._error.set(null);
 
-    this.http.post<{ message: string; user: User }>(`${this.baseUrl}/login`, credentials, { withCredentials: true })
+    // Include rememberMe in the request body for backend to handle session duration
+    const loginPayload = {
+      username: credentials.username,
+      password: credentials.password,
+      rememberMe: credentials.rememberMe || false
+    };
+
+    this.http.post<{ message: string; user: User }>(`${this.baseUrl}/login`, loginPayload, { withCredentials: true })
       .subscribe({
         next: response => {
           this._user.set(response.user);
@@ -55,17 +64,32 @@ export class AuthService {
       .subscribe({
         complete: () => {
           this._user.set(null);
+          this.lastCheckTime = 0; // Reset cache
           this.router.navigate(['/login']);
         },
         error: () => {
           this._user.set(null);
+          this.lastCheckTime = 0; // Reset cache
           this.router.navigate(['/login']);
         },
       });
   }
 
   checkAuth(): Observable<User | null> {
+    // If user is already authenticated, return immediately
+    if (this._user()) {
+      return of(this._user());
+    }
+
+    // If we've checked recently and found no user, avoid repeated calls
+    const now = Date.now();
+    if (now - this.lastCheckTime < this.CHECK_CACHE_DURATION && !this._user()) {
+      return of(null);
+    }
+
     this._isLoading.set(true);
+    this.lastCheckTime = now;
+
     return this.http.get<User>(`${this.baseUrl}/check`, { withCredentials: true }).pipe(
       tap(user => {
         this._user.set(user);

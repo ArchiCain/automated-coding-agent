@@ -1,5 +1,7 @@
 <form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form" novalidate>
-  <mat-form-field appearance="outline" class="username-field">
+  <mat-form-field appearance="outline" class="username-field"
+    [class.mat-form-field-valid]="isFieldValid('username')"
+    [class.mat-form-field-invalid]="isFieldInvalid('username')">
     <mat-label>Username</mat-label>
     <input matInput formControlName="username" autocomplete="username" [readonly]="auth.isLoading()" />
     <mat-icon matPrefix>person</mat-icon>
@@ -9,9 +11,17 @@
     @if (form.get('username')?.hasError('minlength') && form.get('username')?.touched) {
       <mat-error>Username must be at least 3 characters</mat-error>
     }
+    @if (form.get('username')?.hasError('maxlength') && form.get('username')?.touched) {
+      <mat-error>Username cannot exceed 50 characters</mat-error>
+    }
+    @if (form.get('username')?.hasError('pattern') && form.get('username')?.touched) {
+      <mat-error>Username can only contain letters, numbers, dots, underscores, and hyphens</mat-error>
+    }
   </mat-form-field>
 
-  <mat-form-field appearance="outline" class="password-field">
+  <mat-form-field appearance="outline" class="password-field"
+    [class.mat-form-field-valid]="isFieldValid('password')"
+    [class.mat-form-field-invalid]="isFieldInvalid('password')">
     <mat-label>Password</mat-label>
     <input matInput [type]="hidePassword() ? 'password' : 'text'" formControlName="password" autocomplete="current-password" [readonly]="auth.isLoading()" />
     <mat-icon matPrefix>lock</mat-icon>
@@ -21,15 +31,21 @@
     @if (form.get('password')?.hasError('required') && form.get('password')?.touched) {
       <mat-error>Password is required</mat-error>
     }
+    @if (form.get('password')?.hasError('minlength') && form.get('password')?.touched) {
+      <mat-error>Password must be at least 6 characters</mat-error>
+    }
+    @if (form.get('password')?.hasError('maxlength') && form.get('password')?.touched) {
+      <mat-error>Password cannot exceed 128 characters</mat-error>
+    }
   </mat-form-field>
 
   <div class="form-options">
     <mat-checkbox formControlName="rememberMe" color="primary">
       Remember me
     </mat-checkbox>
-    <a href="#" class="forgot-password-link" (click)="$event.preventDefault()">
+    <button type="button" class="forgot-password-link" (click)="onForgotPassword()">
       Forgot password?
-    </a>
+    </button>
   </div>
 
   <button mat-flat-button type="submit" [disabled]="form.invalid || auth.isLoading()" class="submit-button" color="primary">
