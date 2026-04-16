@@ -100,8 +100,10 @@ server.tool(
 
     const fullBody = `${body}\n${contextSection}`;
 
-    // Ensure GH_TOKEN is available — read from git credentials if not in env
-    if (!process.env.GH_TOKEN && !process.env.GITHUB_TOKEN) {
+    // Always re-read GH_TOKEN from git credentials — backend rotates it
+    // every 50 minutes; this MCP subprocess won't see in-memory updates
+    // to the parent's env, but the file on disk is always fresh.
+    {
       try {
         const fs = await import('fs');
         const home = process.env.HOME || '/home/agent';

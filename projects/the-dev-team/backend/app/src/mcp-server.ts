@@ -22,10 +22,11 @@ const execFile = promisify(execFileCb);
 const REPO_ROOT = process.env.REPO_ROOT || '/workspace';
 const REGISTRY = process.env.REGISTRY || 'localhost:30500';
 
-// Ensure GH_TOKEN is set — read from git credentials file as fallback
-// (the entrypoint writes it there from GITHUB_TOKEN at startup)
+// Always read the latest token from .git-credentials. The backend's
+// GitHubTokenService refreshes that file every 50 minutes; reading it
+// fresh on every call ensures the MCP subprocess never works with a
+// stale token. Cheap operation (small file, on local FS).
 function ensureGhToken(): void {
-  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) return;
   try {
     const home = process.env.HOME || '/home/agent';
     const creds = fs.readFileSync(`${home}/.git-credentials`, 'utf-8').trim();
@@ -45,6 +46,10 @@ async function runCommand(
   args: string[],
   cwd?: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  // Refresh GH token before any gh/git command — token may have rotated since spawn
+  if (command === 'gh' || command === 'git') {
+    ensureGhToken();
+  }
   try {
     const { stdout, stderr } = await execFile(command, args, {
       cwd: cwd || REPO_ROOT,
@@ -213,14 +218,15 @@ server.tool(
 
 server.tool(
   'push_and_pr',
-  'Commit all changes, push the branch to origin, and create a new pull request. One PR per issue — every issue gets its own branch, sandbox, and PR. closesIssue is required and adds "Closes #N" to the PR body so the issue auto-closes when the PR merges.',
+  'Commit all changes, push the branch to origin, and create a new DRAFT pull request (default). The Designer agent reviews the draft PR\'s sandbox and leaves PR review feedback. The PR stays in draft until you call mark_pr_ready (typically after Designer approves). One PR per issue — every issue gets its own branch, sandbox, and PR. closesIssue adds "Closes #N" so the issue auto-closes when the PR eventually merges.',
   {
     title: z.string().describe('PR title'),
     description: z.string().optional().describe('PR description/body (markdown)'),
     closesIssue: z.number().optional().describe('GitHub issue number this PR closes — adds "Closes #N" to the PR body so the issue auto-closes when the PR merges'),
+    draft: z.boolean().optional().describe('Open the PR as a draft (default: true). Drafts cannot be merged; use mark_pr_ready to convert to ready-for-review when work is complete.'),
     worktree: z.string().optional().describe('Worktree path (auto-detected from current branch if not provided)'),
   },
-  async ({ title, description, closesIssue, worktree }) => {
+  async ({ title, description, closesIssue, draft, worktree }) => {
     const cwd = worktree || process.cwd();
 
     // Get current branch
@@ -261,12 +267,14 @@ server.tool(
       body = body ? `${body}\n\nCloses #${closesIssue}` : `Closes #${closesIssue}`;
     }
 
+    const isDraft = draft !== false; // default true
     const prArgs = [
       'pr', 'create',
       '--title', title,
       '--base', 'main',
       '--head', branch,
     ];
+    if (isDraft) prArgs.push('--draft');
     if (body) {
       prArgs.push('--body', body);
     }
@@ -281,10 +289,11 @@ server.tool(
       content: [{
         type: 'text' as const,
         text: [
-          `Branch pushed and PR created:`,
+          `Branch pushed and ${isDraft ? 'DRAFT ' : ''}PR created:`,
           `  Branch: ${branch}`,
           `  PR: ${prResult.stdout.trim()}`,
           closesIssue ? `  Will close issue #${closesIssue} on merge` : '',
+          isDraft ? `  Draft — call mark_pr_ready when work is complete and approved` : '',
         ].filter(Boolean).join('\n'),
       }],
     };
@@ -328,6 +337,86 @@ server.tool(
       return { content: [{ type: 'text' as const, text: `Failed to comment on issue #${number}:\n${result.stderr}` }] };
     }
     return { content: [{ type: 'text' as const, text: result.stdout.trim() }] };
+  },
+);
+
+// =========================================================================
+// PR review tools — for the iteration workflow inside a single PR
+// =========================================================================
+
+server.tool(
+  'read_pr_reviews',
+  'Read all reviews + general comments on a PR. Use this when picking up work on a draft PR that has feedback to address. Returns the full review/comment history.',
+  {
+    number: z.number().describe('GitHub PR number'),
+  },
+  async ({ number }) => {
+    const result = await runCommand('gh', [
+      'pr', 'view', String(number),
+      '--json', 'number,title,state,isDraft,reviews,comments,headRefName,headRefOid',
+    ]);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Failed to read PR #${number}:\n${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: result.stdout.trim() }] };
+  },
+);
+
+server.tool(
+  'review_pr',
+  'Submit a formal review on a PR — request_changes / approve / comment. The Designer uses this after reviewing a draft PR\'s sandbox. The body should be specific and actionable. event="REQUEST_CHANGES" triggers the FE Owner to iterate; event="APPROVE" signals the work is done.',
+  {
+    number: z.number().describe('GitHub PR number'),
+    event: z.enum(['REQUEST_CHANGES', 'APPROVE', 'COMMENT']).describe('Review verdict'),
+    body: z.string().describe('Review body (markdown) — list specific changes needed, or note approval reasons'),
+  },
+  async ({ number, event, body }) => {
+    const flag = event === 'REQUEST_CHANGES' ? '--request-changes' : event === 'APPROVE' ? '--approve' : '--comment';
+    const result = await runCommand('gh', [
+      'pr', 'review', String(number),
+      flag,
+      '--body', body,
+    ]);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Failed to submit review on PR #${number}:\n${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: `Review submitted on PR #${number} (${event}).` }] };
+  },
+);
+
+server.tool(
+  'comment_pr',
+  'Post a general comment on a PR (not a formal review). Useful for posting status updates like "addressed feedback, please re-review".',
+  {
+    number: z.number().describe('GitHub PR number'),
+    body: z.string().describe('Comment body (markdown)'),
+  },
+  async ({ number, body }) => {
+    const result = await runCommand('gh', [
+      'pr', 'comment', String(number),
+      '--body', body,
+    ]);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Failed to comment on PR #${number}:\n${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: result.stdout.trim() }] };
+  },
+);
+
+server.tool(
+  'mark_pr_ready',
+  'Convert a draft PR to ready-for-review. Call this when the Designer has approved the work and the PR is ready for human merge.',
+  {
+    number: z.number().describe('GitHub PR number'),
+  },
+  async ({ number }) => {
+    const result = await runCommand('gh', [
+      'pr', 'ready', String(number),
+    ]);
+    if (result.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Failed to mark PR #${number} ready:\n${result.stderr}` }] };
+    }
+    return { content: [{ type: 'text' as const, text: `PR #${number} marked ready for review.` }] };
   },
 );
 

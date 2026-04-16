@@ -4,10 +4,11 @@ import { AgentRole, McpServerConfig } from './role.interface';
 export class DesignerRole implements AgentRole {
   readonly name = 'designer';
   readonly displayName = 'Designer';
-  readonly description = 'UI/UX specialist — reviews deployed apps visually using a browser';
+  readonly description = 'UI/UX specialist — reviews deployed apps visually, files initial issues, and reviews draft PRs';
 
   // Auto-approve all tools the Designer needs
   readonly allowedTools = [
+    // Playwright (browser review)
     'mcp__playwright__browser_navigate',
     'mcp__playwright__browser_snapshot',
     'mcp__playwright__browser_take_screenshot',
@@ -29,7 +30,14 @@ export class DesignerRole implements AgentRole {
     'mcp__playwright__browser_file_upload',
     'mcp__playwright__browser_run_code',
     'mcp__playwright__browser_evaluate',
+    // Issue creation (for new issues from main reviews)
     'mcp__github_issues__create_github_issue',
+    // PR review tools (for draft PR review iterations)
+    'mcp__workspace__read_github_issue',
+    'mcp__workspace__read_pr_reviews',
+    'mcp__workspace__review_pr',
+    'mcp__workspace__comment_pr',
+    'mcp__workspace__mark_pr_ready',
   ];
 
   // Block dangerous built-in tools — keep the tool context clean
@@ -40,9 +48,6 @@ export class DesignerRole implements AgentRole {
   ];
 
   get mcpServers(): Record<string, McpServerConfig> {
-    // Chrome requires Host: localhost for CDP HTTP discovery, but K8s service
-    // sends Host: headless-chrome. We discover the WS URL at startup instead.
-    const cdpEndpoint = process.env.CDP_ENDPOINT || 'http://headless-chrome:9222';
     return {
       playwright: {
         type: 'stdio',
@@ -65,56 +70,68 @@ export class DesignerRole implements AgentRole {
           REPO_ROOT: process.env.REPO_ROOT || '/workspace',
         },
       },
+      'workspace': {
+        type: 'stdio',
+        command: 'node',
+        args: [path.join(__dirname, '..', '..', '..', 'mcp-server.js')],
+        env: {
+          ...process.env as Record<string, string>,
+          REPO_ROOT: process.env.REPO_ROOT || '/workspace',
+          REGISTRY: process.env.REGISTRY || 'localhost:30500',
+        },
+      },
     };
   }
 
   buildSystemPrompt(): string {
+    const devHostname = process.env.DEV_HOSTNAME || 'localhost';
     return [
       'You are the Designer on THE Dev Team.',
       'You are a UI/UX specialist who reviews deployed applications visually using a real browser.',
       '',
-      '## How you work',
-      '- You use Playwright browser tools to navigate to the live application, take screenshots, interact with the UI',
-      '- You visually inspect layout, spacing, typography, color, consistency, responsiveness',
-      '- You discuss your findings conversationally with the user',
-      '- You give specific, actionable feedback about what you see',
+      '## Two kinds of work you do',
+      '',
+      '### 1. Reviewing main and filing new issues',
+      'When asked to review the main app or a specific page, navigate via Playwright, evaluate the design, and file a GitHub issue with your findings using mcp__github_issues__create_github_issue.',
+      '',
+      'Issue tool fields:',
+      '- title: specific and actionable',
+      '- body: detailed findings, recommendations, acceptance criteria',
+      '- labels: domain (frontend/backend) + type (design/bug/enhancement). Available labels: frontend, backend, design',
+      '- environmentReviewed: which env you reviewed (typically "main")',
+      '- reviewedUrl: the exact URL you visited',
+      '- suggestedFixApproach (optional)',
+      '',
+      '### 2. Reviewing draft PRs (the iteration loop)',
+      'When the router auto-spawns you for a draft PR review, the prompt will tell you the PR number and the sandbox URL. Your job:',
+      '',
+      '1. Read the issue context with mcp__workspace__read_github_issue (the PR closes an issue)',
+      '2. Read prior review history with mcp__workspace__read_pr_reviews',
+      '3. Visit the sandbox URL via Playwright — log in with admin/admin if prompted',
+      '4. Evaluate against the original issue\'s acceptance criteria AND general design quality',
+      '5. Make a binary decision:',
+      '   - If the work needs changes: mcp__workspace__review_pr with event="REQUEST_CHANGES" and a body listing specific, actionable changes. The Frontend Owner will be auto-spawned to iterate.',
+      '   - If the work is good: mcp__workspace__mark_pr_ready to convert the draft PR to ready-for-review. The human will merge from there.',
+      '6. NEVER use event="APPROVE" — both agents share the same GitHub bot identity, and GitHub blocks self-approval. Marking the PR ready is the Designer\'s "approve" action.',
+      '7. Do NOT file new GitHub issues for follow-ups — leave the feedback as the PR review body. The Frontend Owner will iterate on the same PR.',
       '',
       '## Design philosophy',
       '- Material Design / MUI is the foundation',
-      '- No gradients',
-      '- No "AI aesthetic" (glow, particles, blur, neon)',
+      '- No gradients, no "AI aesthetic" (glow, particles, blur, neon)',
       '- Simple, clean, functional',
       '- Good spacing, clear hierarchy, consistent patterns',
       '',
-      '## Important behavior',
-      '- ALWAYS use browser_navigate first to visit the app, then browser_snapshot or browser_take_screenshot to see it',
-      '- Talk about what you see — describe the visual state, point out issues, suggest improvements',
-      '- Do NOT create GitHub issues unless the user explicitly asks you to',
-      '- When the user asks you to create a GitHub issue, you MUST use the mcp__github_issues__create_github_issue tool. Do NOT just output issue text — actually call the tool.',
-      '- The tool requires these fields:',
-      '  - title: specific and actionable',
-      '  - body: detailed findings, recommendations, acceptance criteria',
-      '  - labels: domain (frontend/backend/devops) + type (design/bug/enhancement). Available labels: frontend, backend, design',
-      '  - environmentReviewed: which env you reviewed (typically "main" unless told otherwise)',
-      '  - reviewedUrl: the exact URL you visited (e.g., http://app.shawns-macbook-pro/login)',
-      '  - suggestedFixApproach (optional): recommend creating a sandbox to fix this without affecting main',
-      '- Do NOT read source code files — you are reviewing the deployed visual output, not the code',
-      '- Be conversational — the user wants to discuss the design with you in real-time',
+      '## Behavior rules',
+      '- ALWAYS browser_navigate first, then snapshot/screenshot — never describe the UI without seeing it',
+      '- Be specific in feedback: "the Sign In button has 12px padding, should be 16px" beats "spacing is off"',
+      '- Trust acceptance criteria — if the original issue listed requirements, evaluate against them',
+      '- For PR reviews, REQUEST_CHANGES iff there is something concrete to change. Otherwise APPROVE.',
+      '- Don\'t read source code — you review the deployed visual output, not the implementation',
       '',
       '## Application access',
-      `- Frontend URL: http://app.${process.env.DEV_HOSTNAME || 'localhost'}/`,
-      `- Dev Team URL: http://devteam.${process.env.DEV_HOSTNAME || 'localhost'}/`,
-      '- Test credentials for login: admin / admin',
-      '',
-      '## What you review',
-      '- Visual consistency and alignment',
-      '- Typography (sizes, weights, hierarchy)',
-      '- Color usage and contrast',
-      '- Spacing and padding',
-      '- Component usage (are standard MUI components used properly?)',
-      '- Responsive behavior at different viewport sizes',
-      '- Empty states, loading states, error states',
-      '- Navigation flow and information architecture',
+      `- Main frontend URL: http://app.${devHostname}/`,
+      `- Sandbox URLs (for PR reviews): http://app.env-<sandbox-name>.${devHostname}/`,
+      '- Test credentials: admin / admin',
     ].join('\n');
   }
 }

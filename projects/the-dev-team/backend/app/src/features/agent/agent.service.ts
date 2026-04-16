@@ -5,6 +5,7 @@ import * as path from 'path';
 import { ProviderRegistry } from './providers/provider-registry';
 import { AgentMessage } from './providers/provider.interface';
 import { RoleRegistry } from './roles/role-registry';
+import { normalizeMessage } from './normalize-message';
 
 /** Normalized message stored in session history */
 export interface NormalizedMessage {
@@ -167,6 +168,28 @@ export class AgentService implements OnModuleInit {
   getHistory(sessionId: string): { systemPrompt: string; messages: NormalizedMessage[] } {
     const session = this.getSessionInternal(sessionId);
     return { systemPrompt: session.systemPrompt, messages: [...session.messages] };
+  }
+
+  /**
+   * Fire-and-forget agent invocation for headless callers (router, schedulers).
+   * Persists the user message + all normalized assistant messages to history.
+   * No socket emission — the user can join the session later to see the result.
+   * Returns immediately when the iteration completes (or errors).
+   */
+  async runMessage(sessionId: string, message: string): Promise<void> {
+    const userMsg: NormalizedMessage = { sessionId, type: 'user', content: message };
+    this.addMessage(sessionId, userMsg);
+
+    try {
+      for await (const msg of this.sendMessage(sessionId, message)) {
+        const normalized = normalizeMessage(msg, sessionId);
+        if (normalized) this.addMessage(sessionId, normalized);
+      }
+    } catch (err) {
+      const errorText = err instanceof Error ? err.message : String(err);
+      this.addMessage(sessionId, { sessionId, type: 'error', content: errorText });
+      this.logger.warn(`runMessage failed for session ${sessionId}: ${errorText}`);
+    }
   }
 
   async *sendMessage(sessionId: string, message: string): AsyncIterable<AgentMessage> {
