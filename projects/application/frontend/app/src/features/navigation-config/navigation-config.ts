@@ -1,3 +1,4 @@
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import ScienceIcon from '@mui/icons-material/Science';
 import type { NavigationConfig } from './types';
@@ -10,6 +11,15 @@ import type { NavigationConfig } from './types';
 export const navigationConfig: NavigationConfig = {
   maxDepth: 1,
   items: [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      path: '/',
+      icon: DashboardIcon,
+      metadata: {
+        description: 'Main dashboard with system overview and quick actions',
+      },
+    },
     {
       id: 'smoke-tests',
       label: 'Smoke Tests',

@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AppLayout, LayoutProvider } from "./features/layouts";
 import { Login, ProtectedRoute } from "./features/keycloak-auth";
+import { DashboardPage } from "./features/dashboard";
 import SmokeTests from "./features/testing-tools/pages/SmokeTests";
 import { UsersPage, UserPage } from "./features/user-management";
 
@@ -18,7 +19,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<SmokeTests />} />
+            <Route index element={<DashboardPage />} />
             <Route path="smoke-tests" element={<SmokeTests />} />
             <Route path="admin/users" element={<UsersPage />} />
             <Route path="admin/users/new" element={<UserPage />} />
