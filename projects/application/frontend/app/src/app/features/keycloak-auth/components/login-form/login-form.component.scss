@@ -1,34 +1,35 @@
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px; /* 3 * 8dp - Material Design spacing */
   width: 100%;
-  padding: 32px;
+  padding: 32px; /* 4 * 8dp - Material Design spacing */
 
   mat-form-field {
     width: 100%;
-
-    .mat-mdc-form-field-focus-overlay {
-      background-color: transparent;
-    }
+    /* Remove custom styling to let Material Design defaults take effect */
   }
 
   .forgot-password-container {
     display: flex;
     justify-content: flex-end;
-    margin-top: -8px;
-    margin-bottom: 8px;
+    margin-top: -16px; /* -2 * 8dp - proper Material spacing */
+    margin-bottom: 8px; /* 1 * 8dp */
   }
 
   .forgot-password-link {
-    font-size: 0.9rem;
-    color: #1976d2;
+    font-size: 0.875rem; /* Material Design body2 scale */
+    color: #1976d2; /* Material Design primary color */
     text-decoration: none;
     font-weight: 500;
-    transition: color 0.2s ease;
+    line-height: 1.43; /* Material Design body2 line height */
+    letter-spacing: 0.01071em; /* Material Design body2 letter spacing */
+    padding: 8px; /* 1 * 8dp - minimum touch target */
+    border-radius: 4px;
+    transition: color 0.2s cubic-bezier(0.4, 0.0, 0.2, 1); /* Material Design easing */
 
     &:hover {
-      color: #1565c0;
+      color: #1565c0; /* Material Design primary dark */
       text-decoration: underline;
     }
 
@@ -40,27 +41,19 @@
   }
 
   .submit-button {
-    height: 56px;
-    font-size: 1rem;
-    font-weight: 500;
-    border-radius: 8px;
-    text-transform: none;
-    letter-spacing: 0.025em;
-    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
-    transition: all 0.2s ease;
+    height: 56px; /* 7 * 8dp - Material Design button height */
+    font-size: 0.875rem; /* Material Design button text scale */
+    font-weight: 500; /* Material Design button weight */
+    text-transform: none; /* Keep natural casing per Material Design guidelines */
+    letter-spacing: 0.02857em; /* Material Design button letter spacing */
+    line-height: 1.75; /* Material Design button line height */
+    margin-top: 8px; /* 1 * 8dp additional spacing */
+    border-radius: 4px; /* Material Design button border radius */
 
-    &:hover:not(:disabled) {
-      box-shadow: 0 4px 12px rgba(25, 118, 210, 0.4);
-    }
-
-    &:disabled {
-      background-color: #e0e0e0;
-      color: #9e9e9e;
-      box-shadow: none;
-    }
+    /* Let Material Design handle the elevation and hover states */
 
     .spinner {
-      margin-right: 12px;
+      margin-right: 8px; /* 1 * 8dp */
     }
 
     .button-text {
@@ -69,47 +62,15 @@
     }
   }
 
-  // Custom styling for Material form fields
-  ::ng-deep {
-    .mat-mdc-form-field {
-      .mat-mdc-text-field-wrapper {
-        border-radius: 8px;
-      }
-
-      .mdc-notched-outline {
-        border-color: #e0e0e0;
-      }
-
-      .mdc-notched-outline__leading,
-      .mdc-notched-outline__notch,
-      .mdc-notched-outline__trailing {
-        border-color: #e0e0e0;
-      }
-
-      &:hover .mdc-notched-outline {
-        border-color: #1976d2;
-      }
-
-      &.mat-focused .mdc-notched-outline {
-        border-color: #1976d2;
-      }
-
-      .mat-mdc-floating-label {
-        color: #666;
-      }
-
-      &.mat-focused .mat-mdc-floating-label {
-        color: #1976d2;
-      }
-    }
-  }
+  /* Remove custom form field styling to let Material Design defaults take effect */
+  /* This ensures proper focus states, animations, and Material Design behavior */
 
   @media (max-width: 768px) {
-    padding: 24px;
-    gap: 16px;
+    padding: 24px; /* 3 * 8dp for mobile */
+    gap: 16px; /* 2 * 8dp for mobile */
 
     .submit-button {
-      height: 52px;
+      height: 48px; /* 6 * 8dp for mobile - slightly smaller */
     }
   }
 }
