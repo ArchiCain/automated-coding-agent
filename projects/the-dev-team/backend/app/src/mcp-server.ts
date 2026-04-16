@@ -85,19 +85,28 @@ const server = new McpServer({
 
 server.tool(
   'create_worktree',
-  'Create a git worktree with a new branch for isolated development. The worktree is a full copy of the repo at a separate path.',
+  'Create a git worktree with a new branch for isolated development. The branch is created from the latest origin/main (always fresh — does not depend on the parent repo'+"'"+'s checkout state). The worktree is a full copy of the repo at a separate path.',
   {
     name: z.string().describe('Short name for the worktree/branch (e.g., "add-users-endpoint")'),
   },
   async ({ name }) => {
     const branch = `the-dev-team/${name}`;
     const worktreePath = `${REPO_ROOT}/.worktrees/${name}`;
+
+    // Refresh remote ref so we branch from the latest main, not whatever
+    // the local /workspace happens to be checked out at.
+    const fetchResult = await runCommand('git', ['fetch', 'origin', 'main']);
+    if (fetchResult.exitCode !== 0) {
+      return { content: [{ type: 'text' as const, text: `Failed to fetch origin/main: ${fetchResult.stderr}` }] };
+    }
+
+    // Create the worktree branched from origin/main
     const result = await runCommand('git', [
-      'worktree', 'add', '-b', branch, worktreePath,
+      'worktree', 'add', '-b', branch, worktreePath, 'origin/main',
     ]);
 
     if (result.exitCode !== 0) {
-      // Branch may already exist — try without -b
+      // Branch may already exist — try checking it out instead
       const retry = await runCommand('git', [
         'worktree', 'add', worktreePath, branch,
       ]);
@@ -217,6 +226,13 @@ server.tool(
     // Get current branch
     const branchResult = await runCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
     const branch = branchResult.stdout.trim();
+
+    // Safety guard — never push to a protected branch. All agent-created
+    // branches are namespaced under `the-dev-team/`. If we somehow ended
+    // up on main (or anything else), fail loudly before pushing.
+    if (!branch.startsWith('the-dev-team/')) {
+      return { content: [{ type: 'text' as const, text: `Refusing to push: current branch "${branch}" is not a the-dev-team/* branch. Create a worktree first with create_worktree.` }] };
+    }
 
     // Stage all changes
     await runCommand('git', ['add', '-A'], cwd);
