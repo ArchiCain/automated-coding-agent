@@ -10,7 +10,7 @@ import { LoginCredentials } from '../types';
   imports: [MatCardModule, LoginFormComponent],
   template: `
     <div class="login-container">
-      <mat-card class="login-card">
+      <mat-card class="login-card animated-card">
         <mat-card-header>
           <mat-card-title>Sign In</mat-card-title>
           <mat-card-subtitle>RTS AI Platform</mat-card-subtitle>
@@ -36,6 +36,25 @@ import { LoginCredentials } from '../types';
       width: 100%;
       max-width: 440px;
       padding: 32px;
+      border-radius: 12px;
+    }
+    .animated-card {
+      animation: slideUpFadeIn 600ms ease-out forwards;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .animated-card {
+        animation: none;
+      }
+    }
+    @keyframes slideUpFadeIn {
+      0% {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
     .error-message {
       color: var(--app-error);
