@@ -1,12 +1,14 @@
 import { useState, FormEvent } from "react";
-import { Box, TextField, Button, Typography, Alert, Paper, InputAdornment, IconButton, CircularProgress, alpha } from "@mui/material";
-import { Visibility, VisibilityOff, Login as LoginIcon } from "@mui/icons-material";
+import { Box, TextField, Button, Typography, Alert, Paper, InputAdornment, IconButton, CircularProgress, alpha, Checkbox, FormControlLabel, Link, Divider } from "@mui/material";
+import { Visibility, VisibilityOff, Login as LoginIcon, AccountCircle } from "@mui/icons-material";
 import { useAuth } from "../hooks/use-auth";
+import { brandingConfig } from "../../mui-theme/branding-config";
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { login, error } = useAuth();
@@ -55,7 +57,42 @@ export default function LoginForm() {
           },
         }}
       >
-        <Box sx={{ mb: 3, textAlign: 'center' }}>
+        {/* Platform Branding */}
+        <Box sx={{ mb: 4, textAlign: 'center' }}>
+          <Box
+            component="img"
+            src={brandingConfig.logoUrl}
+            alt={`${brandingConfig.appName} Logo`}
+            sx={{
+              height: 48,
+              mb: 2,
+              filter: (theme) => theme.palette.mode === 'dark' ? 'brightness(0) invert(1)' : 'none',
+            }}
+            onError={(e) => {
+              // Hide image if logo doesn't exist, show fallback icon instead
+              e.currentTarget.style.display = 'none';
+              const fallbackIcon = e.currentTarget.nextElementSibling as HTMLElement;
+              if (fallbackIcon) fallbackIcon.style.display = 'block';
+            }}
+          />
+          <AccountCircle
+            sx={{
+              fontSize: 48,
+              mb: 2,
+              display: 'none',
+              color: 'primary.main',
+              opacity: 0.8
+            }}
+          />
+          <Typography
+            variant="h5"
+            component="h1"
+            fontWeight={600}
+            gutterBottom
+            sx={{ color: 'primary.main', mb: 1 }}
+          >
+            {brandingConfig.appName}
+          </Typography>
           <Typography
             variant="h4"
             component="h2"
@@ -143,6 +180,47 @@ export default function LoginForm() {
           }}
         />
 
+        {/* Remember Me Checkbox */}
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                size="small"
+                sx={{
+                  '&.Mui-checked': {
+                    color: 'primary.main',
+                  },
+                }}
+              />
+            }
+            label={
+              <Typography variant="body2" color="text.secondary">
+                Remember me
+              </Typography>
+            }
+          />
+          <Link
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              // TODO: Implement forgot password functionality
+              console.log('Forgot password clicked');
+            }}
+            variant="body2"
+            sx={{
+              color: 'primary.main',
+              textDecoration: 'none',
+              '&:hover': {
+                textDecoration: 'underline',
+              },
+            }}
+          >
+            Forgot password?
+          </Link>
+        </Box>
+
         <Button
           type="submit"
           variant="contained"
@@ -165,6 +243,36 @@ export default function LoginForm() {
         >
           {isSubmitting ? "Signing in..." : "Sign In"}
         </Button>
+
+        {/* Sign Up Link */}
+        <Box sx={{ mt: 3, textAlign: 'center' }}>
+          <Divider sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              or
+            </Typography>
+          </Divider>
+          <Typography variant="body2" color="text.secondary">
+            Don't have an account?{' '}
+            <Link
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                // TODO: Implement sign-up navigation
+                console.log('Sign up clicked');
+              }}
+              sx={{
+                color: 'primary.main',
+                textDecoration: 'none',
+                fontWeight: 500,
+                '&:hover': {
+                  textDecoration: 'underline',
+                },
+              }}
+            >
+              Sign up here
+            </Link>
+          </Typography>
+        </Box>
       </Paper>
     </Box>
   );
