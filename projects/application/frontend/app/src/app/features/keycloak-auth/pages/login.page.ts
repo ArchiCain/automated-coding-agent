@@ -39,7 +39,7 @@ import { LoginCredentials } from '../types';
       border-radius: 12px;
     }
     .animated-card {
-      animation: slideUpFadeIn 400ms ease-out forwards;
+      animation: slideUpFadeIn 600ms ease-out forwards;
     }
     @media (prefers-reduced-motion: reduce) {
       .animated-card {
