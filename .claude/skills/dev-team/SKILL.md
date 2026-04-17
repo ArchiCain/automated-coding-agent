@@ -205,7 +205,7 @@ The frontend has a dedicated docs viewer/editor at `/docs` with three panels:
 | GET | `/cluster/project-docs/read?root={path}&path={file}` | Read a markdown file |
 | POST | `/cluster/project-docs/write` | Write/update a file (body: `{ root, path, content }`) |
 
-The `root` parameter is relative to `$REPO_ROOT` (e.g. `benchmarking/build-a-frontend/docs`). The `DOCS_ROOT` constant in `docs.page.tsx` controls which docs directory the UI serves.
+The `root` parameter is relative to `$REPO_ROOT` (e.g. `projects/application/frontend/docs`). The `DOCS_ROOT` constant in `docs.page.tsx` controls which docs directory the UI serves.
 
 ## When the user shows a screenshot
 
@@ -247,8 +247,8 @@ The docs page reads files from the pod's `/workspace/` directory. After changing
 
 ```bash
 POD=$(kubectl get pod -n the-dev-team -l app=the-dev-team-backend -o jsonpath='{.items[0].metadata.name}')
-kubectl exec $POD -n the-dev-team -c the-dev-team-backend -- rm -rf /workspace/benchmarking/build-a-frontend/docs
-kubectl cp benchmarking/build-a-frontend/docs the-dev-team/$POD:/workspace/benchmarking/build-a-frontend/docs -c the-dev-team-backend
+kubectl exec $POD -n the-dev-team -c the-dev-team-backend -- rm -rf /workspace/projects/application/frontend/docs
+kubectl cp projects/application/frontend/docs the-dev-team/$POD:/workspace/projects/application/frontend/docs -c the-dev-team-backend
 ```
 
 Edits made through the docs page UI write directly to the pod filesystem. They persist until the pod restarts (which re-clones from git).
