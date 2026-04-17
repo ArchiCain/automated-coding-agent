@@ -16,6 +16,8 @@ import { z } from 'zod';
 import { execFile as execFileCb } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as crypto from 'crypto';
 
 const execFile = promisify(execFileCb);
 
@@ -90,24 +92,27 @@ const server = new McpServer({
 
 server.tool(
   'create_worktree',
-  'Create a git worktree with a new branch for isolated development. The branch is created from the latest origin/main (always fresh — does not depend on the parent repo'+"'"+'s checkout state). The worktree is a full copy of the repo at a separate path.',
+  'Create a git worktree with a new branch for isolated development. The branch is created from the environment branch (local-scain by default). The worktree is a full copy of the repo at a separate path.',
   {
-    name: z.string().describe('Short name for the worktree/branch (e.g., "add-users-endpoint")'),
+    name: z.string().describe('Short name for the worktree/branch (e.g., "t-abc123"). Must be lowercase.'),
+    branchPrefix: z.string().optional().describe('Branch prefix (default: "ticket"). Creates branch as prefix/name.'),
+    baseBranch: z.string().optional().describe('Base branch to fork from (default: "local-scain")'),
   },
-  async ({ name }) => {
-    const branch = `the-dev-team/${name}`;
+  async ({ name, branchPrefix, baseBranch }) => {
+    const prefix = branchPrefix || 'ticket';
+    const branch = `${prefix}/${name}`;
+    const base = baseBranch || 'local-scain';
     const worktreePath = `${REPO_ROOT}/.worktrees/${name}`;
 
-    // Refresh remote ref so we branch from the latest main, not whatever
-    // the local /workspace happens to be checked out at.
-    const fetchResult = await runCommand('git', ['fetch', 'origin', 'main']);
+    // Refresh remote ref
+    const fetchResult = await runCommand('git', ['fetch', 'origin', base]);
     if (fetchResult.exitCode !== 0) {
-      return { content: [{ type: 'text' as const, text: `Failed to fetch origin/main: ${fetchResult.stderr}` }] };
+      return { content: [{ type: 'text' as const, text: `Failed to fetch origin/${base}: ${fetchResult.stderr}` }] };
     }
 
-    // Create the worktree branched from origin/main
+    // Create the worktree branched from the base
     const result = await runCommand('git', [
-      'worktree', 'add', '-b', branch, worktreePath, 'origin/main',
+      'worktree', 'add', '-b', branch, worktreePath, `origin/${base}`,
     ]);
 
     if (result.exitCode !== 0) {
@@ -127,6 +132,7 @@ server.tool(
           `Worktree created:`,
           `  Path: ${worktreePath}`,
           `  Branch: ${branch}`,
+          `  Based on: origin/${base}`,
           ``,
           `Work in this directory. When ready, use deploy_sandbox to test or push_and_pr to submit.`,
         ].join('\n'),
@@ -139,17 +145,15 @@ server.tool(
 
 server.tool(
   'deploy_sandbox',
-  'Build Docker images from a worktree and deploy a full sandbox environment (backend, frontend, database, keycloak) to a new K8s namespace. Use this to test your changes against a live system.',
+  'Build Docker images from a worktree and deploy a full sandbox environment (backend, frontend, database, keycloak) to a new K8s namespace. Always deploys the complete stack so login and full testing work.',
   {
-    name: z.string().describe('Sandbox name — must match a worktree name (e.g., "add-users-endpoint")'),
-    services: z.string().optional().describe('Space-separated services to build (default: "backend frontend")'),
+    name: z.string().describe('Sandbox name — must match a worktree name (e.g., "add-users-endpoint"). Must be lowercase and K8s-safe.'),
   },
-  async ({ name, services }) => {
+  async ({ name }) => {
     const output = await runTask('env:deploy', {
       NAME: name,
       WORKTREE: `${REPO_ROOT}/.worktrees/${name}`,
       REGISTRY,
-      ...(services ? { SERVICES: services } : {}),
     });
     return { content: [{ type: 'text' as const, text: output }] };
   },
@@ -222,22 +226,22 @@ server.tool(
   {
     title: z.string().describe('PR title'),
     description: z.string().optional().describe('PR description/body (markdown)'),
+    base: z.string().optional().describe('Base branch for the PR (default: "local-scain"). Agent PRs should target the environment branch, not main.'),
     closesIssue: z.number().optional().describe('GitHub issue number this PR closes — adds "Closes #N" to the PR body so the issue auto-closes when the PR merges'),
     draft: z.boolean().optional().describe('Open the PR as a draft (default: true). Drafts cannot be merged; use mark_pr_ready to convert to ready-for-review when work is complete.'),
     worktree: z.string().optional().describe('Worktree path (auto-detected from current branch if not provided)'),
   },
-  async ({ title, description, closesIssue, draft, worktree }) => {
+  async ({ title, description, base, closesIssue, draft, worktree }) => {
     const cwd = worktree || process.cwd();
 
     // Get current branch
     const branchResult = await runCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
     const branch = branchResult.stdout.trim();
 
-    // Safety guard — never push to a protected branch. All agent-created
-    // branches are namespaced under `the-dev-team/`. If we somehow ended
-    // up on main (or anything else), fail loudly before pushing.
-    if (!branch.startsWith('the-dev-team/')) {
-      return { content: [{ type: 'text' as const, text: `Refusing to push: current branch "${branch}" is not a the-dev-team/* branch. Create a worktree first with create_worktree.` }] };
+    // Safety guard — never push to a protected branch. Agent-created
+    // branches use `the-dev-team/` or `ticket/` prefixes.
+    if (!branch.startsWith('the-dev-team/') && !branch.startsWith('ticket/')) {
+      return { content: [{ type: 'text' as const, text: `Refusing to push: current branch "${branch}" is not an agent branch (the-dev-team/* or ticket/*). Create a worktree first with create_worktree.` }] };
     }
 
     // Stage all changes
@@ -271,7 +275,7 @@ server.tool(
     const prArgs = [
       'pr', 'create',
       '--title', title,
-      '--base', 'main',
+      '--base', base || 'local-scain',
       '--head', branch,
     ];
     if (isDraft) prArgs.push('--draft');
@@ -625,6 +629,231 @@ server.tool(
       return { content: [{ type: 'text' as const, text: `Failed to create issue:\n${result.stderr}` }] };
     }
     return { content: [{ type: 'text' as const, text: result.stdout.trim() }] };
+  },
+);
+
+// =========================================================================
+// Ticket tools — agents interact with the ticket system through these
+// =========================================================================
+
+const TICKETS_DIR = path.join(REPO_ROOT, '.dev-team', 'tickets');
+
+/** Valid transitions agents are allowed to set */
+const AGENT_SETTABLE_STATUSES = [
+  'ready_for_sandbox', 'pr_open', 'sandbox_ready',
+  'code_review_passed', 'code_review_changes_needed',
+  'approved', 'design_changes_needed', 'failed',
+] as const;
+
+/** Valid transitions from each status (subset for agent validation) */
+const AGENT_TRANSITIONS: Record<string, string[]> = {
+  in_progress: ['ready_for_sandbox', 'failed'],
+  sandbox_deploying: ['sandbox_ready', 'failed'],
+  self_testing: ['pr_open', 'in_progress', 'failed'],
+  code_reviewing: ['code_review_passed', 'code_review_changes_needed', 'failed'],
+  design_reviewing: ['approved', 'design_changes_needed', 'failed'],
+};
+
+function readTicketFile(ticketId: string): Record<string, unknown> | null {
+  const ticketPath = path.join(TICKETS_DIR, ticketId, 'ticket.json');
+  if (!fs.existsSync(ticketPath)) return null;
+  return JSON.parse(fs.readFileSync(ticketPath, 'utf-8'));
+}
+
+function writeTicketFile(ticketId: string, ticket: Record<string, unknown>): void {
+  const dir = path.join(TICKETS_DIR, ticketId);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ticket.json'), JSON.stringify(ticket, null, 2));
+}
+
+server.tool(
+  'update_ticket_status',
+  'Update a ticket\'s status. Use this to report progress — e.g., "ready_for_sandbox" when implementation is done, "pr_open" after creating a PR, "failed" on unrecoverable error. Always write a handoff note before updating status.',
+  {
+    ticketId: z.string().describe('Ticket ID (e.g., "T-4a2b1c")'),
+    status: z.enum(AGENT_SETTABLE_STATUSES).describe('New status'),
+    prNumber: z.number().optional().describe('PR number (required when setting status to "pr_open")'),
+    detail: z.string().optional().describe('Context for the transition'),
+  },
+  async ({ ticketId, status, prNumber, detail }) => {
+    const ticket = readTicketFile(ticketId);
+    if (!ticket) {
+      return { content: [{ type: 'text' as const, text: `Ticket ${ticketId} not found.` }] };
+    }
+
+    const currentStatus = ticket.status as string;
+    const allowed = AGENT_TRANSITIONS[currentStatus];
+    if (!allowed || !allowed.includes(status)) {
+      return { content: [{ type: 'text' as const, text: `Invalid transition: ${currentStatus} → ${status}. Allowed from ${currentStatus}: ${allowed?.join(', ') || 'none'}` }] };
+    }
+
+    const now = new Date().toISOString();
+    ticket.status = status;
+    ticket.updatedAt = now;
+    if (prNumber) ticket.prNumber = prNumber;
+    const history = ticket.history as Array<Record<string, unknown>>;
+    history.push({ status, at: now, trigger: 'agent', detail });
+
+    writeTicketFile(ticketId, ticket);
+    return { content: [{ type: 'text' as const, text: `Ticket ${ticketId}: ${currentStatus} → ${status}` }] };
+  },
+);
+
+server.tool(
+  'write_handoff',
+  'Write a handoff note for the current ticket. Include what you did, what\'s not done, gotchas, and recommendations for the next agent. ALWAYS call this before updating ticket status.',
+  {
+    ticketId: z.string().describe('Ticket ID'),
+    phase: z.string().describe('Current phase (e.g., "implementation", "deployment", "self_test", "code_review", "design_review", "iteration")'),
+    content: z.string().describe('Handoff note content (markdown). Include: What I Did, What\'s Not Done, Gotchas, For Next Agent sections.'),
+  },
+  async ({ ticketId, phase, content }) => {
+    const ticket = readTicketFile(ticketId);
+    if (!ticket) {
+      return { content: [{ type: 'text' as const, text: `Ticket ${ticketId} not found.` }] };
+    }
+
+    const handoffsDir = path.join(TICKETS_DIR, ticketId, 'handoffs');
+    fs.mkdirSync(handoffsDir, { recursive: true });
+
+    const existing = fs.readdirSync(handoffsDir).filter((f) => f.endsWith('.md'));
+    const seq = String(existing.length + 1).padStart(3, '0');
+    const filename = `${seq}-${phase}.md`;
+
+    const agent = ticket.activeAgent as Record<string, unknown> | null;
+    const frontmatter = [
+      '---',
+      `agent: ${agent?.name || 'unknown'}`,
+      `role: ${agent?.role || 'unknown'}`,
+      `phase: ${phase}`,
+      `ticket: ${ticketId}`,
+      `at: ${new Date().toISOString()}`,
+      '---',
+      '',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(handoffsDir, filename), frontmatter + content);
+    return { content: [{ type: 'text' as const, text: `Handoff note written: ${filename}` }] };
+  },
+);
+
+server.tool(
+  'read_ticket',
+  'Read the full details of a ticket — status, history, active agent, dependencies, workspace info.',
+  {
+    ticketId: z.string().describe('Ticket ID'),
+  },
+  async ({ ticketId }) => {
+    const ticket = readTicketFile(ticketId);
+    if (!ticket) {
+      return { content: [{ type: 'text' as const, text: `Ticket ${ticketId} not found.` }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(ticket, null, 2) }] };
+  },
+);
+
+server.tool(
+  'read_handoffs',
+  'Read all handoff notes for a ticket — chronological context from every agent that worked on it.',
+  {
+    ticketId: z.string().describe('Ticket ID'),
+  },
+  async ({ ticketId }) => {
+    const handoffsDir = path.join(TICKETS_DIR, ticketId, 'handoffs');
+    if (!fs.existsSync(handoffsDir)) {
+      return { content: [{ type: 'text' as const, text: 'No handoff notes yet.' }] };
+    }
+    const files = fs.readdirSync(handoffsDir).filter((f) => f.endsWith('.md')).sort();
+    if (files.length === 0) {
+      return { content: [{ type: 'text' as const, text: 'No handoff notes yet.' }] };
+    }
+    const notes = files.map((f) => {
+      const content = fs.readFileSync(path.join(handoffsDir, f), 'utf-8');
+      return `=== ${f} ===\n${content}`;
+    }).join('\n\n');
+    return { content: [{ type: 'text' as const, text: notes }] };
+  },
+);
+
+server.tool(
+  'list_tickets',
+  'List all tickets, optionally filtered by status, role, or plan. Returns a summary of each ticket.',
+  {
+    status: z.string().optional().describe('Filter by status (e.g., "in_progress", "queued")'),
+    role: z.string().optional().describe('Filter by assigned role (e.g., "frontend-developer")'),
+    planId: z.string().optional().describe('Filter by plan ID'),
+  },
+  async ({ status, role, planId }) => {
+    if (!fs.existsSync(TICKETS_DIR)) {
+      return { content: [{ type: 'text' as const, text: 'No tickets directory found.' }] };
+    }
+    const entries = fs.readdirSync(TICKETS_DIR, { withFileTypes: true });
+    const tickets: Array<Record<string, unknown>> = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const ticketFile = path.join(TICKETS_DIR, entry.name, 'ticket.json');
+      if (!fs.existsSync(ticketFile)) continue;
+      try {
+        const ticket = JSON.parse(fs.readFileSync(ticketFile, 'utf-8'));
+        if (status && ticket.status !== status) continue;
+        if (role && ticket.assignedRole !== role) continue;
+        if (planId && ticket.planId !== planId) continue;
+        tickets.push(ticket);
+      } catch { /* skip malformed */ }
+    }
+    if (tickets.length === 0) {
+      return { content: [{ type: 'text' as const, text: 'No tickets match the filter.' }] };
+    }
+    const summary = tickets.map((t) => {
+      const agent = t.activeAgent as Record<string, unknown> | null;
+      return `${t.id} | ${t.status} | ${t.assignedRole} | ${agent?.name || '-'} | ${t.title}`;
+    }).join('\n');
+    return { content: [{ type: 'text' as const, text: `ID | Status | Role | Agent | Title\n${'-'.repeat(60)}\n${summary}` }] };
+  },
+);
+
+server.tool(
+  'create_ticket',
+  'Create a new ticket from a decomposed task specification. Only the Team Lead should use this. The ticket will be automatically picked up by the ticket engine when its dependencies are met.',
+  {
+    title: z.string().describe('Human-readable ticket title'),
+    specPath: z.string().describe('Path to the task.md spec file, relative to repo root'),
+    planId: z.string().describe('Plan ID this ticket belongs to (e.g., "p-a3f1b2")'),
+    assignedRole: z.enum(['frontend-developer', 'designer', 'devops', 'code-reviewer']).describe('Which agent role should work this'),
+    priority: z.enum(['critical', 'high', 'medium', 'low']).describe('Priority level'),
+    dependsOn: z.array(z.string()).optional().describe('Array of ticket IDs that must complete first'),
+    targetBranch: z.string().optional().describe('Target branch for PRs (default: "local-scain")'),
+  },
+  async ({ title, specPath, planId, assignedRole, priority, dependsOn, targetBranch }) => {
+    const id = `t-${crypto.randomBytes(3).toString('hex')}`;
+    const now = new Date().toISOString();
+    const ticket = {
+      id,
+      title,
+      specPath,
+      planId,
+      status: 'created',
+      assignedRole,
+      activeAgent: null,
+      agentHistory: [],
+      dependsOn: dependsOn || [],
+      priority,
+      branch: null,
+      worktreePath: null,
+      sandboxNamespace: null,
+      prNumber: null,
+      targetBranch: targetBranch || 'local-scain',
+      history: [{ status: 'created', at: now, trigger: 'team-lead' }],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const dir = path.join(TICKETS_DIR, id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(path.join(dir, 'handoffs'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ticket.json'), JSON.stringify(ticket, null, 2));
+
+    return { content: [{ type: 'text' as const, text: `Ticket created: ${id} — "${title}" (${assignedRole}, ${priority})` }] };
   },
 );
 

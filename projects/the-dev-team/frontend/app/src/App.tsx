@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import { MuiThemeProvider } from './features/mui-theme';
+import { TeamPage } from './features/team';
 import { EnvironmentsOverviewPage, EnvironmentDetailPage, ApplicationDetailPage } from './features/environments';
 import { ClusterPage } from './features/cluster';
 import { DocsPage } from './features/docs';
@@ -24,7 +25,9 @@ export default function App() {
             }}
           >
             <Routes>
-              <Route path="/" element={<EnvironmentsOverviewPage />} />
+              <Route path="/" element={<TeamPage />} />
+              <Route path="/team" element={<TeamPage />} />
+              <Route path="/environments" element={<EnvironmentsOverviewPage />} />
               <Route path="/env/:name" element={<EnvironmentDetailPage />} />
               <Route path="/env/:name/app/:appName" element={<ApplicationDetailPage />} />
               <Route path="/devops" element={<ClusterPage />} />

@@ -3,6 +3,10 @@ import { AgentRole } from './role.interface';
 import { DefaultRole } from './default.role';
 import { FrontendOwnerRole } from './frontend-owner.role';
 import { DesignerRole } from './designer.role';
+import { TeamLeadRole } from './team-lead.role';
+import { FrontendDeveloperRole } from './frontend-developer.role';
+import { DevOpsRole } from './devops.role';
+import { CodeReviewerRole } from './code-reviewer.role';
 
 @Injectable()
 export class RoleRegistry {
@@ -13,6 +17,10 @@ export class RoleRegistry {
     this.register(new DefaultRole());
     this.register(new FrontendOwnerRole());
     this.register(new DesignerRole());
+    this.register(new TeamLeadRole());
+    this.register(new FrontendDeveloperRole());
+    this.register(new DevOpsRole());
+    this.register(new CodeReviewerRole());
     this.logger.log(`Registered ${this.roles.size} agent roles: ${[...this.roles.keys()].join(', ')}`);
   }
 
