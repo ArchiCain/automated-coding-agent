@@ -48,9 +48,42 @@ An Angular frontend for managing users and monitoring backend health, secured by
 - **Cookie auth:** `credentialsInterceptor` adds `withCredentials: true` globally. `authErrorInterceptor` handles 401 refresh with retry queue.
 - **`provideAuth()`** wires all auth infrastructure in one call in `app.config.ts`.
 
-## Backend
+## API Endpoints
 
-NestJS API with Keycloak, PostgreSQL. Already deployed. See [API contract](../api-contract.md) for endpoint details.
+All endpoints are prefixed with `/api` in the frontend (nginx strips the prefix before proxying to the backend). Full request/response shapes are in the [API contract](../api-contract.md).
+
+### Authentication
+
+| Method | Endpoint | Used by | Purpose |
+|--------|----------|---------|---------|
+| POST | `/auth/login` | Auth | Authenticate with email + password, sets HTTP-only cookies |
+| POST | `/auth/logout` | Auth, Layout | End session, revoke tokens, clear cookies |
+| POST | `/auth/refresh` | Auth | Refresh expired access token using refresh cookie |
+| GET | `/auth/check` | Auth | Validate session, return user profile + resolved permissions |
+
+### User Management
+
+| Method | Endpoint | Used by | Purpose |
+|--------|----------|---------|---------|
+| GET | `/users` | Users | List users with server-side pagination, search, sort |
+| GET | `/users/:id` | Users | Get single user details |
+| POST | `/users` | Users | Create new user (email, name, temporaryPassword, role) |
+| PUT | `/users/:id` | Users | Update user (firstName, lastName, role) |
+| DELETE | `/users/:id` | Users | Soft-delete user (disables in Keycloak) |
+| PATCH | `/users/:id/enabled` | Users | Toggle user enabled/disabled |
+
+### Health
+
+| Method | Endpoint | Used by | Purpose |
+|--------|----------|---------|---------|
+| GET | `/health` | Smoke Tests | Backend health check (public, no auth required) |
+
+### Theme
+
+| Method | Endpoint | Used by | Purpose |
+|--------|----------|---------|---------|
+| GET | `/theme` | Theme | Load user's theme preference |
+| PUT | `/theme` | Theme | Save user's theme preference |
 
 ## How This Documentation Works
 
