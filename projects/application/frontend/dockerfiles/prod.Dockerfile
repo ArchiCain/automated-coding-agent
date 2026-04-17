@@ -18,7 +18,7 @@ COPY app/ .
 
 # CACHEBUST arg invalidates Docker layer cache for the build step.
 # Pass --build-arg CACHEBUST=$(date +%s) to force a fresh Angular build.
-ARG CACHEBUST=1
+ARG CACHEBUST=20260417
 RUN npx ng build --configuration=production
 
 # Stage 3: Production runtime with nginx
