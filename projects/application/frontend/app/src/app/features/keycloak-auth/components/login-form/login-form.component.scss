@@ -8,7 +8,8 @@
     width: 100%;
 
     // Dark mode theming via Material CSS custom properties.
-    // Container shape set to 4px as a defensive measure matching Material default.
+    // Container shape is consumed by this Angular Material version; color tokens are NOT.
+    // The ::ng-deep block below handles colors that CSS custom properties can't reach.
     --mdc-outlined-text-field-container-shape: 4px;
     --mdc-outlined-text-field-outline-color: rgba(255, 255, 255, 0.3);
     --mdc-outlined-text-field-hover-outline-color: rgba(255, 255, 255, 0.5);
@@ -21,6 +22,35 @@
     --mdc-outlined-text-field-error-focus-outline-color: #f44336;
     --mdc-outlined-text-field-error-hover-outline-color: #f44336;
     --mdc-outlined-text-field-error-label-text-color: #f44336;
+  }
+
+  // ::ng-deep is required because this Angular Material version does not consume
+  // --mdc-outlined-text-field-*-color CSS custom properties for colors (only shape works).
+  // These rules set COLOR properties only — no border-radius (handled by global styles.scss).
+  ::ng-deep .mat-mdc-form-field {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: rgba(255, 255, 255, 0.3) !important;
+    }
+
+    &.mat-focused .mdc-notched-outline__leading,
+    &.mat-focused .mdc-notched-outline__notch,
+    &.mat-focused .mdc-notched-outline__trailing {
+      border-color: #90caf9 !important;
+    }
+
+    .mat-mdc-input-element {
+      color: #ffffff !important;
+    }
+
+    .mdc-floating-label {
+      color: rgba(255, 255, 255, 0.7) !important;
+    }
+
+    &.mat-focused .mdc-floating-label {
+      color: #90caf9 !important;
+    }
   }
 
   .submit-button {
