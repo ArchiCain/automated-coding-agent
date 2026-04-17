@@ -10,10 +10,9 @@ import { LoginCredentials } from '../types';
   imports: [MatCardModule, LoginFormComponent],
   template: `
     <div class="login-container">
-      <mat-card class="login-card animated-card">
+      <mat-card class="login-card">
         <mat-card-header>
-          <mat-card-title>Sign In</mat-card-title>
-          <mat-card-subtitle>RTS AI Platform</mat-card-subtitle>
+          <mat-card-title>Login</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           @if (auth.error()) {
@@ -30,34 +29,20 @@ import { LoginCredentials } from '../types';
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      background-color: var(--app-bg-default);
+      background-color: #121212;
     }
     .login-card {
+      background-color: #1e1e1e;
+      max-width: 400px;
       width: 100%;
-      max-width: 440px;
       padding: 32px;
-      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
-    .animated-card {
-      animation: slideUpFadeIn 600ms ease-out forwards;
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .animated-card {
-        animation: none;
-      }
-    }
-    @keyframes slideUpFadeIn {
-      0% {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    .login-card mat-card-header {
+      color: #ffffff;
     }
     .error-message {
-      color: var(--app-error);
+      color: #ef5350;
       margin-bottom: 16px;
     }
   `],

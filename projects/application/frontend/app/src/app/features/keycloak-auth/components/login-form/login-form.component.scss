@@ -3,77 +3,55 @@
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  max-width: 400px;
 
   mat-form-field {
     width: 100%;
+  }
 
-    // Enhanced Material Design focus states
-    &.mat-form-field-appearance-outline {
-      .mat-mdc-form-field-outline {
-        border-radius: 10px;
+  // Dark mode form field styling
+  ::ng-deep .mat-mdc-form-field {
+    // Input text color
+    .mat-mdc-input-element {
+      color: #ffffff;
+    }
+
+    // Label color
+    .mat-mdc-floating-label {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    // Outline border color
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    // Focused outline
+    &.mat-focused {
+      .mdc-notched-outline__leading,
+      .mdc-notched-outline__notch,
+      .mdc-notched-outline__trailing {
+        border-color: #90caf9;
       }
 
-      // Focus state styling
-      &.mat-focused .mat-mdc-form-field-outline-thick {
-        border-color: #3399FF;
-        border-width: 2px;
-      }
-
-      // Hover state
-      &:hover:not(.mat-focused) .mat-mdc-form-field-outline {
-        border-color: #3399FF;
+      .mat-mdc-floating-label {
+        color: #90caf9;
       }
     }
 
-    // Input element focus ring
-    .mat-mdc-input-element {
-      transition: all 0.2s ease-in-out;
-
-      &:focus {
-        outline: none;
-      }
+    // Form field background
+    .mat-mdc-text-field-wrapper {
+      background: rgba(255, 255, 255, 0.05);
     }
   }
 
   .submit-button {
+    background-color: #424242;
+    color: #ffffff;
     height: 48px;
     font-size: 1rem;
-    border-radius: 10px;
-    font-weight: 700;
-    transition: all 0.2s ease-in-out;
-    // Base elevation (elevation 2)
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-
-    // Hover effect with enhanced elevation (elevation 4) and colored accent
-    &:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow:
-        0 4px 8px rgba(0, 0, 0, 0.12),
-        0 2px 4px rgba(0, 0, 0, 0.08),
-        0 4px 12px rgba(51, 153, 255, 0.3);
-    }
-
-    &:active:not(:disabled) {
-      transform: translateY(0);
-    }
-
-    // Custom focus ring matching primary color
-    &:focus {
-      outline: none;
-      box-shadow:
-        0 2px 4px rgba(0, 0, 0, 0.12),
-        0 1px 2px rgba(0, 0, 0, 0.24),
-        0 0 0 3px rgba(51, 153, 255, 0.3);
-    }
-
-    // Focus + hover combination
-    &:focus:hover:not(:disabled) {
-      box-shadow:
-        0 4px 8px rgba(0, 0, 0, 0.12),
-        0 2px 4px rgba(0, 0, 0, 0.08),
-        0 4px 12px rgba(51, 153, 255, 0.3),
-        0 0 0 3px rgba(51, 153, 255, 0.3);
-    }
+    width: 100%;
+    border-radius: 4px;
   }
 }
