@@ -161,7 +161,7 @@ The system uses a docs-driven model: **documentation is the specification**. To 
 
 ### Project docs structure
 
-Project documentation lives alongside the project (e.g. `benchmarking/build-a-frontend/docs/`). The structure mirrors the Angular feature directories:
+Project documentation lives alongside the project (e.g. `projects/application/frontend/docs/`). The structure mirrors the Angular feature directories:
 
 ```
 docs/

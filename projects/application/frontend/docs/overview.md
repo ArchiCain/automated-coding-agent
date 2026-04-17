@@ -50,7 +50,7 @@ An Angular frontend for managing users and monitoring backend health, secured by
 
 ## API Endpoints
 
-All endpoints are prefixed with `/api` in the frontend (nginx strips the prefix before proxying to the backend). Full request/response shapes are in the [API contract](../api-contract.md).
+All endpoints are prefixed with `/api` in the frontend (nginx strips the prefix before proxying to the backend). Full request/response shapes are in the [API contract](api-contract.md).
 
 ### Authentication
 

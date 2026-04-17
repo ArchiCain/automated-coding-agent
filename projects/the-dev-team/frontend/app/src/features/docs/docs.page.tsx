@@ -19,7 +19,7 @@ import Markdown from 'react-markdown';
 import { DocsChatBubble } from './docs-chat-bubble';
 
 // The docs root relative to REPO_ROOT — this is where the benchmark frontend docs live
-const DOCS_ROOT = 'benchmarking/build-a-frontend/docs';
+const DOCS_ROOT = 'projects/application/frontend/docs';
 
 interface TreeNode {
   type: 'file' | 'dir';

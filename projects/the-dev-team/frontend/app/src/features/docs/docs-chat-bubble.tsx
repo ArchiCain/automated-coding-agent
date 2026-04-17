@@ -18,7 +18,7 @@ import { MessageInput } from '../chat/message-input';
 import type { AgentMessage, Session, SessionHistory } from '../shared';
 
 const DOCS_ROLE = 'default';
-const DOCS_ROOT = 'benchmarking/build-a-frontend/docs';
+const DOCS_ROOT = 'projects/application/frontend/docs';
 const INSTRUCTIONS_FILE = '.agent-instructions.md';
 
 const DEFAULT_INSTRUCTIONS = `You are a documentation assistant for this project. Your job is to help the user brainstorm, write, and refine project documentation.
