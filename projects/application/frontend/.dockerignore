@@ -1,0 +1,6 @@
+# Exclude build caches and artifacts that could cause stale Docker layers
+app/.angular/
+app/dist/
+app/node_modules/
+app/.sass-cache/
+app/coverage/

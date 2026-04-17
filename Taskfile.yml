@@ -179,7 +179,7 @@ tasks:
             backend)
               docker build -t $REG/$img:$TAG -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend ;;
             frontend)
-              docker build -t $REG/$img:$TAG --build-arg VITE_BACKEND_URL=http://api.${DEV_HOSTNAME} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend ;;
+              docker build --no-cache --build-arg CACHEBUST=$(date +%s) -t $REG/$img:$TAG --build-arg VITE_BACKEND_URL=http://api.${DEV_HOSTNAME} -f projects/application/frontend/dockerfiles/prod.Dockerfile projects/application/frontend ;;
             keycloak)
               docker build -t $REG/$img:$TAG -f projects/application/keycloak/dockerfiles/Dockerfile projects/application/keycloak ;;
             the-dev-team-backend)
@@ -388,7 +388,7 @@ tasks:
       WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
       IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - docker build -t ${REGISTRY:-localhost:30500}/frontend:{{.IMAGE_TAG}} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f {{.WORKTREE_PATH}}/projects/application/frontend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/application/frontend
+      - docker build --no-cache --build-arg CACHEBUST=$(date +%s) -t ${REGISTRY:-localhost:30500}/frontend:{{.IMAGE_TAG}} --build-arg VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://api.localhost} -f {{.WORKTREE_PATH}}/projects/application/frontend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/application/frontend
       - docker push ${REGISTRY:-localhost:30500}/frontend:{{.IMAGE_TAG}}
 
   build:keycloak:
