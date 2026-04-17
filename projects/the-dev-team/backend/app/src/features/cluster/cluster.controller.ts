@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { ClusterService } from './cluster.service';
 
 @Controller('cluster')
@@ -80,5 +80,26 @@ export class ClusterController {
     const content = await this.clusterService.readDoc(filePath);
     if (content === null) return { error: 'Not found' };
     return { content };
+  }
+
+  // ── Project docs (configurable root) ───────────────────────────
+
+  @Get('project-docs/tree')
+  async projectDocsTree(@Query('root') root: string) {
+    return this.clusterService.getProjectDocsTree(root);
+  }
+
+  @Get('project-docs/read')
+  async readProjectDoc(@Query('root') root: string, @Query('path') filePath: string) {
+    const content = await this.clusterService.readProjectDoc(root, filePath);
+    if (content === null) return { error: 'Not found' };
+    return { content };
+  }
+
+  @Post('project-docs/write')
+  async writeProjectDoc(@Body() body: { root: string; path: string; content: string }) {
+    const ok = await this.clusterService.writeProjectDoc(body.root, body.path, body.content);
+    if (!ok) return { error: 'Write failed' };
+    return { ok: true };
   }
 }

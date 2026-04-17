@@ -150,6 +150,107 @@ export class ClusterService {
     }
   }
 
+  // ── Project docs (configurable root) ────────────────────────────
+
+  private get repoRoot(): string {
+    return process.env.REPO_ROOT || '/workspace';
+  }
+
+  private resolveProjectDocsRoot(root: string): string | null {
+    const resolved = path.resolve(this.repoRoot, root);
+    if (!resolved.startsWith(path.resolve(this.repoRoot))) return null;
+    return resolved;
+  }
+
+  /** ~4 chars per token — close enough for Claude models */
+  private estimateTokens(text: string): number {
+    return Math.ceil(text.length / 4);
+  }
+
+  /** Recursively build a tree with token counts at every level */
+  async getProjectDocsTree(root: string): Promise<any> {
+    const docsRoot = this.resolveProjectDocsRoot(root);
+    if (!docsRoot) return { error: 'Invalid root' };
+
+    const buildTree = async (dir: string, relativePath: string): Promise<any[]> => {
+      try {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        const results: any[] = [];
+
+        for (const entry of entries) {
+          const entryRelative = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+          const entryAbsolute = path.join(dir, entry.name);
+
+          if (entry.isDirectory()) {
+            const children = await buildTree(entryAbsolute, entryRelative);
+            const tokens = children.reduce((sum, c) => sum + c.tokens, 0);
+            results.push({
+              type: 'dir',
+              name: entry.name,
+              path: entryRelative,
+              tokens,
+              children,
+            });
+          } else if (entry.name.endsWith('.md')) {
+            try {
+              const content = await fs.readFile(entryAbsolute, 'utf-8');
+              results.push({
+                type: 'file',
+                name: entry.name.replace(/\.md$/, ''),
+                path: entryRelative,
+                tokens: this.estimateTokens(content),
+              });
+            } catch {
+              results.push({
+                type: 'file',
+                name: entry.name.replace(/\.md$/, ''),
+                path: entryRelative,
+                tokens: 0,
+              });
+            }
+          }
+        }
+
+        return results.sort((a, b) => {
+          if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+      } catch {
+        return [];
+      }
+    };
+
+    const children = await buildTree(docsRoot, '');
+    const totalTokens = children.reduce((sum, c) => sum + c.tokens, 0);
+    return { root, tokens: totalTokens, children };
+  }
+
+  async readProjectDoc(root: string, filePath: string): Promise<string | null> {
+    const docsRoot = this.resolveProjectDocsRoot(root);
+    if (!docsRoot) return null;
+    const resolved = path.resolve(docsRoot, filePath);
+    if (!resolved.startsWith(docsRoot)) return null;
+    try {
+      return await fs.readFile(resolved, 'utf-8');
+    } catch {
+      return null;
+    }
+  }
+
+  async writeProjectDoc(root: string, filePath: string, content: string): Promise<boolean> {
+    const docsRoot = this.resolveProjectDocsRoot(root);
+    if (!docsRoot) return false;
+    const resolved = path.resolve(docsRoot, filePath);
+    if (!resolved.startsWith(docsRoot)) return false;
+    try {
+      await fs.mkdir(path.dirname(resolved), { recursive: true });
+      await fs.writeFile(resolved, content, 'utf-8');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ── Repo info ──────────────────────────────────────────────────
 
   async getBranch(): Promise<string> {

@@ -1,12 +1,17 @@
-# User Management Page
+# Users Feature
 
-**Route:** `/users`
-**Auth:** `permissionGuard('users:read')`
 **Feature directory:** `src/app/features/users/`
+**Page:** `/users` (requires `permissionGuard('users:read')`)
 
 ## Purpose
 
 Full CRUD interface for managing Keycloak users. Admin-only. Supports server-side pagination, search, sorting, user creation, editing, deletion, and enable/disable toggle.
+
+## Components
+
+- **CreateUserDialog** — modal form for creating users (email, firstName, lastName, temporaryPassword, role). Email required + email validation. Role defaults to "user".
+- **UserDetailDialog** — modal for viewing/editing a user. Email read-only. Edit firstName, lastName, role. Delete button with confirmation (only if `users:delete` permission).
+- **ConfirmDialog** — generic confirmation for destructive actions. Accepts title, message, confirm label, and color.
 
 ## Acceptance Criteria
 

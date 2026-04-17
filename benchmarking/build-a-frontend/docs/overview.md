@@ -13,22 +13,16 @@ An Angular frontend for managing users and monitoring backend health, secured by
 - **Forms:** ReactiveFormsModule only
 - **Config:** Runtime `/config.json` (no build-time env vars)
 
-## Pages
+## Features
 
-| Page | Route | Auth | Description |
-|------|-------|------|-------------|
-| [Login](pages/login/requirements.md) | `/login` | Public | Email + password authentication |
-| [Welcome](pages/welcome/requirements.md) | `/home` | Authenticated | Informational landing with feature cards |
-| [User Management](pages/users/requirements.md) | `/users` | `users:read` | Full CRUD user table with dialogs |
-| [Smoke Tests](pages/smoke-tests/requirements.md) | `/smoke-tests` | Authenticated | Backend health check with auto-refresh |
-
-## Shared Features
-
-| Feature | Description |
-|---------|-------------|
-| [Auth](shared/auth/requirements.md) | Cookie-based session, permissions, guards, interceptors |
-| [Layout](shared/layout/requirements.md) | Sidenav, responsive nav, user info |
-| [Theme](shared/theme/requirements.md) | Dark/light toggle, server-persisted preference |
+| Feature | Page | Auth | Description |
+|---------|------|------|-------------|
+| [Auth](features/auth/requirements.md) | `/login` | Public | Cookie-based Keycloak auth, permission guards, interceptors, login page |
+| [Home](features/home/requirements.md) | `/home` | Authenticated | Welcome page with feature cards |
+| [Users](features/users/requirements.md) | `/users` | `users:read` | Full CRUD user management with server-side pagination |
+| [Smoke Tests](features/smoke-tests/requirements.md) | `/smoke-tests` | Authenticated | Backend health check with auto-refresh |
+| [Layout](features/layout/requirements.md) | — | — | App shell: sidenav, responsive nav, user info, logout |
+| [Theme](features/theme/requirements.md) | — | — | Dark/light toggle, server-persisted preference |
 
 ## Standards
 
@@ -49,8 +43,8 @@ An Angular frontend for managing users and monitoring backend health, secured by
                                      └── redirect → /home │
 ```
 
-- **Default protected:** `authGuard` on the parent route. All children inherit it. Only `/login` is outside.
-- **Permission-based:** `permissionGuard('users:read')` on `/users`. Permissions come from `GET /auth/check`, resolved server-side.
+- **Default protected:** `authGuard` on the parent route. All children inherit. Only `/login` is outside.
+- **Permission-based:** `permissionGuard('users:read')` on `/users`. Permissions from `GET /auth/check`, resolved server-side.
 - **Cookie auth:** `credentialsInterceptor` adds `withCredentials: true` globally. `authErrorInterceptor` handles 401 refresh with retry queue.
 - **`provideAuth()`** wires all auth infrastructure in one call in `app.config.ts`.
 
@@ -62,10 +56,8 @@ NestJS API with Keycloak, PostgreSQL. Already deployed. See [API contract](../ap
 
 These docs are the source of truth. To change the frontend:
 
-1. Update the docs (requirements, flows, components, test data)
+1. Update the docs (requirements, flows, test data)
 2. The diff between docs and code defines the work
 3. Agents implement the code to match the docs
-4. Designer agent verifies against `flows.md` step-by-step
+4. Designer agent verifies against flows step-by-step
 5. Docs are always current because they drove the implementation
-
-See `docs/development/documentation-standard.md` for the global documentation philosophy.

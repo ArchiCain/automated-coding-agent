@@ -1,8 +1,7 @@
-# Smoke Tests Page
+# Smoke Tests Feature
 
-**Route:** `/smoke-tests`
-**Auth:** Authenticated (inherited from parent route)
 **Feature directory:** `src/app/features/smoke-tests/`
+**Page:** `/smoke-tests` (authenticated — inherited from parent route)
 
 ## Purpose
 

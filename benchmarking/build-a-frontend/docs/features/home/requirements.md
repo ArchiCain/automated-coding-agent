@@ -1,12 +1,22 @@
-# Welcome Page
+# Home Feature
 
-**Route:** `/home`
-**Auth:** Authenticated (inherited from parent route)
 **Feature directory:** `src/app/features/home/`
+**Page:** `/home` (authenticated — inherited from parent route)
 
 ## Purpose
 
 A static informational landing page that welcomes the user and explains what this application is. Provides navigation to available features via feature cards.
+
+## Components
+
+- **FeatureCard** — reusable card with icon, title, description, and route. Entire card is clickable. Hover state changes background.
+
+## Feature Cards
+
+| Icon | Title | Description | Route | Visibility |
+|------|-------|-------------|-------|------------|
+| `people` | User Management | Manage users, roles, and permissions | `/users` | `hasPermission$('users:read')` |
+| `monitor_heart` | Smoke Tests | Check backend service health status | `/smoke-tests` | Always visible |
 
 ## Acceptance Criteria
 

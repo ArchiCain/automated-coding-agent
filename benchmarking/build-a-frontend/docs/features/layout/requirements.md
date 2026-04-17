@@ -6,27 +6,15 @@
 
 The app shell — `mat-sidenav-container` with responsive navigation, user info, theme toggle, and logout. Wraps all authenticated pages. The login page does NOT use this layout.
 
-## Component: LayoutComponent
-
-**Selector:** `app-layout`
-**Standalone:** yes
-**Change detection:** OnPush
-
-### Dependencies
-| Service | Methods/signals used |
-|---------|---------------------|
-| `AuthService` | `user()`, `hasPermission$()`, `logout()` |
-| `ThemeService` | `isDark()`, `toggle()` |
-| `Router` | Active route detection |
-| `BreakpointObserver` | Responsive sidenav mode |
-
-### Behavior
+## Behavior
 
 - **Desktop (>960px):** Sidenav in `side` mode (always visible, pushes content)
 - **Tablet (600-960px):** Sidenav in `over` mode (overlay, hamburger toggle)
 - **Mobile (<600px):** Sidenav in `over` mode (overlay, hamburger toggle)
+- Sidenav width: 240px
+- Content padding: 24px
 
-### Nav Items
+## Nav Items
 
 | Label | Icon | Route | Visibility |
 |-------|------|-------|------------|
@@ -34,25 +22,16 @@ The app shell — `mat-sidenav-container` with responsive navigation, user info,
 | Users | `people` | `/users` | `hasPermission$('users:read')` |
 | Smoke Tests | `monitor_heart` | `/smoke-tests` | Always |
 
-Active route is highlighted with accent color.
+Active route highlighted with accent color.
 
-### Sidenav Footer
+## Sidenav Footer
 
-```
-��────────────────────┐
-│                    │
-│  Nav items...      │
-│                    │
-│  ─────────────     │
-│  🌙 Dark Mode [•]  │  ← mat-slide-toggle
-│                    │
-│  Admin User        │  ← firstName lastName
-│  admin@example.com │  ← email, smaller text
-│  [Logout]          │  ← mat-button
-└────────────────────┘
-```
+- Theme toggle (`mat-slide-toggle`)
+- User name (firstName lastName)
+- User email (smaller text)
+- Logout button
 
-### Layout Structure
+## Structure
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -60,7 +39,7 @@ Active route is highlighted with accent color.
 ├────────────┬─────────────────────────────────┤
 │ mat-sidenav│ mat-sidenav-content             │
 │ width:240px│                                 │
-│            │  <router-outlet> (page content) ��
+│            │  <router-outlet> (page content) │
 │ Nav items  │  padding: 24px                  │
 │            │                                 │
 │ Theme tog. │                                 │

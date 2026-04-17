@@ -5,25 +5,21 @@
 1. User logs in
 2. `ThemeService.loadPreference()` runs
 3. `GET /api/theme` returns `{ theme: "dark", userId: "..." }`
-4. Service sets `isDark()` = true
-5. Body gets class `theme-dark`
-6. All Material components render with dark palette
+4. Body gets class `theme-dark`
+5. All Material components render with dark palette
 
 ## Flow 2: Toggle to Light
 
 1. User clicks theme toggle in sidenav (currently dark)
-2. `ThemeService.toggle()` is called
-3. Body class changes from `theme-dark` to `theme-light` immediately
-4. `PUT /api/theme` with `{ theme: "light" }` is sent (async, non-blocking)
-5. All Material components re-render with light palette
-6. `isDark()` returns false
+2. Body class changes from `theme-dark` to `theme-light` immediately
+3. `PUT /api/theme` with `{ theme: "light" }` is sent (async, non-blocking)
+4. All Material components re-render with light palette
 
 ## Flow 3: Toggle Back to Dark
 
 1. User clicks theme toggle again (currently light)
 2. Body class changes from `theme-light` to `theme-dark`
 3. `PUT /api/theme` with `{ theme: "dark" }` is sent
-4. `isDark()` returns true
 
 ## Flow 4: Preference Persists
 
