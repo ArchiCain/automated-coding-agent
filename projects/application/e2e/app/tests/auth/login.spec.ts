@@ -27,7 +27,7 @@ test.describe('Login Workflow', () => {
 
     // Verify login page is displayed
     await expect(page).toHaveURL(/.*login/);
-    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /login/i })).toBeVisible();
 
     // Verify form elements are present
     await expect(page.getByLabel(/username/i)).toBeVisible();
@@ -55,7 +55,7 @@ test.describe('Login Workflow', () => {
     expect(page.url()).not.toContain('/login');
 
     // Verify user is authenticated (should see app content, not login)
-    await expect(page.getByRole('heading', { name: /sign in/i })).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: /login/i })).not.toBeVisible();
   });
 
   test('should redirect to home after login', async ({ page }) => {
@@ -107,6 +107,6 @@ test.describe('Login Workflow', () => {
 
     // Verify on login page
     await expect(page).toHaveURL(/.*login/);
-    await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /login/i })).toBeVisible();
   });
 });
