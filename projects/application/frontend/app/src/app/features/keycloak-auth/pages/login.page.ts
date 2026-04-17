@@ -10,16 +10,13 @@ import { LoginCredentials } from '../types';
   imports: [MatCardModule, LoginFormComponent],
   template: `
     <div class="login-container">
-      <mat-card class="login-card animated-card">
-        <mat-card-header>
-          <mat-card-title>Sign In</mat-card-title>
-          <mat-card-subtitle>RTS AI Platform</mat-card-subtitle>
-        </mat-card-header>
+      <mat-card class="login-card mat-elevation-z4">
         <mat-card-content>
+          <h1 class="login-title">Sign In</h1>
           @if (auth.error()) {
             <p class="error-message">{{ auth.error() }}</p>
           }
-          <app-login-form (submitCredentials)="onLogin($event)" />
+          <app-login-form [isLoading]="auth.isLoading()" (submitCredentials)="onLogin($event)" />
         </mat-card-content>
       </mat-card>
     </div>
@@ -30,32 +27,31 @@ import { LoginCredentials } from '../types';
       justify-content: center;
       align-items: center;
       min-height: 100vh;
+      background-color: #f5f5f5;
+    }
+
+    :host-context(.dark-theme) .login-container {
       background-color: var(--app-bg-default);
     }
+
     .login-card {
       width: 100%;
       max-width: 440px;
       padding: 32px;
-      border-radius: 12px;
-    }
-    .animated-card {
-      animation: slideUpFadeIn 600ms ease-out forwards;
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .animated-card {
-        animation: none;
+
+      &:hover {
+        transform: none;
       }
     }
-    @keyframes slideUpFadeIn {
-      0% {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
+
+    .login-title {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: var(--app-text-primary);
     }
+
     .error-message {
       color: var(--app-error);
       margin-bottom: 16px;

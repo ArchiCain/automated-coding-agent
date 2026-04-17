@@ -18,7 +18,11 @@
     }
   </mat-form-field>
 
-  <button mat-flat-button type="submit" [disabled]="form.invalid" class="submit-button">
-    Sign In
+  <button mat-flat-button type="submit" [disabled]="form.invalid || isLoading()" class="submit-button">
+    @if (isLoading()) {
+      <mat-spinner diameter="20" />
+    } @else {
+      Sign In
+    }
   </button>
 </form>

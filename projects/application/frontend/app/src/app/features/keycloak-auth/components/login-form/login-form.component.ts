@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, inject, output } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, input, output } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -23,6 +23,7 @@ import { LoginCredentials } from '../../types';
 export class LoginFormComponent {
   private readonly fb = inject(FormBuilder);
 
+  readonly isLoading = input(false);
   readonly submitCredentials = output<LoginCredentials>();
 
   readonly form = this.fb.group({
