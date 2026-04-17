@@ -8,8 +8,7 @@
     width: 100%;
 
     // Dark mode theming via Material CSS custom properties.
-    // This avoids targeting internal notch segments directly,
-    // which prevents the scalloped/broken outline rendering.
+    --mdc-outlined-text-field-container-shape: 4px;
     --mdc-outlined-text-field-outline-color: rgba(255, 255, 255, 0.3);
     --mdc-outlined-text-field-hover-outline-color: rgba(255, 255, 255, 0.5);
     --mdc-outlined-text-field-focus-outline-color: #90caf9;
@@ -21,6 +20,19 @@
     --mdc-outlined-text-field-error-focus-outline-color: #f44336;
     --mdc-outlined-text-field-error-hover-outline-color: #f44336;
     --mdc-outlined-text-field-error-label-text-color: #f44336;
+
+    // Override global styles.scss which sets border-radius: 10px directly on
+    // .mdc-notched-outline > * (lines 98-102). That global rule bypasses the
+    // CSS custom property above, so we must explicitly reset the geometry here.
+    ::ng-deep .mdc-text-field--outlined .mdc-notched-outline > * {
+      border-radius: 0 !important;
+    }
+    ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__leading {
+      border-radius: 4px 0 0 4px !important;
+    }
+    ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__trailing {
+      border-radius: 0 4px 4px 0 !important;
+    }
   }
 
   .submit-button {

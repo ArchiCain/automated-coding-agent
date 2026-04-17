@@ -40,7 +40,7 @@ import { LoginCredentials } from '../types';
     }
     .login-card mat-card-header {
       color: #ffffff;
-      margin-bottom: 24px;
+      margin-bottom: 24px !important;
     }
     .error-message {
       color: #ef5350;
