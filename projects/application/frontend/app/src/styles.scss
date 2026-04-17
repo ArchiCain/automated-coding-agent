@@ -96,7 +96,12 @@ body {
 
 // Form fields
 .mat-mdc-form-field {
-  .mdc-text-field--outlined .mdc-notched-outline > * {
-    border-radius: 10px;
+  .mdc-text-field--outlined {
+    .mdc-notched-outline__leading {
+      border-radius: 10px 0 0 10px;
+    }
+    .mdc-notched-outline__trailing {
+      border-radius: 0 10px 10px 0;
+    }
   }
 }
