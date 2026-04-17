@@ -94,9 +94,9 @@ body {
   font-weight: 600;
 }
 
-// Form fields
+// Form fields — use 4px border-radius (Material default) to prevent scalloped outlines
 .mat-mdc-form-field {
   .mdc-text-field--outlined .mdc-notched-outline > * {
-    border-radius: 10px;
+    border-radius: 4px;
   }
 }
