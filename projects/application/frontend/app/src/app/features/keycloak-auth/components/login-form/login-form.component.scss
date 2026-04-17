@@ -8,7 +8,7 @@
     width: 100%;
   }
 
-  // Dark mode form field styling
+  // Dark mode form field styling (::ng-deep required for Material encapsulation)
   ::ng-deep .mat-mdc-form-field {
     // Input text color
     .mat-mdc-input-element {
