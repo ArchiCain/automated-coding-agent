@@ -13,6 +13,7 @@ import { LoginDto, KeycloakUserProfile } from "../keycloak-types";
 import { Request, Response } from "express";
 import { Public } from "../decorators/public.decorator";
 import { KeycloakUser } from "../decorators/keycloak-user.decorator";
+import { getPermissionsForRoles } from "../permissions/permissions.constants";
 
 @Controller("auth")
 export class KeycloakAuthController {
@@ -127,6 +128,8 @@ export class KeycloakAuthController {
     @KeycloakUser() user: KeycloakUserProfile,
     @Res() response: Response
   ): Promise<void> {
+    const permissions = getPermissionsForRoles(user.roles);
+
     response.status(200).json({
       authenticated: true,
       user: {
@@ -137,6 +140,7 @@ export class KeycloakAuthController {
         firstName: user.firstName,
         lastName: user.lastName,
       },
+      permissions,
     });
   }
 }

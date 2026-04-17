@@ -6,7 +6,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { KeycloakAuthController } from './keycloak-auth.controller';
-import { KeycloakAuthService } from './keycloak-auth.service';
+import { KeycloakAuthService } from '../services/keycloak-auth.service';
 import { Request, Response } from 'express';
 
 describe('KeycloakAuthController (Unit)', () => {
@@ -212,6 +212,7 @@ describe('KeycloakAuthController (Unit)', () => {
       expect(mockResponse.json).toHaveBeenCalledWith({
         authenticated: true,
         user: mockUser,
+        permissions: ['conversations:read', 'conversations:create'],
       });
     });
   });
