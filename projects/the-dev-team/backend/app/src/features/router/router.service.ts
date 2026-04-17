@@ -4,7 +4,7 @@ import * as path from 'path';
 import { execFile as execFileCb } from 'child_process';
 import { promisify } from 'util';
 import { AgentService } from '../agent/agent.service';
-import { RouterState, IssueSummary, PrSummary } from './router.types';
+import { RouterState, IssueSummary, PrSummary, ClosedPrSummary } from './router.types';
 
 const execFile = promisify(execFileCb);
 
@@ -31,6 +31,7 @@ export class RouterService implements OnModuleInit, OnModuleDestroy {
     routedIssues: [],
     designerRoutedForPrCommit: {},
     feOwnerRoutedForPrReview: {},
+    cleanedPrs: [],
   };
   private timer: NodeJS.Timeout | null = null;
   private readonly POLL_INTERVAL_MS = 30_000;
@@ -83,6 +84,7 @@ export class RouterService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.routeNewIssues();
       await this.routePrTriggers();
+      await this.cleanupClosedPrs();
     } catch (err) {
       this.logger.warn(`Poll failed: ${(err as Error).message}`);
     } finally {
@@ -93,9 +95,23 @@ export class RouterService implements OnModuleInit, OnModuleDestroy {
   // ── Issue routing ──────────────────────────────────────────────────
 
   private async routeNewIssues(): Promise<void> {
-    const issues = await this.fetchOpenIssues();
+    const [issues, issuesWithOpenPrs] = await Promise.all([
+      this.fetchOpenIssues(),
+      this.fetchIssuesWithOpenPrs(),
+    ]);
+
     for (const issue of issues) {
       if (this.state.routedIssues.includes(issue.number)) continue;
+
+      // Dedup: skip issues that already have an open PR closing them.
+      // Prevents duplicate spawns after a router state reset, when the
+      // FE Owner has already opened a PR for this issue.
+      if (issuesWithOpenPrs.has(issue.number)) {
+        this.logger.log(`Issue #${issue.number} already has an open PR — skipping`);
+        this.state.routedIssues.push(issue.number);
+        this.persistState();
+        continue;
+      }
 
       const labels = (issue.labels || []).map((l) => l.name);
       const role = this.routeIssueByLabel(labels);
@@ -111,6 +127,28 @@ export class RouterService implements OnModuleInit, OnModuleDestroy {
       await this.spawnAgent(role, this.buildPickUpIssuePrompt(issue));
       this.state.routedIssues.push(issue.number);
       this.persistState();
+    }
+  }
+
+  /** Returns the set of issue numbers referenced by any currently-open PR. */
+  private async fetchIssuesWithOpenPrs(): Promise<Set<number>> {
+    try {
+      const { stdout } = await execFile(
+        'gh',
+        ['pr', 'list', '--state', 'open', '--limit', '50', '--json', 'closingIssuesReferences'],
+        { cwd: this.repoRoot, env: { ...process.env, REPO_ROOT: this.repoRoot } },
+      );
+      const prs = JSON.parse(stdout) as Array<{ closingIssuesReferences?: Array<{ number: number }> }>;
+      const numbers = new Set<number>();
+      for (const pr of prs) {
+        for (const ref of pr.closingIssuesReferences || []) {
+          numbers.add(ref.number);
+        }
+      }
+      return numbers;
+    } catch (err) {
+      this.logger.warn(`Failed to list issues-with-PRs: ${(err as Error).message}`);
+      return new Set();
     }
   }
 
@@ -227,6 +265,61 @@ Steps:
       return JSON.parse(stdout) as PrSummary[];
     } catch (err) {
       this.logger.warn(`Failed to list PRs: ${(err as Error).message}`);
+      return [];
+    }
+  }
+
+  // ── Cleanup closed PRs ────────────────────────────────────────────
+
+  private async cleanupClosedPrs(): Promise<void> {
+    const closedPrs = await this.fetchClosedAgentPrs();
+    for (const pr of closedPrs) {
+      if (this.state.cleanedPrs.includes(pr.number)) continue;
+      // Only clean PRs on agent-prefixed branches so we never touch a human's branch
+      if (!pr.headRefName.startsWith('the-dev-team/')) continue;
+
+      const sandboxName = pr.headRefName.replace(/^the-dev-team\//, '');
+      this.logger.log(`Cleaning up closed PR #${pr.number} (sandbox=${sandboxName})`);
+
+      // Destroy sandbox (best-effort)
+      try {
+        await execFile('task', ['env:destroy', '--', sandboxName], {
+          cwd: this.repoRoot,
+          env: { ...process.env, REPO_ROOT: this.repoRoot },
+        });
+        this.logger.log(`  Destroyed sandbox env-${sandboxName}`);
+      } catch (err) {
+        this.logger.warn(`  Failed to destroy sandbox env-${sandboxName}: ${(err as Error).message}`);
+      }
+
+      // Remove worktree (best-effort)
+      const worktreePath = path.join(this.repoRoot, '.worktrees', sandboxName);
+      try {
+        await execFile('git', ['worktree', 'remove', '--force', worktreePath], {
+          cwd: this.repoRoot,
+          env: { ...process.env, REPO_ROOT: this.repoRoot },
+        });
+        this.logger.log(`  Removed worktree ${worktreePath}`);
+      } catch (err) {
+        this.logger.warn(`  Failed to remove worktree ${worktreePath}: ${(err as Error).message}`);
+      }
+
+      this.state.cleanedPrs.push(pr.number);
+      this.persistState();
+    }
+  }
+
+  private async fetchClosedAgentPrs(): Promise<ClosedPrSummary[]> {
+    try {
+      const { stdout } = await execFile(
+        'gh',
+        ['pr', 'list', '--state', 'closed', '--limit', '50', '--json', 'number,headRefName,state,mergedAt,closedAt,author'],
+        { cwd: this.repoRoot, env: { ...process.env, REPO_ROOT: this.repoRoot } },
+      );
+      const prs = JSON.parse(stdout) as ClosedPrSummary[];
+      return prs.filter((pr) => pr.author?.login === this.BOT_LOGIN);
+    } catch (err) {
+      this.logger.warn(`Failed to list closed PRs: ${(err as Error).message}`);
       return [];
     }
   }

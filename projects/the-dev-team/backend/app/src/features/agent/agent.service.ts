@@ -142,7 +142,7 @@ export class AgentService implements OnModuleInit {
     const session: Session = {
       id,
       provider: provider || 'claude-code',
-      model: model || 'claude-sonnet-4-20250514',
+      model: model || 'claude-opus-4-6',
       role: role || 'default',
       createdAt: new Date(),
       lastMessageAt: new Date(),
