@@ -17,9 +17,6 @@ import { MessageList } from '../chat/message-list';
 import { MessageInput } from '../chat/message-input';
 import type { AgentMessage } from '../shared';
 
-const DOCS_ROOT = 'projects/application/frontend/docs';
-const INSTRUCTIONS_FILE = '.agent-instructions.md';
-
 const DEFAULT_INSTRUCTIONS = '';
 
 interface DocsChatBubbleProps {
@@ -60,17 +57,9 @@ export function DocsChatBubble({ activePath, onDocChanged }: DocsChatBubbleProps
   const [stepHistory, setStepHistory] = useState<StepUsage[]>([]);
   const [usageExpanded, setUsageExpanded] = useState(false);
 
-  // Load instructions from file
+  // Instructions are managed locally (editable in the UI)
   useEffect(() => {
-    fetch(`/api/cluster/project-docs/read?root=${encodeURIComponent(DOCS_ROOT)}&path=${encodeURIComponent(INSTRUCTIONS_FILE)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.content) {
-          setInstructions(data.content);
-        }
-        setInstructionsLoaded(true);
-      })
-      .catch(() => setInstructionsLoaded(true));
+    setInstructionsLoaded(true);
   }, []);
 
   // Set up socket connection — Mastra namespace
@@ -205,18 +194,9 @@ export function DocsChatBubble({ activePath, onDocChanged }: DocsChatBubbleProps
 
   const saveInstructions = async () => {
     setSavingInstructions(true);
-    try {
-      const res = await fetch('/api/cluster/project-docs/write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ root: DOCS_ROOT, path: INSTRUCTIONS_FILE, content: instructionsDraft }),
-      });
-      if (res.ok) {
-        setInstructions(instructionsDraft);
-        setEditingInstructions(false);
-      }
-    } catch { /* ignore */ }
-    finally { setSavingInstructions(false); }
+    setInstructions(instructionsDraft);
+    setEditingInstructions(false);
+    setSavingInstructions(false);
   };
 
   // Floating bubble when closed

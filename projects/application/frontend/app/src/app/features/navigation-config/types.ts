@@ -1,3 +1,4 @@
+/** A single navigation entry. May contain `children` for nested groups. */
 export interface NavigationItem {
   id: string;
   label: string;
@@ -8,6 +9,7 @@ export interface NavigationItem {
   badge?: string;
 }
 
+/** Top-level navigation configuration containing all nav items. */
 export interface NavigationConfig {
   items: NavigationItem[];
 }

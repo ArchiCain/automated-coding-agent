@@ -11,6 +11,7 @@ import { ChatMessage } from '../../types';
   styleUrl: './message-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Renders a list of chat messages with auto-scroll to bottom on new messages. */
 export class MessageListComponent {
   readonly messages = input.required<ChatMessage[]>();
   readonly isStreaming = input(false);

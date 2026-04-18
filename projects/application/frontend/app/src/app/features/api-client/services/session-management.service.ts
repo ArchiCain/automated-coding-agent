@@ -8,6 +8,7 @@ import { AppConfigService } from './app-config.service';
 const REFRESH_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
+/** Manages auth session lifecycle: proactive token refresh, inactivity logout, and activity tracking. */
 @Injectable({ providedIn: 'root' })
 export class SessionManagementService implements OnDestroy {
   private readonly http = inject(HttpClient);

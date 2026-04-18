@@ -7,6 +7,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CircularProgress from '@mui/material/CircularProgress';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { AgentMessage } from '../shared';
 
 interface MessageListProps {
@@ -129,7 +130,7 @@ function MessageBubble({ message }: { message: AgentMessage }) {
             },
           }}
         >
-          <Markdown>{content ?? ''}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]}>{content ?? ''}</Markdown>
         </Box>
       </Box>
     );

@@ -47,6 +47,7 @@ import { SessionSidebarComponent } from '../components/session-sidebar/session-s
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Top-level chat page. Connects WebSocket on init, disconnects on destroy. */
 export class ChatPage implements OnInit, OnDestroy {
   readonly chat = inject(ChatService);
 

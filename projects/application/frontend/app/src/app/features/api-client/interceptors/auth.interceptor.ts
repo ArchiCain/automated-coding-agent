@@ -8,6 +8,7 @@ import { SessionManagementService } from '../services/session-management.service
 let isRefreshing = false;
 const refreshSubject = new BehaviorSubject<boolean>(false);
 
+/** Adds `withCredentials: true` to all requests and handles 401 with token refresh + retry queue. */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const sessionService = inject(SessionManagementService);
 

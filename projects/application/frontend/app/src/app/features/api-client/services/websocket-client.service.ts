@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client';
 
 import { AppConfigService } from './app-config.service';
 
+/** Generic Socket.IO client wrapper. Connects to a namespace and exposes events as Observables. */
 @Injectable({ providedIn: 'root' })
 export class WebSocketClientService implements OnDestroy {
   private readonly config = inject(AppConfigService);

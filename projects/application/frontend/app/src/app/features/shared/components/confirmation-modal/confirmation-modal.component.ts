@@ -2,6 +2,7 @@ import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 
+/** Data passed to `ConfirmationModalComponent` via `MAT_DIALOG_DATA`. */
 export interface ConfirmationModalData {
   title: string;
   message: string;
@@ -28,6 +29,7 @@ export interface ConfirmationModalData {
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Generic confirmation dialog. Closes with `true` on confirm, `false` on cancel. */
 export class ConfirmationModalComponent {
   readonly data = inject<ConfirmationModalData>(MAT_DIALOG_DATA);
   readonly dialogRef = inject(MatDialogRef<ConfirmationModalComponent>);

@@ -102,4 +102,25 @@ export class ClusterController {
     if (!ok) return { error: 'Write failed' };
     return { ok: true };
   }
+
+  // ── Full project tree (code + docs) ─────────────────────────────
+
+  @Get('project-tree')
+  async projectTree(@Query('root') root: string) {
+    return this.clusterService.getProjectTree(root);
+  }
+
+  @Get('project-file/read')
+  async readProjectFile(@Query('root') root: string, @Query('path') filePath: string) {
+    const content = await this.clusterService.readProjectDoc(root, filePath);
+    if (content === null) return { error: 'Not found' };
+    return { content };
+  }
+
+  @Post('project-file/write')
+  async writeProjectFile(@Body() body: { root: string; path: string; content: string }) {
+    const ok = await this.clusterService.writeProjectDoc(body.root, body.path, body.content);
+    if (!ok) return { error: 'Write failed' };
+    return { ok: true };
+  }
 }

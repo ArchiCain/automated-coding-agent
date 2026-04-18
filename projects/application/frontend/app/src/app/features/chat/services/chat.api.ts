@@ -6,6 +6,7 @@ import { AppConfigService } from '@features/api-client';
 
 import { ChatSession } from '../types';
 
+/** HTTP client for agent session CRUD operations. */
 @Injectable({ providedIn: 'root' })
 export class ChatApiService {
   private readonly http = inject(HttpClient);

@@ -251,6 +251,78 @@ export class ClusterService {
     }
   }
 
+  // ── Full project tree (code + docs) ────────────────────────────
+
+  private static EXCLUDED_DIRS = new Set([
+    'node_modules', 'dist', '.git', '.angular', '.vite',
+    'chart', 'dockerfiles', 'scripts', 'coverage',
+    '__pycache__', '.next', '.nuxt', 'build', '.turbo',
+  ]);
+
+  async getProjectTree(root: string): Promise<any> {
+    const projectRoot = this.resolveProjectDocsRoot(root);
+    if (!projectRoot) return { error: 'Invalid root' };
+
+    const buildTree = async (dir: string, relativePath: string, depth: number): Promise<any[]> => {
+      if (depth > 8) return [];
+      try {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        const results: any[] = [];
+
+        for (const entry of entries) {
+          if (entry.name.startsWith('.') && entry.name !== '.docs') continue;
+          const entryRelative = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+          const entryAbsolute = path.join(dir, entry.name);
+
+          if (entry.isDirectory()) {
+            if (ClusterService.EXCLUDED_DIRS.has(entry.name)) continue;
+            const children = await buildTree(entryAbsolute, entryRelative, depth + 1);
+            if (children.length === 0 && entry.name !== '.docs') continue;
+            const tokens = children.reduce((sum, c) => sum + (c.tokens || 0), 0);
+            results.push({
+              type: 'dir',
+              name: entry.name,
+              path: entryRelative,
+              isDocsDir: entry.name === '.docs',
+              tokens,
+              children,
+            });
+          } else {
+            const isDoc = relativePath.includes('.docs') || dir.endsWith('.docs');
+            let tokens = 0;
+            if (isDoc && entry.name.endsWith('.md')) {
+              try {
+                const content = await fs.readFile(entryAbsolute, 'utf-8');
+                tokens = this.estimateTokens(content);
+              } catch { /* ignore */ }
+            }
+            results.push({
+              type: 'file',
+              name: entry.name,
+              path: entryRelative,
+              isDoc,
+              tokens,
+            });
+          }
+        }
+
+        return results.sort((a, b) => {
+          // .docs dirs first, then other dirs, then files
+          if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+          if (a.isDocsDir && !b.isDocsDir) return -1;
+          if (!a.isDocsDir && b.isDocsDir) return 1;
+          return a.name.localeCompare(b.name);
+        });
+      } catch {
+        return [];
+      }
+    };
+
+    const children = await buildTree(projectRoot, '', 0);
+    const totalTokens = children.reduce((sum, c) => sum + (c.tokens || 0), 0);
+    return { root, tokens: totalTokens, children };
+  }
+
   // ── Repo info ──────────────────────────────────────────────────
 
   async getBranch(): Promise<string> {

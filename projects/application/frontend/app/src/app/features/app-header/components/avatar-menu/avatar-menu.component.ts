@@ -36,6 +36,7 @@ import { AuthService } from '@features/keycloak-auth';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** User avatar icon button with dropdown menu showing username and sign-out action. */
 export class AvatarMenuComponent {
   readonly auth = inject(AuthService);
 }

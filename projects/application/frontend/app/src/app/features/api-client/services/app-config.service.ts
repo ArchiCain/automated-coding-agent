@@ -1,11 +1,13 @@
 import { Injectable, signal } from '@angular/core';
 
+/** Runtime application configuration loaded from `/config.json`. */
 export interface AppConfig {
   backendUrl: string;
 }
 
 const REQUIRED_KEYS: (keyof AppConfig)[] = ['backendUrl'];
 
+/** Loads and provides runtime config from `/config.json`. Must complete before app renders (APP_INITIALIZER). */
 @Injectable({ providedIn: 'root' })
 export class AppConfigService {
   private readonly _config = signal<AppConfig | null>(null);

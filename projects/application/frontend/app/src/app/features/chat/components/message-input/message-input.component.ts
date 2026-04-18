@@ -48,6 +48,7 @@ import { MatIconModule } from '@angular/material/icon';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Chat message textarea with send/stop controls. Enter sends, Shift+Enter inserts newline. */
 export class MessageInputComponent {
   readonly disabled = input(false);
   readonly isStreaming = input(false);

@@ -57,6 +57,7 @@ import { ChatSession } from '../../types';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Sidebar listing chat sessions with create, select, and delete actions. */
 export class SessionSidebarComponent {
   readonly sessions = input.required<ChatSession[]>();
   readonly activeSessionId = input<string | null>(null);

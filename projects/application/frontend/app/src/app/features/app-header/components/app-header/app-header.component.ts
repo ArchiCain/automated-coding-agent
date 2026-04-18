@@ -40,6 +40,7 @@ import { AvatarMenuComponent } from '../avatar-menu/avatar-menu.component';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Sticky top toolbar with menu toggle, app title, theme toggle, and avatar menu. */
 export class AppHeaderComponent {
   readonly menuToggle = output<void>();
 }

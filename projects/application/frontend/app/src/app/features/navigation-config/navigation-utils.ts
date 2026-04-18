@@ -1,5 +1,6 @@
 import { NavigationItem } from './types';
 
+/** Recursively flattens nested navigation items into a single-level array. */
 export function flattenNavigation(items: NavigationItem[]): NavigationItem[] {
   const result: NavigationItem[] = [];
   for (const item of items) {
@@ -11,6 +12,7 @@ export function flattenNavigation(items: NavigationItem[]): NavigationItem[] {
   return result;
 }
 
+/** Finds the navigation item whose `route` matches the given path, or `null`. */
 export function findActiveNavItem(
   items: NavigationItem[],
   currentRoute: string,
@@ -19,6 +21,7 @@ export function findActiveNavItem(
   return flat.find(item => item.route === currentRoute) ?? null;
 }
 
+/** Finds the parent navigation item that contains a child with the given `id`, or `null`. */
 export function findParentNavItem(
   items: NavigationItem[],
   childId: string,

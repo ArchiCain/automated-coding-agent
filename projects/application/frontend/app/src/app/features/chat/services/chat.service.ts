@@ -7,6 +7,7 @@ import { AppConfigService } from '@features/api-client';
 import { ChatSession, ChatMessage, SessionHistory } from '../types';
 import { ChatApiService } from './chat.api';
 
+/** Manages chat state and Socket.IO connection to the agent backend. */
 @Injectable({ providedIn: 'root' })
 export class ChatService implements OnDestroy {
   private readonly config = inject(AppConfigService);

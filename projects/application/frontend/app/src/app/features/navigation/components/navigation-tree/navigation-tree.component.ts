@@ -61,6 +61,7 @@ import { NavigationItem } from '@features/navigation-config';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Renders a tree of navigation items as mat-list links with optional expansion panels for groups. */
 export class NavigationTreeComponent {
   readonly items = input.required<NavigationItem[]>();
 }

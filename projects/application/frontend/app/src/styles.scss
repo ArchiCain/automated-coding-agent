@@ -1,6 +1,6 @@
 @use '@angular/material' as mat;
-@use './styles/themes/light-theme' as light;
-@use './styles/themes/dark-theme' as dark;
+@use './app/features/theme/styles/light-theme' as light;
+@use './app/features/theme/styles/dark-theme' as dark;
 
 // Light theme (default)
 html {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -9,23 +9,35 @@ import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import Collapse from '@mui/material/Collapse';
 import FolderIcon from '@mui/icons-material/Folder';
+import FolderSpecialIcon from '@mui/icons-material/FolderSpecial';
 import DescriptionIcon from '@mui/icons-material/Description';
+import CodeIcon from '@mui/icons-material/Code';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
+import Switch from '@mui/material/Switch';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { DocsChatBubble } from './docs-chat-bubble';
 
-// The docs root relative to REPO_ROOT — this is where the benchmark frontend docs live
-const DOCS_ROOT = 'projects/application/frontend/docs';
+const PROJECTS = [
+  { label: 'Frontend', root: 'projects/application/frontend/app' },
+  { label: 'Backend', root: 'projects/application/backend' },
+  { label: 'Keycloak', root: 'projects/application/keycloak' },
+  { label: 'Database', root: 'projects/application/database' },
+  { label: 'E2E Tests', root: 'projects/application/e2e' },
+];
 
 interface TreeNode {
   type: 'file' | 'dir';
   name: string;
   path: string;
-  tokens: number;
+  tokens?: number;
+  isDoc?: boolean;
+  isDocsDir?: boolean;
   children?: TreeNode[];
 }
 
@@ -40,10 +52,20 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-function titleCase(s: string): string {
-  return s
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+/** Filter tree to only show .docs/ dirs and directories that contain them */
+function filterDocsOnly(nodes: TreeNode[]): TreeNode[] {
+  return nodes
+    .map((node) => {
+      if (node.type === 'file') {
+        return node.isDoc ? node : null;
+      }
+      // Directory
+      if (node.isDocsDir) return node; // Show .docs/ dirs fully
+      const filteredChildren = filterDocsOnly(node.children || []);
+      if (filteredChildren.length === 0) return null;
+      return { ...node, children: filteredChildren };
+    })
+    .filter(Boolean) as TreeNode[];
 }
 
 // ── Tree Node Component ──────────────────────────────────────────
@@ -59,9 +81,11 @@ function TreeItem({
   activePath: string | null;
   onSelect: (path: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(depth < 2);
+  const [expanded, setExpanded] = useState(node.isDocsDir || depth < 1);
   const isDir = node.type === 'dir';
   const isActive = activePath === node.path;
+  const isDocFile = node.isDoc;
+  const isDocsDir = node.isDocsDir;
 
   return (
     <>
@@ -73,9 +97,9 @@ function TreeItem({
         sx={{
           display: 'flex',
           alignItems: 'center',
-          pl: depth * 2 + 1,
+          pl: depth * 1.5 + 0.5,
           pr: 1,
-          py: 0.4,
+          py: 0.3,
           cursor: 'pointer',
           bgcolor: isActive ? 'rgba(88, 166, 255, 0.12)' : 'transparent',
           '&:hover': { bgcolor: isActive ? 'rgba(88, 166, 255, 0.12)' : 'rgba(255,255,255,0.04)' },
@@ -84,48 +108,54 @@ function TreeItem({
       >
         {isDir ? (
           expanded ? (
-            <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.secondary', mr: 0.5 }} />
+            <ExpandMoreIcon sx={{ fontSize: 14, color: 'text.secondary', mr: 0.25 }} />
           ) : (
-            <ChevronRightIcon sx={{ fontSize: 16, color: 'text.secondary', mr: 0.5 }} />
+            <ChevronRightIcon sx={{ fontSize: 14, color: 'text.secondary', mr: 0.25 }} />
           )
         ) : (
-          <Box sx={{ width: 20, mr: 0.5 }} />
+          <Box sx={{ width: 16, mr: 0.25 }} />
         )}
 
-        {isDir ? (
-          <FolderIcon sx={{ fontSize: 16, color: '#d29922', mr: 0.75 }} />
+        {isDocsDir ? (
+          <FolderSpecialIcon sx={{ fontSize: 14, color: '#58a6ff', mr: 0.5 }} />
+        ) : isDir ? (
+          <FolderIcon sx={{ fontSize: 14, color: '#d29922', mr: 0.5 }} />
+        ) : isDocFile ? (
+          <DescriptionIcon sx={{ fontSize: 14, color: '#58a6ff', mr: 0.5 }} />
         ) : (
-          <DescriptionIcon sx={{ fontSize: 16, color: 'text.secondary', mr: 0.75 }} />
+          <CodeIcon sx={{ fontSize: 14, color: '#8b949e', mr: 0.5 }} />
         )}
 
         <Typography
           sx={{
             flex: 1,
-            fontSize: '0.78rem',
-            color: isActive ? '#58a6ff' : 'text.primary',
-            fontWeight: isActive ? 600 : 400,
+            fontSize: '0.72rem',
+            color: isActive ? '#58a6ff' : isDocFile || isDocsDir ? '#c9d1d9' : '#8b949e',
+            fontWeight: isActive ? 600 : isDocsDir ? 600 : 400,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
           }}
         >
-          {titleCase(node.name)}
+          {node.name}
         </Typography>
 
-        <Tooltip title={`~${node.tokens.toLocaleString()} tokens`} placement="right">
-          <Chip
-            label={formatTokens(node.tokens)}
-            size="small"
-            sx={{
-              height: 18,
-              fontSize: '0.6rem',
-              fontFamily: 'monospace',
-              bgcolor: node.tokens > 5000 ? 'rgba(255, 167, 38, 0.15)' : 'rgba(255,255,255,0.06)',
-              color: node.tokens > 5000 ? '#ffa726' : 'text.secondary',
-              '& .MuiChip-label': { px: 0.75 },
-            }}
-          />
-        </Tooltip>
+        {(node.tokens ?? 0) > 0 && (
+          <Tooltip title={`~${(node.tokens ?? 0).toLocaleString()} tokens`} placement="right">
+            <Chip
+              label={formatTokens(node.tokens ?? 0)}
+              size="small"
+              sx={{
+                height: 16,
+                fontSize: '0.55rem',
+                fontFamily: 'monospace',
+                bgcolor: 'rgba(88, 166, 255, 0.1)',
+                color: '#58a6ff',
+                '& .MuiChip-label': { px: 0.5 },
+              }}
+            />
+          </Tooltip>
+        )}
       </Box>
 
       {isDir && node.children && (
@@ -142,6 +172,104 @@ function TreeItem({
         </Collapse>
       )}
     </>
+  );
+}
+
+// ── Project section in sidebar ───────────────────────────────────
+
+function ProjectSection({
+  label,
+  root,
+  activePath,
+  onSelect,
+  showCode,
+}: {
+  label: string;
+  root: string;
+  activePath: string | null;
+  onSelect: (root: string, path: string) => void;
+  showCode: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [tree, setTree] = useState<TreeRoot | null>(null);
+  const [loading, setLoading] = useState(false);
+  const loaded = useRef(false);
+
+  const load = useCallback(async () => {
+    if (loaded.current) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/cluster/project-tree?root=${encodeURIComponent(root)}`);
+      if (res.ok) {
+        const data: TreeRoot = await res.json();
+        setTree(data);
+        loaded.current = true;
+      }
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [root]);
+
+  const toggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next) void load();
+  };
+
+  return (
+    <Box>
+      <Box
+        onClick={toggle}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          px: 1.5,
+          py: 0.6,
+          cursor: 'pointer',
+          '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        {expanded ? (
+          <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.secondary', mr: 0.5 }} />
+        ) : (
+          <ChevronRightIcon sx={{ fontSize: 16, color: 'text.secondary', mr: 0.5 }} />
+        )}
+        <Typography sx={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: 'text.primary' }}>
+          {label}
+        </Typography>
+        {tree && (
+          <Chip
+            label={formatTokens(tree.tokens)}
+            size="small"
+            sx={{
+              height: 16,
+              fontSize: '0.55rem',
+              fontFamily: 'monospace',
+              bgcolor: 'rgba(88, 166, 255, 0.1)',
+              color: '#58a6ff',
+              '& .MuiChip-label': { px: 0.5 },
+            }}
+          />
+        )}
+      </Box>
+      <Collapse in={expanded} timeout="auto">
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+            <CircularProgress size={16} />
+          </Box>
+        )}
+        {(showCode ? tree?.children : filterDocsOnly(tree?.children || []))?.map((node) => (
+          <TreeItem
+            key={node.path}
+            node={node}
+            depth={1}
+            activePath={activePath}
+            onSelect={(p) => onSelect(root, p)}
+          />
+        ))}
+      </Collapse>
+    </Box>
   );
 }
 
@@ -179,8 +307,8 @@ const markdownSx = {
 // ── Main Page Component ──────────────────────────────────────────
 
 export function DocsPage() {
-  const [tree, setTree] = useState<TreeRoot | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [showCode, setShowCode] = useState(false);
+  const [activeRoot, setActiveRoot] = useState<string | null>(null);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [content, setContent] = useState<string | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
@@ -189,29 +317,14 @@ export function DocsPage() {
   const [saving, setSaving] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load the full tree on mount
-  const loadTree = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/cluster/project-docs/tree?root=${encodeURIComponent(DOCS_ROOT)}`);
-      if (res.ok) {
-        const data: TreeRoot = await res.json();
-        setTree(data);
-      }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void loadTree(); }, [loadTree]);
-
-  // Load file content
-  const handleSelect = useCallback(async (filePath: string) => {
+  const handleSelect = useCallback(async (root: string, filePath: string) => {
+    setActiveRoot(root);
     setActivePath(filePath);
     setEditing(false);
     setContentLoading(true);
     try {
       const res = await fetch(
-        `/api/cluster/project-docs/read?root=${encodeURIComponent(DOCS_ROOT)}&path=${encodeURIComponent(filePath)}`
+        `/api/cluster/project-file/read?root=${encodeURIComponent(root)}&path=${encodeURIComponent(filePath)}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -221,37 +334,39 @@ export function DocsPage() {
     finally { setContentLoading(false); }
   }, []);
 
-  // Save edited content
   const handleSave = useCallback(async () => {
-    if (!activePath) return;
+    if (!activeRoot || !activePath) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/cluster/project-docs/write', {
+      const res = await fetch('/api/cluster/project-file/write', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ root: DOCS_ROOT, path: activePath, content: editContent }),
+        body: JSON.stringify({ root: activeRoot, path: activePath, content: editContent }),
       });
       if (res.ok) {
         setContent(editContent);
         setEditing(false);
-        void loadTree(); // refresh token counts
       }
     } catch { /* ignore */ }
     finally { setSaving(false); }
-  }, [activePath, editContent, loadTree]);
+  }, [activeRoot, activePath, editContent]);
 
   const startEditing = () => {
     setEditContent(content || '');
     setEditing(true);
   };
 
+  // Derive the full path for the chat context
+  const fullActivePath = activeRoot && activePath ? `${activeRoot}/${activePath}` : null;
+  const isMarkdown = activePath?.endsWith('.md');
+
   return (
     <Box sx={{ display: 'flex', height: 'calc(100vh - 48px)' }}>
-      {/* ── Left: File tree ────────────────────────────────── */}
+      {/* ── Left: Project tree ──────────────────────────────── */}
       <Box
         sx={{
-          width: 300,
-          minWidth: 300,
+          width: 320,
+          minWidth: 320,
           flexShrink: 0,
           borderRight: '1px solid',
           borderColor: 'divider',
@@ -263,35 +378,33 @@ export function DocsPage() {
           flexDirection: 'column',
         }}
       >
-        {/* Header */}
         <Box sx={{ p: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.85rem' }}>
-              Project Docs
-            </Typography>
-            {tree && (
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.65rem' }}>
-                {formatTokens(tree.tokens)} tokens total
-              </Typography>
-            )}
-          </Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.85rem' }}>
+            Projects
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showCode}
+                onChange={(e) => setShowCode(e.target.checked)}
+                sx={{ '& .MuiSwitch-thumb': { width: 14, height: 14 }, '& .MuiSwitch-switchBase': { p: '3px' }, '& .MuiSwitch-track': { borderRadius: 7 } }}
+              />
+            }
+            label={<Typography sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>Code</Typography>}
+            sx={{ m: 0, gap: 0.25 }}
+          />
         </Box>
 
-        {/* Tree */}
-        <Box sx={{ flex: 1, overflow: 'auto', py: 0.5 }}>
-          {loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-              <CircularProgress size={20} />
-            </Box>
-          )}
-
-          {tree?.children.map((node) => (
-            <TreeItem
-              key={node.path}
-              node={node}
-              depth={0}
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
+          {PROJECTS.map((p) => (
+            <ProjectSection
+              key={p.root}
+              label={p.label}
+              root={p.root}
               activePath={activePath}
               onSelect={handleSelect}
+              showCode={showCode}
             />
           ))}
         </Box>
@@ -308,7 +421,6 @@ export function DocsPage() {
           scrollbarColor: '#30363d #0d1117',
         }}
       >
-        {/* Toolbar */}
         {activePath && (
           <Box
             sx={{
@@ -325,12 +437,12 @@ export function DocsPage() {
             <Typography
               sx={{
                 flex: 1,
-                fontSize: '0.78rem',
+                fontSize: '0.75rem',
                 fontFamily: 'monospace',
                 color: 'text.secondary',
               }}
             >
-              {activePath}
+              {activeRoot}/{activePath}
             </Typography>
 
             {content !== null && !editing && (
@@ -365,7 +477,6 @@ export function DocsPage() {
           </Box>
         )}
 
-        {/* Content */}
         <Box sx={{ flex: 1, overflow: 'auto', p: editing ? 0 : 4 }}>
           {contentLoading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -373,9 +484,27 @@ export function DocsPage() {
             </Box>
           )}
 
-          {!contentLoading && content !== null && !editing && (
+          {!contentLoading && content !== null && !editing && isMarkdown && (
             <Box sx={markdownSx}>
-              <Markdown>{content}</Markdown>
+              <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+            </Box>
+          )}
+
+          {!contentLoading && content !== null && !editing && !isMarkdown && (
+            <Box
+              component="pre"
+              sx={{
+                maxWidth: 900,
+                mx: 'auto',
+                fontSize: '0.8rem',
+                fontFamily: 'monospace',
+                color: 'text.primary',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                lineHeight: 1.6,
+              }}
+            >
+              {content}
             </Box>
           )}
 
@@ -406,10 +535,10 @@ export function DocsPage() {
           {!content && !contentLoading && !activePath && (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 1 }}>
               <Typography sx={{ color: 'text.secondary', fontSize: '0.95rem' }}>
-                Select a document from the tree to view it.
+                Expand a project and select a file to view it.
               </Typography>
               <Typography sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
-                Token counts show approximate context usage per file and directory.
+                Blue folders are .docs/ — documentation co-located with code.
               </Typography>
             </Box>
           )}
@@ -417,7 +546,7 @@ export function DocsPage() {
       </Box>
 
       {/* ── Floating chat bubble ─────────────────────────── */}
-      <DocsChatBubble activePath={activePath} onDocChanged={() => { if (activePath) handleSelect(activePath); loadTree(); }} />
+      <DocsChatBubble activePath={fullActivePath} onDocChanged={() => { if (activeRoot && activePath) handleSelect(activeRoot, activePath); }} />
     </Box>
   );
 }

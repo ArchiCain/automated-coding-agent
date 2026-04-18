@@ -26,6 +26,7 @@ import { NavigationTreeComponent } from '../navigation-tree/navigation-tree.comp
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Overlay navigation drawer (280px) that opens/closes via the `opened` input. */
 export class LeftNavigationDrawerComponent {
   readonly opened = input(false);
   readonly closed = output<void>();

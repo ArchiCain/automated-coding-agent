@@ -23,6 +23,7 @@ import { NavigationTreeComponent } from '../navigation-tree/navigation-tree.comp
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+/** Permanent left sidebar (280px) rendering the app navigation tree. */
 export class LeftNavigationSidebarComponent {
   readonly navItems = navigationConfig.items;
 }
