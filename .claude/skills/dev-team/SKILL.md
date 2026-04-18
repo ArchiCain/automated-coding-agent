@@ -41,9 +41,9 @@ features/
 │   ├── task-runner-context.tsx # React context wrapping the hook
 │   ├── use-task-runner.ts      # Socket.io /task-runner + REST
 │   └── types.ts
-├── docs/           # Project docs viewer/editor with chat assistant
-│   ├── docs.page.tsx          # Three-panel: file tree + markdown viewer/editor
-│   └── docs-chat-bubble.tsx   # Floating chat bubble with editable system instructions
+├── docs/           # Project docs viewer/editor with Mastra-powered chat assistant
+│   ├── docs.page.tsx          # Project tree + file viewer with code toggle
+│   └── docs-chat-bubble.tsx   # Floating chat with token tracking + tool call visibility
 ├── mui-theme/      # MUI theme (dark mode)
 │   ├── theme.ts
 │   └── mui-theme-provider.tsx
@@ -56,7 +56,7 @@ App.tsx             # Routes: / (environments), /env/:name, /env/:name/app/:appN
 main.tsx            # Entry point
 ```
 
-**Tech stack:** React 19, MUI, Vite, recharts, react-markdown, socket.io-client
+**Tech stack:** React 19, MUI, Vite, recharts, react-markdown (with remark-gfm), socket.io-client
 
 ### Backend (`projects/the-dev-team/backend/app/src/`)
 
@@ -78,6 +78,17 @@ features/
 │       ├── default.role.ts      # General-purpose agent
 │       ├── designer.role.ts     # UI/UX reviewer (Playwright + GitHub issues)
 │       └── frontend-owner.role.ts  # Angular developer (file ops + workspace)
+├── mastra-agents/  # Mastra-powered docs assistant
+│   ├── agents/
+│   │   └── docs-assistant.agent.ts  # Agent factory with system instructions
+│   ├── gateways/
+│   │   └── mastra-agents.gateway.ts # Socket.io /mastra namespace, onStepFinish tracking
+│   ├── tools/
+│   │   ├── list-dir.tool.ts     # Browse directories in projects/application/
+│   │   ├── read-file.tool.ts    # Read any file (docs or code)
+│   │   └── write-file.tool.ts   # Write/update files
+│   ├── mastra-agents.module.ts
+│   └── mastra-agents.types.ts
 ├── router/         # Orchestration — polls GitHub, spawns agents
 │   ├── router.service.ts        # Poll loop: issues → agents, PRs → reviews
 │   ├── router.types.ts          # RouterState, IssueSummary, PrSummary
@@ -87,9 +98,9 @@ features/
 │   ├── task-runner.gateway.ts   # Socket.io /task-runner namespace
 │   ├── task-runner.controller.ts
 │   └── task-runner.types.ts
-├── cluster/        # Kubernetes cluster API + project docs endpoints
-│   ├── cluster.service.ts       # K8s API, Prometheus/Loki queries, project docs tree/read/write
-│   └── cluster.controller.ts    # REST endpoints including project-docs/*
+├── cluster/        # Kubernetes cluster API + project tree/file endpoints
+│   ├── cluster.service.ts       # K8s API, Prometheus/Loki, project-tree, project-file read/write
+│   └── cluster.controller.ts    # REST endpoints
 ├── health/         # /health endpoint
 └── cors/           # CORS middleware
 
@@ -100,7 +111,68 @@ app.module.ts              # Root NestJS module
 main.ts                    # Entry point (port 8080)
 ```
 
-**Tech stack:** NestJS, @anthropic-ai/claude-code SDK (Opus 4.6), @kubernetes/client-node, socket.io
+**Tech stack:** NestJS, @anthropic-ai/claude-code SDK (Opus 4.6), @mastra/core (agents + tools), @kubernetes/client-node, socket.io
+
+## Docs page (`/docs`)
+
+The docs page provides a project tree viewer with an AI-powered docs assistant.
+
+### UI structure
+
+- **Left sidebar (320px):** Expandable project tree showing all 5 managed projects (Frontend, Backend, Keycloak, Database, E2E Tests). Each project loads on expand via `GET /api/cluster/project-tree`.
+- **Code toggle:** Switch in sidebar header. Default OFF (docs-only view — shows only `.docs/` directories). Toggle ON to see full source tree alongside docs.
+- **Center panel:** File viewer. Markdown files render with GFM (tables, checkboxes). Code files render as monospace. Edit button switches to raw textarea with save.
+- **Chat bubble (bottom-right):** Mastra-powered Docs Assistant agent with:
+  - Editable system instructions
+  - Inline tool call visibility (tool use → result → step tokens)
+  - Per-step token usage breakdown (expandable in bottom bar)
+  - Cumulative token tracking across conversation
+
+### Docs assistant agent
+
+The agent uses Mastra framework with three tools:
+- **listDir** — Browse `projects/application/` directories
+- **readFile** — Read any file (docs or source code)
+- **writeFile** — Create or update files
+
+System instructions explain the `.docs/` convention and review workflow. When asked to review a feature, the agent:
+1. Reads project-level `.docs/` (overview + standards)
+2. Reads the feature's `.docs/` (requirements, flows, test-data)
+3. Reads the feature's source code
+4. Compares docs to implementation
+
+### Backend endpoints for docs
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/cluster/project-tree?root={path}` | Full directory tree with .docs/ detection and token counts |
+| GET | `/cluster/project-file/read?root={path}&path={file}` | Read any file |
+| POST | `/cluster/project-file/write` | Write/update a file (body: `{ root, path, content }`) |
+| GET | `/cluster/project-docs/tree?root={path}` | Legacy: docs-only tree |
+| GET | `/cluster/project-docs/read?root={path}&path={file}` | Legacy: read doc file |
+
+### WebSocket events (Mastra namespace: `/mastra`)
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `message` | Client → Server | Send conversation messages + optional systemPrompt |
+| `agent:delta` | Server → Client | Streaming text chunk |
+| `agent:tool-call` | Server → Client | Tool invocation (toolName, args) |
+| `agent:tool-result` | Server → Client | Tool result (toolName, result) |
+| `agent:step` | Server → Client | Per-step token usage from onStepFinish |
+| `agent:usage` | Server → Client | Aggregated token usage |
+| `agent:done` | Server → Client | Stream complete |
+| `agent:error` | Server → Client | Error message |
+| `cancel` | Client → Server | Abort active stream |
+
+## Documentation convention (.docs/)
+
+Documentation lives in `.docs/` directories co-located with the code they describe:
+
+- **Project-level:** `{project}/app/.docs/overview.md`, `{project}/app/.docs/standards/`
+- **Feature-level:** `{project}/app/src/features/{feature}/.docs/requirements.md`
+
+See `ideas/docs-driven-development.md` for the full convention.
 
 ## Orchestration flow
 
@@ -155,58 +227,6 @@ The frontend container runs nginx (`projects/the-dev-team/frontend/dockerfiles/n
 - `/socket.io/*` → proxied with WebSocket upgrade
 - `/*` → serves static React build with SPA fallback
 
-## Documentation-driven development
-
-The system uses a docs-driven model: **documentation is the specification**. To change what the system builds, change the docs first — agents make the code match.
-
-### Project docs structure
-
-Project documentation lives alongside the project (e.g. `projects/application/frontend/docs/`). The structure mirrors the Angular feature directories:
-
-```
-docs/
-├── overview.md              # Index — what the app is, feature table, architecture
-├── standards/               # Global rules for the project
-│   ├── coding.md            # Angular patterns, file naming, code style
-│   └── design.md            # Colors, typography, component patterns, spacing
-└── features/                # One directory per feature (mirrors src/app/features/)
-    ├── auth/                # Auth infrastructure + login page
-    │   ├── requirements.md  # What the feature does, acceptance criteria, constraints
-    │   ├── flows.md         # Step-by-step user flows (these ARE the acceptance tests)
-    │   └── test-data.md     # Test accounts, edge cases, API examples
-    ├── home/                # Welcome page
-    ├── users/               # User management (full CRUD)
-    ├── smoke-tests/         # Health checks
-    ├── layout/              # App shell, sidenav, responsive nav
-    └── theme/               # Dark/light toggle, server-persisted preference
-```
-
-### Doc file types
-
-| File | Purpose | Why code can't replace it |
-|------|---------|--------------------------|
-| `requirements.md` | What the feature does, components needed, acceptance criteria | The "what should exist" vs what does exist |
-| `flows.md` | Step-by-step user journeys — the acceptance tests | Crosses component boundaries, includes expected visual outcomes |
-| `test-data.md` | Credentials, seed data, edge cases, error scenarios | Environment/test config that lives outside the code |
-
-### The Docs page (`/docs`)
-
-The frontend has a dedicated docs viewer/editor at `/docs` with three panels:
-
-- **Left sidebar (300px):** Recursive file tree with token counts per file and directory. Token estimation uses `~chars/4`. Directories are expandable/collapsible.
-- **Center:** Markdown viewer (react-markdown). Toolbar shows file path with edit button. Edit mode switches to raw markdown textarea. Save writes to disk via `POST /api/cluster/project-docs/write`.
-- **Floating chat bubble (bottom-right):** Opens a chat panel with editable system instructions. Instructions are persisted to `.agent-instructions.md` in the docs root. Instructions are editable before conversation starts, then locked.
-
-### Project docs backend endpoints
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/cluster/project-docs/tree?root={path}` | Recursive file tree with token counts |
-| GET | `/cluster/project-docs/read?root={path}&path={file}` | Read a markdown file |
-| POST | `/cluster/project-docs/write` | Write/update a file (body: `{ root, path, content }`) |
-
-The `root` parameter is relative to `$REPO_ROOT` (e.g. `projects/application/frontend/docs`). The `DOCS_ROOT` constant in `docs.page.tsx` controls which docs directory the UI serves.
-
 ## When the user shows a screenshot
 
 1. Identify which page it is from the URL or visual layout:
@@ -225,7 +245,7 @@ After making code changes, build and deploy to the local Minikube cluster:
 
 ```bash
 # Build the changed image(s) into Minikube's Docker daemon
-eval $(minikube docker-env) && docker build --build-arg CACHEBUST=$(date +%s) -t localhost:30500/the-dev-team-frontend:latest -f projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile projects/the-dev-team/frontend && docker push localhost:30500/the-dev-team-frontend:latest
+eval $(minikube docker-env) && docker build --no-cache --build-arg CACHEBUST=$(date +%s) -t localhost:30500/the-dev-team-frontend:latest -f projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile projects/the-dev-team/frontend && docker push localhost:30500/the-dev-team-frontend:latest
 
 # For backend changes:
 eval $(minikube docker-env) && docker build --build-arg CACHEBUST=$(date +%s) -t localhost:30500/the-dev-team-backend:latest -f projects/the-dev-team/backend/dockerfiles/prod.Dockerfile projects/the-dev-team/backend && docker push localhost:30500/the-dev-team-backend:latest
@@ -239,16 +259,27 @@ kubectl rollout status deployment/the-dev-team-frontend -n the-dev-team --timeou
 kubectl rollout status deployment/the-dev-team-backend -n the-dev-team --timeout=120s
 ```
 
+**IMPORTANT:** For frontend builds, use `--no-cache` to avoid Docker layer caching issues where source changes don't get picked up.
+
 The user accesses services via Tailscale hostnames (configured in `.env`). You do NOT need to restart the tunnel after deploying — only the pods change.
 
-### Syncing project docs to the pod
+### Syncing .docs/ to the pod
 
 The docs page reads files from the pod's `/workspace/` directory. After changing docs locally, copy them to the pod:
 
 ```bash
 POD=$(kubectl get pod -n the-dev-team -l app=the-dev-team-backend -o jsonpath='{.items[0].metadata.name}')
-kubectl exec $POD -n the-dev-team -c the-dev-team-backend -- rm -rf /workspace/projects/application/frontend/docs
-kubectl cp projects/application/frontend/docs the-dev-team/$POD:/workspace/projects/application/frontend/docs -c the-dev-team-backend
+
+# Example: sync frontend .docs
+kubectl cp projects/application/frontend/app/.docs the-dev-team/$POD:/workspace/projects/application/frontend/app/.docs -c the-dev-team-backend
+
+# Example: sync a feature's .docs
+kubectl cp projects/application/frontend/app/src/app/features/keycloak-auth/.docs the-dev-team/$POD:/workspace/projects/application/frontend/app/src/app/features/keycloak-auth/.docs -c the-dev-team-backend
+```
+
+**Note:** `kubectl cp` can create nested directories (`.docs/.docs/`). After bulk copies, verify with:
+```bash
+kubectl exec $POD -n the-dev-team -c the-dev-team-backend -- find /workspace/projects/application -path "*/.docs/.docs" -type d
 ```
 
 Edits made through the docs page UI write directly to the pod filesystem. They persist until the pod restarts (which re-clones from git).
@@ -256,8 +287,9 @@ Edits made through the docs page UI write directly to the pod filesystem. They p
 ## Key patterns
 
 - **API calls from frontend:** All go through `/api/` prefix. The nginx proxy strips it. So `fetch('/api/cluster/pods')` hits the backend's `ClusterController` at `/cluster/pods`.
-- **WebSocket:** Socket.io connects via `/socket.io/` (nginx proxies with upgrade). The `AgentGateway` handles events. Task runner uses a separate `/task-runner` namespace.
+- **WebSocket:** Socket.io connects via `/socket.io/` (nginx proxies with upgrade). The `AgentGateway` handles events. Task runner uses `/task-runner` namespace. Mastra docs assistant uses `/mastra` namespace.
 - **Agent sessions:** Created via REST (`POST /agent/sessions`) or headless via `agentService.createSession()` + `runMessage()`. The router uses headless invocation; the UI uses WebSocket.
+- **Mastra agents:** Separate from Claude Code SDK agents. Use `@mastra/core` with ESM dynamic imports (NestJS is CommonJS). Agent instances are cached and recreated when model/instructions change.
 - **Roles:** Each role defines `allowedTools`, `disallowedTools`, `mcpServers`, and a `buildSystemPrompt()`. Roles are registered in `role-registry.ts`.
 - **GitHub auth:** GitHub App installation tokens (1-hour TTL, auto-refreshed every 50min by `GithubTokenService`). Written to `/workspace/.git-credentials`. MCP servers re-read the file before every command.
 - **Helm charts:** Each service has a `chart/` directory. Values come from `infrastructure/k8s/helmfile.yaml.gotmpl`.
