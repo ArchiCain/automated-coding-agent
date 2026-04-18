@@ -417,7 +417,7 @@ export function DocsPage() {
       </Box>
 
       {/* ── Floating chat bubble ─────────────────────────── */}
-      <DocsChatBubble />
+      <DocsChatBubble activePath={activePath} onDocChanged={() => { if (activePath) handleSelect(activePath); loadTree(); }} />
     </Box>
   );
 }

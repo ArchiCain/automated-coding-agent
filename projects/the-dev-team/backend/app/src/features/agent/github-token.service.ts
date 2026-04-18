@@ -22,14 +22,14 @@ export class GitHubTokenService implements OnModuleInit, OnModuleDestroy {
   private static readonly REFRESH_INTERVAL_MS = 50 * 60 * 1000;
 
   async onModuleInit(): Promise<void> {
-    await this.refresh();
-    // Periodic refresh — only meaningful when we have GitHub App credentials.
-    // For static GITHUB_TOKEN setups the refresh is a no-op but harmless.
-    this.refreshTimer = setInterval(() => {
-      this.refresh().catch((err) => {
-        this.logger.warn(`Scheduled token refresh failed: ${(err as Error).message}`);
-      });
-    }, GitHubTokenService.REFRESH_INTERVAL_MS);
+    // DISABLED for Mastra testing — no GitHub token refresh
+    // await this.refresh();
+    // this.refreshTimer = setInterval(() => {
+    //   this.refresh().catch((err) => {
+    //     this.logger.warn(`Scheduled token refresh failed: ${(err as Error).message}`);
+    //   });
+    // }, GitHubTokenService.REFRESH_INTERVAL_MS);
+    this.logger.log('GitHub token refresh DISABLED (Mastra testing mode)');
   }
 
   onModuleDestroy(): void {

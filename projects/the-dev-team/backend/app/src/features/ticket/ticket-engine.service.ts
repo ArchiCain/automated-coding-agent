@@ -25,9 +25,10 @@ export class TicketEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    void this.poll();
-    this.timer = setInterval(() => void this.poll(), this.POLL_INTERVAL_MS);
-    this.logger.log(`Ticket engine started, polling every ${this.POLL_INTERVAL_MS / 1000}s`);
+    // DISABLED for Mastra testing — no ticket polling
+    // void this.poll();
+    // this.timer = setInterval(() => void this.poll(), this.POLL_INTERVAL_MS);
+    this.logger.log('Ticket engine DISABLED (Mastra testing mode)');
   }
 
   onModuleDestroy(): void {

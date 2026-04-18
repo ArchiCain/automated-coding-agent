@@ -248,6 +248,7 @@ releases:
           DEV_HOSTNAME: {{ requiredEnv "DEV_HOSTNAME" }}
         secretEnv:
           CLAUDE_CODE_OAUTH_TOKEN: {{ env "CLAUDE_CODE_OAUTH_TOKEN" | default "" }}
+          ANTHROPIC_API_KEY: {{ env "ANTHROPIC_API_KEY" | default "" }}
           GITHUB_TOKEN: {{ env "GITHUB_TOKEN" | default "" }}
           GITHUB_APP_ID: "{{ env "GITHUB_APP_ID" | default "" }}"
           GITHUB_APP_INSTALLATION_ID: "{{ env "GITHUB_APP_INSTALLATION_ID" | default "" }}"

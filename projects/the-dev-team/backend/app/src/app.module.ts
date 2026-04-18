@@ -7,6 +7,7 @@ import { AgentModule } from './features/agent';
 import { ClusterModule } from './features/cluster';
 import { TaskRunnerModule } from './features/task-runner';
 import { TicketModule } from './features/ticket';
+import { MastraAgentsModule } from './features/mastra-agents';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TicketModule } from './features/ticket';
     ClusterModule,
     TaskRunnerModule,
     TicketModule,
+    MastraAgentsModule,
   ],
 })
 export class AppModule {}

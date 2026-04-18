@@ -15,38 +15,25 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { io, Socket } from 'socket.io-client';
 import { MessageList } from '../chat/message-list';
 import { MessageInput } from '../chat/message-input';
-import type { AgentMessage, Session, SessionHistory } from '../shared';
+import type { AgentMessage } from '../shared';
 
-const DOCS_ROLE = 'default';
 const DOCS_ROOT = 'projects/application/frontend/docs';
 const INSTRUCTIONS_FILE = '.agent-instructions.md';
 
-const DEFAULT_INSTRUCTIONS = `You are a documentation assistant for this project. Your job is to help the user brainstorm, write, and refine project documentation.
+const DEFAULT_INSTRUCTIONS = '';
 
-You have access to read and write files in the project docs directory. The docs follow a structured format:
-- pages/{name}/requirements.md — what each page does
-- pages/{name}/components.md — component inventory
-- pages/{name}/flows.md — step-by-step user flows (these are the acceptance tests)
-- pages/{name}/test-data.md — test credentials, edge cases, API examples
-- shared/{feature}/requirements.md — cross-cutting feature docs
-- shared/{feature}/flows.md — feature lifecycle flows
-- standards/ — coding and design standards
+interface DocsChatBubbleProps {
+  activePath?: string | null;
+  onDocChanged?: () => void;
+}
 
-When helping the user:
-- Ask clarifying questions before writing docs
-- Follow the existing document structure and formatting
-- Write flows as numbered step-by-step sequences
-- Include concrete test data (usernames, passwords, expected responses)
-- Keep requirements as checkbox acceptance criteria
-`;
-
-export function DocsChatBubble() {
+export function DocsChatBubble({ activePath, onDocChanged }: DocsChatBubbleProps) {
   const [open, setOpen] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const socketRef = useRef<Socket | null>(null);
-  const initialized = useRef(false);
+  const onDocChangedRef = useRef(onDocChanged);
+  onDocChangedRef.current = onDocChanged;
 
   // Instructions state
   const [instructions, setInstructions] = useState<string>(DEFAULT_INSTRUCTIONS);
@@ -56,6 +43,22 @@ export function DocsChatBubble() {
   const [instructionsExpanded, setInstructionsExpanded] = useState(false);
   const [savingInstructions, setSavingInstructions] = useState(false);
   const hasConversation = messages.length > 0;
+
+  // Token usage state
+  interface StepUsage {
+    step: number;
+    finishReason: string;
+    toolCalls: string[];
+    usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens: number };
+  }
+  const [tokenUsage, setTokenUsage] = useState<{
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cachedInputTokens?: number;
+  } | null>(null);
+  const [stepHistory, setStepHistory] = useState<StepUsage[]>([]);
+  const [usageExpanded, setUsageExpanded] = useState(false);
 
   // Load instructions from file
   useEffect(() => {
@@ -70,81 +73,130 @@ export function DocsChatBubble() {
       .catch(() => setInstructionsLoaded(true));
   }, []);
 
-  // Set up socket connection
+  // Set up socket connection — Mastra namespace
   useEffect(() => {
-    const socket = io('/agent', { transports: ['websocket', 'polling'] });
+    const socket = io('/mastra', { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
-    socket.on('agent:history', (data: SessionHistory) => {
-      setMessages(data.messages);
+    // Text deltas arrive as raw strings — accumulate into one assistant bubble
+    socket.on('agent:delta', (text: string) => {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.type === 'assistant' && last._streaming) {
+          const updated = { ...last, content: (last.content || '') + text };
+          return [...prev.slice(0, -1), updated];
+        }
+        return [...prev, { type: 'assistant', content: text, _streaming: true }];
+      });
     });
 
-    socket.on('agent:message', (msg: AgentMessage) => {
-      setMessages((prev) => [...prev, msg]);
+    socket.on('agent:tool-call', (data: { toolName: string; args: Record<string, unknown> }) => {
+      setMessages((prev) => [
+        ...prev,
+        { type: 'tool_use', tool: data.toolName, input: data.args },
+      ]);
+    });
+
+    socket.on('agent:tool-result', (data: { toolName: string; result: unknown }) => {
+      setMessages((prev) => [
+        ...prev,
+        { type: 'tool_result', tool: data.toolName, output: data.result },
+      ]);
+      if (data.toolName === 'writeDoc') {
+        onDocChangedRef.current?.();
+      }
+    });
+
+    socket.on('agent:step', (data: any) => {
+      console.log(`[Mastra] Step ${data.step}:`, data.usage, 'tools:', data.toolCalls, 'finish:', data.finishReason);
+      setStepHistory((prev) => {
+        const updated = [...prev, data];
+        // Build a detailed label showing what happened and what it cost
+        const u = data.usage;
+        const lines: string[] = [];
+
+        if (data.toolCalls?.length) {
+          lines.push(`LLM call → ${data.toolCalls.join(', ')}`);
+        } else {
+          lines.push(`LLM call → response`);
+        }
+        lines.push(`  Prompt: ${u.inputTokens.toLocaleString()} tokens${u.cachedInputTokens ? ` (${u.cachedInputTokens.toLocaleString()} cached)` : ''}`);
+        lines.push(`  Output: ${u.outputTokens.toLocaleString()} tokens`);
+
+        // Show the delta — what the tool result added to the context
+        if (data.step > 0) {
+          const prevStep = updated[data.step - 1];
+          if (prevStep) {
+            const delta = u.inputTokens - prevStep.usage.inputTokens;
+            lines.push(`  +${delta.toLocaleString()} from tool result`);
+          }
+        }
+
+        setMessages((prev) => [...prev, { type: 'system', content: lines.join('\n') }]);
+        return updated;
+      });
+    });
+
+    socket.on('agent:usage', (data: { usage: Record<string, number>; finishReason?: string }) => {
+      console.log('[Mastra] Aggregated usage:', data.usage, 'finishReason:', data.finishReason);
+      setTokenUsage((prev) => ({
+        inputTokens: (prev?.inputTokens ?? 0) + (data.usage.inputTokens ?? 0),
+        outputTokens: (prev?.outputTokens ?? 0) + (data.usage.outputTokens ?? 0),
+        totalTokens: (prev?.totalTokens ?? 0) + (data.usage.totalTokens ?? 0),
+        cachedInputTokens: (prev?.cachedInputTokens ?? 0) + (data.usage.cachedInputTokens ?? 0),
+      }));
     });
 
     socket.on('agent:done', () => {
+      setMessages((prev) =>
+        prev.map((m) => (m._streaming ? { ...m, _streaming: undefined } : m)),
+      );
       setIsStreaming(false);
     });
 
-    socket.on('agent:error', (data: { sessionId: string; error: string }) => {
-      setMessages((prev) => [
-        ...prev,
-        { type: 'error', sessionId: data.sessionId, content: data.error },
-      ]);
+    socket.on('agent:error', (error: string) => {
+      setMessages((prev) => [...prev, { type: 'error', content: error }]);
       setIsStreaming(false);
     });
 
     return () => { socket.disconnect(); };
   }, []);
 
-  // Create session when chat is first opened
-  const initSession = useCallback(async () => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    try {
-      const res = await fetch('/api/agent/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: DOCS_ROLE }),
-      });
-      const session = (await res.json()) as Session;
-      setSessionId(session.id);
-
-      if (socketRef.current) {
-        socketRef.current.emit('join:session', { sessionId: session.id });
-      }
-    } catch (err) {
-      console.error('Failed to create docs chat session:', err);
-    }
-  }, []);
-
-  const handleOpen = () => {
-    setOpen(true);
-    if (!initialized.current) {
-      void initSession();
-    }
-  };
-
   const sendMessage = useCallback(
     (message: string) => {
-      if (!sessionId || !socketRef.current) return;
+      if (!socketRef.current) return;
       setIsStreaming(true);
-      setMessages((prev) => [
-        ...prev,
-        { type: 'user', sessionId, content: message },
-      ]);
-      socketRef.current.emit('message', { sessionId, message });
+
+      // Prepend active document context if the user has a file open
+      const contextPrefix = activePath ? `[Currently viewing: ${activePath}]\n\n` : '';
+      const fullMessage = contextPrefix + message;
+
+      // Add user message to local state (show original message, not the prefixed one)
+      const updatedMessages = [...messages, { type: 'user', content: message } as AgentMessage];
+      setMessages(updatedMessages);
+
+      // Build the messages array for the backend — only user/assistant
+      // Use the context-prefixed message for the latest user message
+      const conversationMessages = updatedMessages
+        .filter((m) => m.type === 'user' || m.type === 'assistant')
+        .map((m, i, arr) => ({
+          role: m.type!,
+          content: i === arr.length - 1 && m.type === 'user' ? fullMessage : m.content || '',
+        }));
+
+      socketRef.current.emit('message', {
+        messages: conversationMessages,
+        systemPrompt: instructions,
+      });
     },
-    [sessionId],
+    [messages, instructions, activePath],
   );
 
   const cancelMessage = useCallback(() => {
-    if (!sessionId || !socketRef.current) return;
-    socketRef.current.emit('cancel', { sessionId });
+    if (!socketRef.current) return;
+    socketRef.current.emit('cancel');
     setIsStreaming(false);
-  }, [sessionId]);
+  }, []);
 
   const startEditingInstructions = () => {
     setInstructionsDraft(instructions);
@@ -172,7 +224,7 @@ export function DocsChatBubble() {
     return (
       <Fab
         color="primary"
-        onClick={handleOpen}
+        onClick={() => setOpen(true)}
         sx={{
           position: 'fixed',
           bottom: 24,
@@ -328,7 +380,7 @@ export function DocsChatBubble() {
                     scrollbarColor: '#30363d transparent',
                   }}
                 >
-                  {instructions}
+                  {instructions || '(No system instructions set)'}
                 </Typography>
               )}
             </Box>
@@ -353,12 +405,97 @@ export function DocsChatBubble() {
         )}
       </Box>
 
+      {/* Token usage */}
+      {tokenUsage && (
+        <Box
+          sx={{
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'rgba(88, 166, 255, 0.04)',
+          }}
+        >
+          {/* Summary row — clickable to expand */}
+          <Box
+            onClick={() => stepHistory.length > 0 && setUsageExpanded(!usageExpanded)}
+            sx={{
+              display: 'flex',
+              gap: 1.5,
+              px: 1.5,
+              py: 0.5,
+              cursor: stepHistory.length > 0 ? 'pointer' : 'default',
+              '&:hover': stepHistory.length > 0 ? { bgcolor: 'rgba(255,255,255,0.03)' } : {},
+            }}
+          >
+            {stepHistory.length > 0 && (
+              usageExpanded
+                ? <ExpandMoreIcon sx={{ fontSize: 12, color: 'text.secondary', mt: '1px' }} />
+                : <ChevronRightIcon sx={{ fontSize: 12, color: 'text.secondary', mt: '1px' }} />
+            )}
+            <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>
+              <Box component="span" sx={{ color: '#58a6ff' }}>In:</Box> {tokenUsage.inputTokens.toLocaleString()}
+              {tokenUsage.cachedInputTokens ? ` (${tokenUsage.cachedInputTokens.toLocaleString()} cached)` : ''}
+            </Typography>
+            <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>
+              <Box component="span" sx={{ color: '#58a6ff' }}>Out:</Box> {tokenUsage.outputTokens.toLocaleString()}
+            </Typography>
+            <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', ml: 'auto' }}>
+              <Box component="span" sx={{ color: '#58a6ff' }}>Total:</Box> {tokenUsage.totalTokens.toLocaleString()}
+              {stepHistory.length > 0 && ` (${stepHistory.length} steps)`}
+            </Typography>
+          </Box>
+
+          {/* Per-step breakdown */}
+          {usageExpanded && stepHistory.length > 0 && (
+            <Box sx={{ px: 1.5, pb: 0.75, maxHeight: 160, overflow: 'auto', scrollbarWidth: 'thin', scrollbarColor: '#30363d transparent' }}>
+              {stepHistory.map((s, i) => {
+                const prevStep = i > 0 ? stepHistory[i - 1] : null;
+                const inputDelta = prevStep ? s.usage.inputTokens - prevStep.usage.inputTokens : 0;
+                return (
+                  <Box key={i} sx={{ py: 0.25, borderTop: i > 0 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Typography sx={{ fontSize: '0.6rem', color: '#8b949e', fontFamily: 'monospace', minWidth: 50 }}>
+                        Step {s.step}
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.6rem', color: '#8b949e', fontFamily: 'monospace' }}>
+                        in:{s.usage.inputTokens.toLocaleString()}
+                        {s.usage.cachedInputTokens ? ` (${s.usage.cachedInputTokens.toLocaleString()}c)` : ''}
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.6rem', color: '#8b949e', fontFamily: 'monospace' }}>
+                        out:{s.usage.outputTokens.toLocaleString()}
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.6rem', color: '#8b949e', fontFamily: 'monospace' }}>
+                        = {s.usage.totalTokens.toLocaleString()}
+                      </Typography>
+                      {s.toolCalls.length > 0 && (
+                        <Typography sx={{ fontSize: '0.6rem', color: '#d29922', fontFamily: 'monospace', ml: 'auto' }}>
+                          {s.toolCalls.length} call{s.toolCalls.length > 1 ? 's' : ''}: {s.toolCalls.join(', ')}
+                        </Typography>
+                      )}
+                      {s.toolCalls.length === 0 && (
+                        <Typography sx={{ fontSize: '0.6rem', color: '#3fb950', fontFamily: 'monospace', ml: 'auto' }}>
+                          {s.finishReason}
+                        </Typography>
+                      )}
+                    </Box>
+                    {inputDelta > 0 && (
+                      <Typography sx={{ fontSize: '0.55rem', color: '#d29922', fontFamily: 'monospace', pl: '50px', ml: 1 }}>
+                        +{inputDelta.toLocaleString()} tokens from tool result
+                      </Typography>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </Box>
+      )}
+
       {/* Input */}
       <MessageInput
         onSend={sendMessage}
         onCancel={cancelMessage}
         isStreaming={isStreaming}
-        disabled={!sessionId}
+        disabled={false}
       />
     </Box>
   );

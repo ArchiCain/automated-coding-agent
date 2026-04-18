@@ -47,10 +47,10 @@ export class RouterService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.loadState();
-    // Initial poll then every interval
-    void this.poll();
-    this.timer = setInterval(() => void this.poll(), this.POLL_INTERVAL_MS);
-    this.logger.log(`Router started, polling every ${this.POLL_INTERVAL_MS / 1000}s`);
+    // DISABLED for Mastra testing — no GitHub polling
+    // void this.poll();
+    // this.timer = setInterval(() => void this.poll(), this.POLL_INTERVAL_MS);
+    this.logger.log('Router DISABLED (Mastra testing mode)');
   }
 
   onModuleDestroy(): void {

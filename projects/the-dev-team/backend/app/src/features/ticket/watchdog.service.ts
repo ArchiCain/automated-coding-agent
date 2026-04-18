@@ -24,12 +24,12 @@ export class WatchdogService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    // First check after 30s to let things stabilize on startup
-    setTimeout(() => {
-      void this.check();
-      this.timer = setInterval(() => void this.check(), this.CHECK_INTERVAL_MS);
-    }, 30_000);
-    this.logger.log(`Watchdog started, checking every ${this.CHECK_INTERVAL_MS / 1000}s`);
+    // DISABLED for Mastra testing — no watchdog checks
+    // setTimeout(() => {
+    //   void this.check();
+    //   this.timer = setInterval(() => void this.check(), this.CHECK_INTERVAL_MS);
+    // }, 30_000);
+    this.logger.log('Watchdog DISABLED (Mastra testing mode)');
   }
 
   onModuleDestroy(): void {
