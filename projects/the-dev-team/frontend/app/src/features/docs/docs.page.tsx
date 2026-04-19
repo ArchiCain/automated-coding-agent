@@ -316,6 +316,7 @@ export function DocsPage() {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [openBubble, setOpenBubble] = useState<'docs' | 'sync' | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSelect = useCallback(async (root: string, filePath: string) => {
@@ -554,8 +555,18 @@ export function DocsPage() {
       </Box>
 
       {/* ── Floating chat bubbles ────────────────────────── */}
-      <DocsChatBubble activePath={fullActivePath} onDocChanged={() => { if (activeRoot && activePath) handleSelect(activeRoot, activePath); }} />
-      <SyncChatBubble featurePath={featurePath} onDocChanged={() => { if (activeRoot && activePath) handleSelect(activeRoot, activePath); }} />
+      <DocsChatBubble
+        activePath={fullActivePath}
+        hidden={openBubble === 'sync'}
+        onOpenChange={(open) => setOpenBubble(open ? 'docs' : null)}
+        onDocChanged={() => { if (activeRoot && activePath) handleSelect(activeRoot, activePath); }}
+      />
+      <SyncChatBubble
+        featurePath={featurePath}
+        hidden={openBubble === 'docs'}
+        onOpenChange={(open) => setOpenBubble(open ? 'sync' : null)}
+        onDocChanged={() => { if (activeRoot && activePath) handleSelect(activeRoot, activePath); }}
+      />
     </Box>
   );
 }
