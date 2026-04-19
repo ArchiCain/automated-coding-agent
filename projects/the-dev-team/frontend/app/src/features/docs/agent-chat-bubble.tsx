@@ -44,8 +44,6 @@ export interface AgentChatBubbleProps {
   worktreePath?: string;
   disabled?: boolean;
   disabledTooltip?: string;
-  hidden?: boolean; // hide FAB entirely (when another panel is open)
-  onOpenChange?: (open: boolean) => void;
   onDocChanged?: () => void;
   onSyncComplete?: (data: {
     worktreePath: string;
@@ -65,8 +63,6 @@ export function AgentChatBubble({
   worktreePath,
   disabled,
   disabledTooltip,
-  hidden,
-  onOpenChange,
   onDocChanged,
   onSyncComplete,
 }: AgentChatBubbleProps) {
@@ -235,11 +231,10 @@ export function AgentChatBubble({
 
   // Floating bubble when closed
   if (!open) {
-    if (hidden) return null;
     return (
       <Fab
         color="primary"
-        onClick={() => { if (!disabled) { setOpen(true); onOpenChange?.(true); } }}
+        onClick={() => !disabled && setOpen(true)}
         title={disabled ? disabledTooltip : title}
         sx={{
           position: 'fixed',
@@ -257,15 +252,15 @@ export function AgentChatBubble({
     );
   }
 
-  // Chat panel
+  // Chat panel — sits above the FAB row
   return (
     <Box
       sx={{
         position: 'fixed',
-        bottom: 24,
-        right: 24,
+        bottom: 88, // above FABs (24 + 56 FAB height + 8 gap)
+        right: fabPosition,
         width: 420,
-        height: 600,
+        height: 560,
         zIndex: 1300,
         display: 'flex',
         flexDirection: 'column',
@@ -295,10 +290,10 @@ export function AgentChatBubble({
         <Typography sx={{ flex: 1, fontSize: '0.85rem', fontWeight: 600, color: 'text.primary' }}>
           {title}
         </Typography>
-        <IconButton size="small" onClick={() => { setOpen(false); onOpenChange?.(false); }} sx={{ color: 'text.secondary' }}>
+        <IconButton size="small" onClick={() => setOpen(false)} sx={{ color: 'text.secondary' }}>
           <MinimizeIcon sx={{ fontSize: 16 }} />
         </IconButton>
-        <IconButton size="small" onClick={() => { setOpen(false); onOpenChange?.(false); }} sx={{ color: 'text.secondary' }}>
+        <IconButton size="small" onClick={() => setOpen(false)} sx={{ color: 'text.secondary' }}>
           <CloseIcon sx={{ fontSize: 16 }} />
         </IconButton>
       </Box>

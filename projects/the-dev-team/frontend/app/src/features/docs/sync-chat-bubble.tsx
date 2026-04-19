@@ -19,12 +19,10 @@ interface SyncSetupResult {
 
 interface SyncChatBubbleProps {
   featurePath: string | null;
-  hidden?: boolean;
-  onOpenChange?: (open: boolean) => void;
   onDocChanged?: () => void;
 }
 
-export function SyncChatBubble({ featurePath, hidden, onOpenChange, onDocChanged }: SyncChatBubbleProps) {
+export function SyncChatBubble({ featurePath, onDocChanged }: SyncChatBubbleProps) {
   const [syncSetup, setSyncSetup] = useState<SyncSetupResult | null>(null);
   const [settingUp, setSettingUp] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -95,8 +93,6 @@ export function SyncChatBubble({ featurePath, hidden, onOpenChange, onDocChanged
           accentColor="#3fb950"
           fabPosition={88}
           worktreePath={syncSetup.worktreePath}
-          hidden={hidden}
-          onOpenChange={onOpenChange}
           onDocChanged={onDocChanged}
           onSyncComplete={handleSyncComplete}
         />
@@ -130,11 +126,10 @@ export function SyncChatBubble({ featurePath, hidden, onOpenChange, onDocChanged
 
   // Setup flow — show FAB that opens a setup panel
   if (!showSetupPanel) {
-    if (hidden) return null;
     return (
       <Fab
         color="primary"
-        onClick={() => { if (!isDisabled) { setShowSetupPanel(true); onOpenChange?.(true); } }}
+        onClick={() => !isDisabled && setShowSetupPanel(true)}
         title={isDisabled ? 'Navigate to a feature directory to start syncing' : 'Start Sync'}
         sx={{
           position: 'fixed',
@@ -157,8 +152,8 @@ export function SyncChatBubble({ featurePath, hidden, onOpenChange, onDocChanged
     <Box
       sx={{
         position: 'fixed',
-        bottom: 24,
-        right: 24,
+        bottom: 88,
+        right: 88,
         width: 360,
         zIndex: 1300,
         bgcolor: '#0d1117',
@@ -185,7 +180,7 @@ export function SyncChatBubble({ featurePath, hidden, onOpenChange, onDocChanged
         <Typography sx={{ flex: 1, fontSize: '0.85rem', fontWeight: 600, color: 'text.primary' }}>
           Start Sync
         </Typography>
-        <IconButton size="small" onClick={() => { setShowSetupPanel(false); onOpenChange?.(false); }} sx={{ color: 'text.secondary' }}>
+        <IconButton size="small" onClick={() => setShowSetupPanel(false)} sx={{ color: 'text.secondary' }}>
           <CloseIcon sx={{ fontSize: 16 }} />
         </IconButton>
       </Box>
@@ -217,7 +212,7 @@ export function SyncChatBubble({ featurePath, hidden, onOpenChange, onDocChanged
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
           <Button
             size="small"
-            onClick={() => { setShowSetupPanel(false); onOpenChange?.(false); }}
+            onClick={() => setShowSetupPanel(false)}
             sx={{ fontSize: '0.75rem', textTransform: 'none', color: 'text.secondary' }}
           >
             Cancel

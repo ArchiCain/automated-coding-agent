@@ -3,12 +3,10 @@ import { AgentChatBubble } from './agent-chat-bubble';
 
 interface DocsChatBubbleProps {
   activePath?: string | null;
-  hidden?: boolean;
-  onOpenChange?: (open: boolean) => void;
   onDocChanged?: () => void;
 }
 
-export function DocsChatBubble({ activePath, hidden, onOpenChange, onDocChanged }: DocsChatBubbleProps) {
+export function DocsChatBubble({ activePath, onDocChanged }: DocsChatBubbleProps) {
   return (
     <AgentChatBubble
       agentName="docs-assistant"
@@ -17,8 +15,6 @@ export function DocsChatBubble({ activePath, hidden, onOpenChange, onDocChanged 
       accentColor="#58a6ff"
       fabPosition={24}
       activePath={activePath}
-      hidden={hidden}
-      onOpenChange={onOpenChange}
       onDocChanged={onDocChanged}
     />
   );
