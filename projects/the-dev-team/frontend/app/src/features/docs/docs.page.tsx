@@ -22,6 +22,7 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { DocsChatBubble } from './docs-chat-bubble';
+import { SyncChatBubble } from './sync-chat-bubble';
 
 const PROJECTS = [
   { label: 'Frontend', root: 'projects/application/frontend/app' },
@@ -360,6 +361,13 @@ export function DocsPage() {
   const fullActivePath = activeRoot && activePath ? `${activeRoot}/${activePath}` : null;
   const isMarkdown = activePath?.endsWith('.md');
 
+  // Derive feature path for sync agent (extract up to features/{name})
+  const featurePath: string | null = (() => {
+    if (!fullActivePath) return null;
+    const match = fullActivePath.match(/(.*\/features\/[^/]+)/);
+    return match?.[1] ?? null;
+  })();
+
   return (
     <Box sx={{ display: 'flex', height: 'calc(100vh - 48px)' }}>
       {/* ── Left: Project tree ──────────────────────────────── */}
@@ -545,8 +553,9 @@ export function DocsPage() {
         </Box>
       </Box>
 
-      {/* ── Floating chat bubble ─────────────────────────── */}
+      {/* ── Floating chat bubbles ────────────────────────── */}
       <DocsChatBubble activePath={fullActivePath} onDocChanged={() => { if (activeRoot && activePath) handleSelect(activeRoot, activePath); }} />
+      <SyncChatBubble featurePath={featurePath} onDocChanged={() => { if (activeRoot && activePath) handleSelect(activeRoot, activePath); }} />
     </Box>
   );
 }

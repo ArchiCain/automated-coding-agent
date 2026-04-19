@@ -1,28 +1,29 @@
 import { Logger } from '@nestjs/common';
-import { createListDirTool } from '../tools/list-dir.tool';
-import { createReadFileTool } from '../tools/read-file.tool';
-import { createWriteFileTool } from '../tools/write-file.tool';
+import * as path from 'path';
+import { createDocsTools } from '../tools';
 
 const logger = new Logger('DocsAssistantAgent');
+
+const REPO_ROOT = process.env.REPO_ROOT || '/workspace';
+const PROJECTS_ROOT = path.resolve(REPO_ROOT, 'projects/application');
 
 let cachedAgent: any = null;
 let cachedModel: string | null = null;
 let cachedInstructions: string | null = null;
 
-const DEFAULT_INSTRUCTIONS = `You are a documentation assistant for a multi-project application. Your job is to help the user review, write, and maintain project documentation that lives alongside the code.
+const DEFAULT_INSTRUCTIONS = `You are a documentation assistant for a doc-driven development system.
+Your job is to curate .docs/ specifications by comparing them against the actual code.
 
 ## Documentation Convention
 
 Documentation lives in \`.docs/\` directories co-located with the code they describe:
 
 - **Project-level docs:** \`{project}/.docs/overview.md\`, \`{project}/.docs/standards/coding.md\`
-- **Feature-level docs:** \`{project}/app/src/features/{feature}/.docs/requirements.md\`, \`flows.md\`, \`test-data.md\`
-
-The \`.docs/\` directory is always a sibling of the code it documents.
+- **Feature-level docs:** \`{project}/app/src/features/{feature}/.docs/requirements.md\`, \`flows.md\`, \`test-instructions.md\`
 
 ## Projects
 
-All paths are relative to \`projects/application/\`:
+All paths are relative to your working directory (projects/application/):
 
 | Project | Source Code | Description |
 |---------|------------|-------------|
@@ -34,16 +35,23 @@ All paths are relative to \`projects/application/\`:
 
 ## When reviewing a feature
 
-1. **Always read the project-level docs first:** \`{project}/.docs/overview.md\` and any files in \`{project}/.docs/standards/\`
-2. **Read the feature's docs:** List and read everything in \`{project}/.../features/{feature}/.docs/\`
-3. **Read the feature's code:** List and read the source files in the same feature directory
-4. **Compare:** Check that the docs accurately describe what the code does
+1. Read the project-level .docs/ first (overview, standards) for conventions
+2. Read the feature's .docs/ (requirements, flows, test-instructions)
+3. Read the feature's source code
+4. Compare: Are the docs accurate? Are there gaps? Is anything unclear?
+5. Update docs or flag issues
 
 ## Tools
 
-- **listDir** — Browse directories to discover files and \`.docs/\` folders
-- **readFile** — Read any file (docs or source code)
-- **writeFile** — Create or update documentation files
+- **listDir** — Browse directories to discover files and .docs/ folders
+- **readFile** — Read files with pagination (use offset/limit for large files)
+- **editFile** — Make targeted edits to existing files (safer than writeFile)
+- **writeFile** — Create new files or full rewrites
+- **searchContent** — Search file contents by pattern (like grep)
+- **searchFiles** — Find files by name pattern (like find)
+
+Be deliberate about what you read — you have a limited context window.
+Use searchContent to find specific patterns before reading entire files.
 `;
 
 export async function getDocsAssistantAgent(
@@ -63,16 +71,14 @@ export async function getDocsAssistantAgent(
   logger.log(`Creating Docs Assistant Agent (model: ${model})`);
 
   const { Agent } = await import('@mastra/core/agent');
-  const listDirTool = await createListDirTool();
-  const readFileTool = await createReadFileTool();
-  const writeFileTool = await createWriteFileTool();
+  const tools = await createDocsTools(PROJECTS_ROOT);
 
   cachedAgent = new Agent({
     id: 'docs-assistant',
     name: 'Docs Assistant',
     instructions: effectiveInstructions,
     model,
-    tools: { listDir: listDirTool, readFile: readFileTool, writeFile: writeFileTool },
+    tools,
   });
 
   cachedModel = model;

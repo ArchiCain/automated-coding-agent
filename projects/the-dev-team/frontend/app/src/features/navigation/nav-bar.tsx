@@ -6,6 +6,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import CloudIcon from '@mui/icons-material/Cloud';
 
 export function NavBar() {
   const location = useLocation();
@@ -43,6 +44,15 @@ export function NavBar() {
             sx={{ textTransform: 'none', fontSize: '0.8rem' }}
           >
             Docs
+          </Button>
+          <Button
+            size="small"
+            color={location.pathname.startsWith('/env') ? 'primary' : 'inherit'}
+            onClick={() => navigate('/environments')}
+            startIcon={<CloudIcon />}
+            sx={{ textTransform: 'none', fontSize: '0.8rem' }}
+          >
+            Environments
           </Button>
         </Box>
       </Toolbar>

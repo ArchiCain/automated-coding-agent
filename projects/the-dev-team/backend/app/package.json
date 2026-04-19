@@ -29,6 +29,7 @@
     "@nestjs/websockets": "^11.1.12",
     "@playwright/mcp": "^0.0.70",
     "@types/jsonwebtoken": "^9.0.10",
+    "diff": "^9.0.0",
     "dotenv": "^16.4.5",
     "jsonwebtoken": "^9.0.3",
     "reflect-metadata": "^0.2.2",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.14",
     "@nestjs/schematics": "^11.0.9",
+    "@types/diff": "^7.0.2",
     "@types/node": "^25.0.1",
     "@types/uuid": "^10.0.0",
     "typescript": "^5.9.3"

@@ -6,13 +6,17 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Socket } from 'socket.io';
+import { execFileSync } from 'child_process';
 import { getDocsAssistantAgent } from '../agents/docs-assistant.agent';
+import { createSyncAgent } from '../agents/sync-agent.agent';
 import type { MastraUsage } from '../mastra-agents.types';
 
 interface IncomingMessage {
+  agentName?: 'docs-assistant' | 'sync-agent';
   messages: Array<{ role: string; content: string }>;
   model?: string;
   systemPrompt?: string;
+  worktreePath?: string;
 }
 
 @WebSocketGateway({ cors: { origin: '*' }, namespace: '/mastra' })
@@ -25,16 +29,40 @@ export class MastraAgentsGateway {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: IncomingMessage,
   ) {
+    const agentName = data.agentName || 'docs-assistant';
     const model = data.model || 'anthropic/claude-haiku-4-5';
-    const instructions = data.systemPrompt || 'You are a helpful assistant.';
+    const instructions = data.systemPrompt || '';
 
-    this.logger.log(`Message received (model: ${model}, messages: ${data.messages.length})`);
+    this.logger.log(`Message received (agent: ${agentName}, model: ${model}, messages: ${data.messages.length})`);
 
     const abortController = new AbortController();
     this.activeStreams.set(client.id, abortController);
 
+    // Capture HEAD for sync-complete detection
+    let headBefore: string | null = null;
+    if (agentName === 'sync-agent' && data.worktreePath) {
+      try {
+        headBefore = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: data.worktreePath,
+          encoding: 'utf-8',
+        }).trim();
+      } catch {
+        this.logger.warn('Could not read HEAD before sync');
+      }
+    }
+
     try {
-      const agent = await getDocsAssistantAgent(model, instructions);
+      // Route to the correct agent
+      let agent: any;
+      if (agentName === 'sync-agent') {
+        if (!data.worktreePath) {
+          client.emit('agent:error', 'worktreePath is required for sync-agent');
+          return;
+        }
+        agent = await createSyncAgent(model, instructions, data.worktreePath);
+      } else {
+        agent = await getDocsAssistantAgent(model, instructions);
+      }
 
       let stepIndex = 0;
       const stream = await agent.stream(data.messages, {
@@ -43,8 +71,6 @@ export class MastraAgentsGateway {
           try {
             this.logger.log(`Step ${stepIndex} finished — keys: ${Object.keys(step).join(', ')}`);
             this.logger.log(`Step ${stepIndex} usage: ${JSON.stringify(step.usage)}`);
-            this.logger.log(`Step ${stepIndex} finishReason: ${step.finishReason}`);
-            this.logger.log(`Step ${stepIndex} toolCalls: ${JSON.stringify(step.toolCalls?.map?.((tc: any) => ({ type: tc.type, toolName: tc.toolName || tc.payload?.toolName })))}`);
 
             const stepUsage = step.usage || {};
             const tools = (step.toolCalls || []).map((tc: any) =>
@@ -99,6 +125,28 @@ export class MastraAgentsGateway {
         client.emit('agent:usage', { usage: usageData, finishReason });
       } catch (err) {
         this.logger.warn('Failed to retrieve usage data', err);
+      }
+
+      // Check for new commits (sync-complete detection)
+      if (agentName === 'sync-agent' && data.worktreePath && headBefore) {
+        try {
+          const headAfter = execFileSync('git', ['rev-parse', 'HEAD'], {
+            cwd: data.worktreePath,
+            encoding: 'utf-8',
+          }).trim();
+
+          if (headAfter !== headBefore) {
+            this.logger.log(`Sync agent made commits: ${headBefore.slice(0, 7)} → ${headAfter.slice(0, 7)}`);
+            client.emit('agent:sync-complete', {
+              worktreePath: data.worktreePath,
+              hasNewCommits: true,
+              headBefore,
+              headAfter,
+            });
+          }
+        } catch {
+          this.logger.warn('Could not check HEAD after sync');
+        }
       }
 
       client.emit('agent:done');
