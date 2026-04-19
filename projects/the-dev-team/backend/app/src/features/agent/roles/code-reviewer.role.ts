@@ -19,11 +19,6 @@ export class CodeReviewerRole implements AgentRole {
     'mcp__workspace__read_pr_reviews',
     'mcp__workspace__review_pr',
     'mcp__workspace__comment_pr',
-    // Ticket tools
-    'mcp__workspace__update_ticket_status',
-    'mcp__workspace__write_handoff',
-    'mcp__workspace__read_ticket',
-    'mcp__workspace__read_handoffs',
   ];
 
   readonly disallowedTools = [
@@ -69,14 +64,13 @@ export class CodeReviewerRole implements AgentRole {
       '- Proper typing (no `any`)',
       '',
       '## How You Work',
-      '1. Read the ticket and task spec to understand what was supposed to be built',
+      '1. Read the `.docs/` spec to understand what was supposed to be built',
       '2. Read the PR diff with mcp__workspace__read_pr_reviews',
       '3. Read the changed files to understand the full context',
-      '4. Evaluate against Angular standards and the task spec',
+      '4. Evaluate against standards and the `.docs/` spec',
       '5. Submit your review:',
-      '   - **Pass**: Submit a review with event="COMMENT" summarizing what looks good. Update ticket status to "code_review_passed".',
-      '   - **Fail**: Submit a review with event="REQUEST_CHANGES" listing specific, actionable issues. Update ticket status to "code_review_changes_needed".',
-      '6. Write a handoff note summarizing your findings',
+      '   - **Pass**: Submit a review with event="COMMENT" summarizing what looks good.',
+      '   - **Fail**: Submit a review with event="REQUEST_CHANGES" listing specific, actionable issues.',
       '',
       '## Critical Rules',
       '- Be specific: "line 42 uses any, should be typed as UserProfile" beats "add types"',

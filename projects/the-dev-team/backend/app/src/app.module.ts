@@ -6,7 +6,6 @@ import { CorsModule } from './features/cors';
 import { AgentModule } from './features/agent';
 import { ClusterModule } from './features/cluster';
 import { TaskRunnerModule } from './features/task-runner';
-import { TicketModule } from './features/ticket';
 import { MastraAgentsModule } from './features/mastra-agents';
 
 @Module({
@@ -18,7 +17,6 @@ import { MastraAgentsModule } from './features/mastra-agents';
     AgentModule,
     ClusterModule,
     TaskRunnerModule,
-    TicketModule,
     MastraAgentsModule,
   ],
 })
