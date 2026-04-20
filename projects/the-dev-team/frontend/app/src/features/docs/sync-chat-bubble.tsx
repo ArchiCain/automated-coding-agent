@@ -156,7 +156,6 @@ export function SyncChatBubble({ featurePath, onDocChanged }: SyncChatBubbleProp
         right: 24,
         width: 360,
         zIndex: 1400,
-        zIndex: 1300,
         bgcolor: '#0d1117',
         border: '1px solid',
         borderColor: 'divider',
