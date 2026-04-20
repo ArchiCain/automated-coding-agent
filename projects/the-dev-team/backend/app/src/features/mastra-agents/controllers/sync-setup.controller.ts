@@ -24,7 +24,7 @@ const AGENT_INSTRUCTIONS: Record<string, string> = {
   'sync-agent': SYNC_INSTRUCTIONS,
 };
 
-@Controller('api/mastra')
+@Controller('mastra')
 export class SyncSetupController {
   private readonly logger = new Logger(SyncSetupController.name);
 
