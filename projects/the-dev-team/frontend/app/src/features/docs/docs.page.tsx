@@ -83,21 +83,20 @@ function filterDocsOnly(nodes: TreeNode[]): TreeNode[] {
 /** Collapse chains of dirs with only one child dir into "a/b/c" nodes */
 function collapseSingleChildDirs(node: TreeNode): TreeNode {
   if (node.type === 'file') return node;
-  const children = node.children || [];
-  if (
-    children.length === 1 &&
-    children[0].type === 'dir' &&
-    !children[0].isDocsDir
-  ) {
-    // Merge: "src" + "app" → "src/app", then recurse
+  const children = node.children ?? [];
+  const only = children.length === 1 ? children[0] : undefined;
+  if (only && only.type === 'dir' && !only.isDocsDir) {
     const merged: TreeNode = {
-      ...children[0],
-      name: `${node.name}/${children[0].name}`,
-      tokens: children[0].tokens,
+      type: only.type,
+      name: `${node.name}/${only.name}`,
+      path: only.path,
+      tokens: only.tokens,
+      isDoc: only.isDoc,
+      isDocsDir: only.isDocsDir,
+      children: only.children,
     };
     return collapseSingleChildDirs(merged);
   }
-  // Recurse into children
   return { ...node, children: children.map(collapseSingleChildDirs) };
 }
 
