@@ -213,8 +213,7 @@ export function AgentChatBubble({
     if (!socketRef.current) return;
     socketRef.current.emit('cancel');
     setIsStreaming(false);
-    setSavingInstructions(false);
-  };
+  }, []);
 
   // Floating bubble when closed
   if (!open) {
@@ -325,22 +324,21 @@ export function AgentChatBubble({
 
         {instructionsExpanded && (
           <Box sx={{ px: 1.5, pb: 1 }}>
-              <Typography
-                sx={{
-                  fontSize: '0.72rem',
-                  lineHeight: 1.6,
-                  color: 'text.secondary',
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'monospace',
-                  maxHeight: 160,
-                  overflow: 'auto',
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: '#30363d transparent',
-                }}
-              >
-                {instructions || '(No system instructions set)'}
-              </Typography>
-            )}
+            <Typography
+              sx={{
+                fontSize: '0.72rem',
+                lineHeight: 1.6,
+                color: 'text.secondary',
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'monospace',
+                maxHeight: 160,
+                overflow: 'auto',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#30363d transparent',
+              }}
+            >
+              {instructions || '(Loading instructions...)'}
+            </Typography>
           </Box>
         )}
       </Box>
