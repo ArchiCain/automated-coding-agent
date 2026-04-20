@@ -252,15 +252,15 @@ export function AgentChatBubble({
     );
   }
 
-  // Chat panel — sits above the FAB row
+  // Chat panel
   return (
     <Box
       sx={{
         position: 'fixed',
-        bottom: 88, // above FABs (24 + 56 FAB height + 8 gap)
-        right: fabPosition,
+        bottom: 24,
+        right: 24,
         width: 420,
-        height: 560,
+        height: 600,
         zIndex: 1400, // above FABs (1300)
         display: 'flex',
         flexDirection: 'column',
