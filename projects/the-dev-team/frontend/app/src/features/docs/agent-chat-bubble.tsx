@@ -261,7 +261,7 @@ export function AgentChatBubble({
         right: fabPosition,
         width: 420,
         height: 560,
-        zIndex: 1300,
+        zIndex: 1400, // above FABs (1300)
         display: 'flex',
         flexDirection: 'column',
         bgcolor: '#0d1117',

@@ -66,6 +66,7 @@ export class MastraAgentsGateway {
 
       let stepIndex = 0;
       const stream = await agent.stream(data.messages, {
+        maxSteps: 50, // no artificial step limit — only token budget matters
         abortSignal: abortController.signal,
         onStepFinish: (step: any) => {
           try {
