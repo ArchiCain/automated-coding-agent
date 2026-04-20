@@ -53,20 +53,52 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-/** Filter tree to only show .docs/ dirs and directories that contain them */
+/**
+ * Filter tree for docs-only view:
+ * - Only show doc files (files inside .docs/ dirs)
+ * - Hide .docs/ directory nodes themselves (promote children up)
+ * - Collapse single-child directory chains into one node (e.g. src/app/features → "src/app/features")
+ */
 function filterDocsOnly(nodes: TreeNode[]): TreeNode[] {
-  return nodes
-    .map((node) => {
+  // Step 1: Filter to only doc-containing branches, flattening .docs/ dirs
+  const filtered = nodes
+    .flatMap((node) => {
       if (node.type === 'file') {
-        return node.isDoc ? node : null;
+        return node.isDoc ? [node] : [];
       }
-      // Directory
-      if (node.isDocsDir) return node; // Show .docs/ dirs fully
+      // If this IS a .docs/ dir, promote its children directly (skip the .docs node)
+      if (node.isDocsDir) {
+        return node.children || [];
+      }
+      // Regular directory — recurse
       const filteredChildren = filterDocsOnly(node.children || []);
-      if (filteredChildren.length === 0) return null;
-      return { ...node, children: filteredChildren };
-    })
-    .filter(Boolean) as TreeNode[];
+      if (filteredChildren.length === 0) return [];
+      return [{ ...node, children: filteredChildren }];
+    });
+
+  // Step 2: Collapse single-child directory chains
+  return filtered.map((node) => collapseSingleChildDirs(node));
+}
+
+/** Collapse chains of dirs with only one child dir into "a/b/c" nodes */
+function collapseSingleChildDirs(node: TreeNode): TreeNode {
+  if (node.type === 'file') return node;
+  const children = node.children || [];
+  if (
+    children.length === 1 &&
+    children[0].type === 'dir' &&
+    !children[0].isDocsDir
+  ) {
+    // Merge: "src" + "app" → "src/app", then recurse
+    const merged: TreeNode = {
+      ...children[0],
+      name: `${node.name}/${children[0].name}`,
+      tokens: children[0].tokens,
+    };
+    return collapseSingleChildDirs(merged);
+  }
+  // Recurse into children
+  return { ...node, children: children.map(collapseSingleChildDirs) };
 }
 
 // ── Tree Node Component ──────────────────────────────────────────
