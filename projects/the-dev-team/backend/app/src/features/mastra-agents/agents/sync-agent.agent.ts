@@ -3,7 +3,7 @@ import { createSyncTools } from '../tools';
 
 const logger = new Logger('SyncAgent');
 
-const DEFAULT_INSTRUCTIONS = `You are a code synchronization agent. Your job is to read feature documentation from .docs/ directories and implement or update the code to match what the docs describe.
+export const DEFAULT_INSTRUCTIONS = `You are a code synchronization agent. Your job is to read feature documentation from .docs/ directories and implement or update the code to match what the docs describe.
 
 ## Workflow
 

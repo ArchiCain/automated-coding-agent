@@ -1,6 +1,6 @@
 /**
  * Generic agent chat bubble — extracted from DocsChatBubble.
- * Handles WebSocket streaming, instructions editing, token tracking.
+ * Handles WebSocket streaming, token tracking, read-only system instructions.
  * Parameterized by agentName, title, color, and callbacks.
  */
 
@@ -8,13 +8,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Box from '@mui/material/Box';
 import Fab from '@mui/material/Fab';
 import IconButton from '@mui/material/IconButton';
-import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import TextField from '@mui/material/TextField';
 import CloseIcon from '@mui/icons-material/Close';
 import MinimizeIcon from '@mui/icons-material/Remove';
-import EditIcon from '@mui/icons-material/Edit';
-import SaveIcon from '@mui/icons-material/Save';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { io, Socket } from 'socket.io-client';
@@ -75,13 +71,16 @@ export function AgentChatBubble({
   const onSyncCompleteRef = useRef(onSyncComplete);
   onSyncCompleteRef.current = onSyncComplete;
 
-  // Instructions state
+  // Instructions — fetched from backend, read-only
   const [instructions, setInstructions] = useState<string>('');
-  const [editingInstructions, setEditingInstructions] = useState(false);
-  const [instructionsDraft, setInstructionsDraft] = useState('');
   const [instructionsExpanded, setInstructionsExpanded] = useState(false);
-  const [savingInstructions, setSavingInstructions] = useState(false);
-  const hasConversation = messages.length > 0;
+
+  useEffect(() => {
+    fetch(`/api/mastra/agents/${agentName}/instructions`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (data?.instructions) setInstructions(data.instructions); })
+      .catch(() => {});
+  }, [agentName]);
 
   // Token usage state
   const [tokenUsage, setTokenUsage] = useState<{
@@ -204,28 +203,16 @@ export function AgentChatBubble({
       socketRef.current.emit('message', {
         agentName,
         messages: conversationMessages,
-        systemPrompt: instructions,
         worktreePath,
       });
     },
-    [messages, instructions, activePath, agentName, worktreePath],
+    [messages, activePath, agentName, worktreePath],
   );
 
   const cancelMessage = useCallback(() => {
     if (!socketRef.current) return;
     socketRef.current.emit('cancel');
     setIsStreaming(false);
-  }, []);
-
-  const startEditingInstructions = () => {
-    setInstructionsDraft(instructions);
-    setEditingInstructions(true);
-  };
-
-  const saveInstructions = async () => {
-    setSavingInstructions(true);
-    setInstructions(instructionsDraft);
-    setEditingInstructions(false);
     setSavingInstructions(false);
   };
 
@@ -334,63 +321,10 @@ export function AgentChatBubble({
           >
             System Instructions
           </Typography>
-          {!hasConversation && !editingInstructions && (
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                startEditingInstructions();
-              }}
-              sx={{ color: 'text.secondary', p: 0.25 }}
-            >
-              <EditIcon sx={{ fontSize: 14 }} />
-            </IconButton>
-          )}
         </Box>
 
         {instructionsExpanded && (
           <Box sx={{ px: 1.5, pb: 1 }}>
-            {editingInstructions ? (
-              <Box>
-                <TextField
-                  multiline
-                  fullWidth
-                  minRows={6}
-                  maxRows={12}
-                  value={instructionsDraft}
-                  onChange={(e) => setInstructionsDraft(e.target.value)}
-                  sx={{
-                    '& .MuiInputBase-root': {
-                      fontFamily: 'monospace',
-                      fontSize: '0.72rem',
-                      lineHeight: 1.5,
-                      bgcolor: '#161b22',
-                      p: 1,
-                    },
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#30363d' },
-                  }}
-                />
-                <Box sx={{ display: 'flex', gap: 0.5, mt: 0.75, justifyContent: 'flex-end' }}>
-                  <Button
-                    size="small"
-                    onClick={() => setEditingInstructions(false)}
-                    sx={{ fontSize: '0.7rem', textTransform: 'none', color: 'text.secondary', minWidth: 0, px: 1 }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    startIcon={<SaveIcon sx={{ fontSize: 12 }} />}
-                    onClick={saveInstructions}
-                    disabled={savingInstructions}
-                    sx={{ fontSize: '0.7rem', textTransform: 'none', minWidth: 0, px: 1.5 }}
-                  >
-                    {savingInstructions ? 'Saving...' : 'Save'}
-                  </Button>
-                </Box>
-              </Box>
-            ) : (
               <Typography
                 sx={{
                   fontSize: '0.72rem',

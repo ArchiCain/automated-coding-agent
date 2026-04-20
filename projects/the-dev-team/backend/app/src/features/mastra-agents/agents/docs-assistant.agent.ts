@@ -11,7 +11,7 @@ let cachedAgent: any = null;
 let cachedModel: string | null = null;
 let cachedInstructions: string | null = null;
 
-const DEFAULT_INSTRUCTIONS = `You are a documentation assistant for a doc-driven development system.
+export const DEFAULT_INSTRUCTIONS = `You are a documentation assistant for a doc-driven development system.
 Your job is to curate .docs/ specifications by comparing them against the actual code.
 
 ## Documentation Convention

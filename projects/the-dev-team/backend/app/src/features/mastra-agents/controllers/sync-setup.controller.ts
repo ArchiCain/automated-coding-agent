@@ -1,4 +1,6 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Logger, NotFoundException } from '@nestjs/common';
+import { DEFAULT_INSTRUCTIONS as DOCS_INSTRUCTIONS } from '../agents/docs-assistant.agent';
+import { DEFAULT_INSTRUCTIONS as SYNC_INSTRUCTIONS } from '../agents/sync-agent.agent';
 import { execFile as execFileCb } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -17,11 +19,25 @@ interface SyncSetupResult {
   sandboxName: string;
 }
 
-@Controller('api/mastra/sync')
+const AGENT_INSTRUCTIONS: Record<string, string> = {
+  'docs-assistant': DOCS_INSTRUCTIONS,
+  'sync-agent': SYNC_INSTRUCTIONS,
+};
+
+@Controller('api/mastra')
 export class SyncSetupController {
   private readonly logger = new Logger(SyncSetupController.name);
 
-  @Post('setup')
+  @Get('agents/:name/instructions')
+  getInstructions(@Param('name') name: string): { agentName: string; instructions: string } {
+    const instructions = AGENT_INSTRUCTIONS[name];
+    if (!instructions) {
+      throw new NotFoundException(`Agent "${name}" not found. Available: ${Object.keys(AGENT_INSTRUCTIONS).join(', ')}`);
+    }
+    return { agentName: name, instructions };
+  }
+
+  @Post('sync/setup')
   async setup(@Body() body: { featurePath: string }): Promise<SyncSetupResult> {
     const { featurePath } = body;
 
