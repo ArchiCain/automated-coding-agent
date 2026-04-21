@@ -4,7 +4,13 @@ import { Observable } from 'rxjs';
 
 import { AppConfigService } from '@features/api-client';
 
-import { User, CreateUserRequest, UpdateUserRequest, UserListQuery, UserListResponse } from '../types';
+import {
+  User,
+  CreateUserRequest,
+  UpdateUserRequest,
+  UserListQuery,
+  UserListResponse,
+} from '../types';
 
 @Injectable({ providedIn: 'root' })
 export class UserManagementApiService {
@@ -19,9 +25,9 @@ export class UserManagementApiService {
     let params = new HttpParams();
     if (query?.search) params = params.set('search', query.search);
     if (query?.page) params = params.set('page', query.page.toString());
-    if (query?.limit) params = params.set('limit', query.limit.toString());
+    if (query?.pageSize) params = params.set('pageSize', query.pageSize.toString());
     if (query?.sortBy) params = params.set('sortBy', query.sortBy);
-    if (query?.sortOrder) params = params.set('sortOrder', query.sortOrder);
+    if (query?.sortDirection) params = params.set('sortDirection', query.sortDirection);
 
     return this.http.get<UserListResponse>(this.baseUrl, { params, withCredentials: true });
   }

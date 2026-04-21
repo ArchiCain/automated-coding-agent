@@ -1,10 +1,10 @@
 export type Permission =
   | 'users:read'
-  | 'users:write'
+  | 'users:create'
+  | 'users:update'
   | 'users:delete'
   | 'conversations:read'
-  | 'conversations:write'
-  | 'conversations:delete'
-  | 'admin:access';
+  | 'conversations:create'
+  | 'conversations:delete';
 
-export type Role = 'admin' | 'user' | 'viewer';
+export type Role = 'admin' | 'user';

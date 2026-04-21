@@ -1,19 +1,26 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap, catchError, of } from 'rxjs';
+import { Observable, tap, catchError, of, map } from 'rxjs';
 
-import { AppConfigService } from '@features/api-client';
+import { AppConfigService, SessionManagementService } from '@features/api-client';
 
 import { User, LoginCredentials } from '../types';
 import { getPermissionsForRoles, hasPermission } from '../permissions/permissions.config';
 import { Permission } from '../permissions/permissions.types';
+
+interface CheckAuthResponse {
+  authenticated: boolean;
+  user: User;
+  permissions: Permission[];
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly config = inject(AppConfigService);
   private readonly router = inject(Router);
+  private readonly session = inject(SessionManagementService);
 
   private readonly _user = signal<User | null>(null);
   private readonly _isLoading = signal(false);
@@ -41,6 +48,7 @@ export class AuthService {
         next: response => {
           this._user.set(response.user);
           this._isLoading.set(false);
+          this.session.startTimers();
           this.router.navigate(['/']);
         },
         error: err => {
@@ -51,6 +59,7 @@ export class AuthService {
   }
 
   logout(): void {
+    this.session.stopTimers();
     this.http.post(`${this.baseUrl}/logout`, {}, { withCredentials: true })
       .subscribe({
         complete: () => {
@@ -66,14 +75,17 @@ export class AuthService {
 
   checkAuth(): Observable<User | null> {
     this._isLoading.set(true);
-    return this.http.get<User>(`${this.baseUrl}/check`, { withCredentials: true }).pipe(
-      tap(user => {
-        this._user.set(user);
+    return this.http.get<CheckAuthResponse>(`${this.baseUrl}/check`, { withCredentials: true }).pipe(
+      map(response => {
+        this._user.set(response.user);
         this._isLoading.set(false);
+        this.session.startTimers();
+        return response.user;
       }),
       catchError(() => {
         this._user.set(null);
         this._isLoading.set(false);
+        this.session.stopTimers();
         return of(null);
       }),
     );

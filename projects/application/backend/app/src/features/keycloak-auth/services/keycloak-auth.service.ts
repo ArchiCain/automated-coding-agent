@@ -10,12 +10,19 @@ export class KeycloakAuthService {
   private readonly realm: string;
   private readonly clientId: string;
   private readonly clientSecret: string;
+  private readonly jwks: ReturnType<typeof jose.createRemoteJWKSet>;
+  private readonly issuer: string;
 
   constructor(private configService: ConfigService) {
     this.keycloakBaseUrl = this.configService.get<string>('KEYCLOAK_BASE_URL') || 'http://keycloak:8080';
     this.realm = this.configService.get<string>('KEYCLOAK_REALM') || 'application';
     this.clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID') || 'backend-service';
     this.clientSecret = this.configService.get<string>('KEYCLOAK_CLIENT_SECRET') || 'backend-service-secret';
+
+    this.issuer = `${this.keycloakBaseUrl}/realms/${this.realm}`;
+    this.jwks = jose.createRemoteJWKSet(
+      new URL(`${this.issuer}/protocol/openid-connect/certs`),
+    );
   }
 
   async login(loginDto: LoginDto): Promise<JwtTokens> {
@@ -154,16 +161,12 @@ export class KeycloakAuthService {
 
   private async decodeToken(token: string): Promise<TokenPayload> {
     try {
-      // Simple validation - in production, you should verify signature with JWKS
-      const decodedToken = jose.decodeJwt(token) as TokenPayload;
-
-      if (decodedToken.exp * 1000 < Date.now()) {
-        throw new Error('Token expired');
-      }
-
-      return decodedToken;
+      const { payload } = await jose.jwtVerify(token, this.jwks, {
+        issuer: this.issuer,
+      });
+      return payload as unknown as TokenPayload;
     } catch (error) {
-      this.logger.error(`Token decode error: ${error.message}`);
+      this.logger.error(`Token verify error: ${error.message}`);
       throw new UnauthorizedException('Invalid token');
     }
   }

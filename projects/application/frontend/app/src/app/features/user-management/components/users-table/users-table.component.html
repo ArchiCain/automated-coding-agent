@@ -18,9 +18,9 @@
     </td>
   </ng-container>
 
-  <ng-container matColumnDef="createdAt">
+  <ng-container matColumnDef="createdTimestamp">
     <th mat-header-cell *matHeaderCellDef mat-sort-header>Created</th>
-    <td mat-cell *matCellDef="let user">{{ user.createdAt | date:'short' }}</td>
+    <td mat-cell *matCellDef="let user">{{ user.createdTimestamp | date:'short' }}</td>
   </ng-container>
 
   <ng-container matColumnDef="actions">

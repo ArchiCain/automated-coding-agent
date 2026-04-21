@@ -2,15 +2,11 @@ import { Permission, Role } from './permissions.types';
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
-    'users:read', 'users:write', 'users:delete',
-    'conversations:read', 'conversations:write', 'conversations:delete',
-    'admin:access',
+    'users:read', 'users:create', 'users:update', 'users:delete',
+    'conversations:read', 'conversations:create', 'conversations:delete',
   ],
   user: [
-    'conversations:read', 'conversations:write', 'conversations:delete',
-  ],
-  viewer: [
-    'conversations:read',
+    'conversations:read', 'conversations:create',
   ],
 };
 

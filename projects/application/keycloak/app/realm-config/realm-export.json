@@ -191,7 +191,7 @@
       "serviceAccountClientId": "backend-service",
       "realmRoles": [],
       "clientRoles": {
-        "realm-management": ["manage-users", "view-users", "query-users"]
+        "realm-management": ["manage-users", "view-users", "query-users", "view-realm"]
       }
     }
   ]

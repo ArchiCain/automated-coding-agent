@@ -5,6 +5,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 
+import { Role } from '@features/keycloak-auth';
+
 import { User, CreateUserRequest, UpdateUserRequest } from '../../types';
 
 @Component({
@@ -21,15 +23,14 @@ export class UserFormComponent implements OnInit {
   readonly submitForm = output<CreateUserRequest | UpdateUserRequest>();
   readonly cancelForm = output<void>();
 
-  readonly availableRoles = ['admin', 'user', 'viewer'];
+  readonly availableRoles: Role[] = ['admin', 'user'];
 
   readonly form = this.fb.group({
-    username: ['', [Validators.required, Validators.minLength(3)]],
     email: ['', [Validators.required, Validators.email]],
-    password: [''],
+    temporaryPassword: [''],
     firstName: [''],
     lastName: [''],
-    roles: [['user'] as string[], Validators.required],
+    role: ['user' as Role, Validators.required],
   });
 
   get isEditMode(): boolean {
@@ -40,23 +41,46 @@ export class UserFormComponent implements OnInit {
     const existingUser = this.user();
     if (existingUser) {
       this.form.patchValue({
-        username: existingUser.username,
         email: existingUser.email,
         firstName: existingUser.firstName ?? '',
         lastName: existingUser.lastName ?? '',
-        roles: existingUser.roles,
+        role: this.pickPrimaryRole(existingUser.roles),
       });
-      this.form.get('username')?.disable();
-      this.form.get('password')?.clearValidators();
+      this.form.get('email')?.disable();
+      this.form.get('temporaryPassword')?.clearValidators();
     } else {
-      this.form.get('password')?.setValidators([Validators.required, Validators.minLength(8)]);
+      this.form.get('temporaryPassword')?.setValidators([
+        Validators.required,
+        Validators.minLength(8),
+      ]);
     }
-    this.form.get('password')?.updateValueAndValidity();
+    this.form.get('temporaryPassword')?.updateValueAndValidity();
   }
 
   onSubmit(): void {
-    if (this.form.valid) {
-      this.submitForm.emit(this.form.getRawValue() as CreateUserRequest);
+    if (this.form.invalid) return;
+    const raw = this.form.getRawValue();
+    if (this.isEditMode) {
+      const update: UpdateUserRequest = {
+        firstName: raw.firstName || undefined,
+        lastName: raw.lastName || undefined,
+        role: raw.role ?? undefined,
+      };
+      this.submitForm.emit(update);
+    } else {
+      const create: CreateUserRequest = {
+        email: raw.email!,
+        firstName: raw.firstName || undefined,
+        lastName: raw.lastName || undefined,
+        temporaryPassword: raw.temporaryPassword!,
+        role: raw.role!,
+      };
+      this.submitForm.emit(create);
     }
+  }
+
+  private pickPrimaryRole(roles: Role[]): Role {
+    if (roles.includes('admin')) return 'admin';
+    return 'user';
   }
 }

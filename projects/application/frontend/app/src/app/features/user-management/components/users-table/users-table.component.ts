@@ -21,5 +21,5 @@ export class UsersTableComponent {
   readonly deleteUser = output<User>();
   readonly sortChange = output<Sort>();
 
-  readonly displayedColumns = ['username', 'email', 'roles', 'createdAt', 'actions'];
+  readonly displayedColumns = ['username', 'email', 'roles', 'createdTimestamp', 'actions'];
 }

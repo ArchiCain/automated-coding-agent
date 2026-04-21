@@ -3,7 +3,11 @@ import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { TypeormDatabaseClientModule } from "./features/typeorm-database-client";
 import { CorsModule } from "./features/cors";
-import { KeycloakAuthModule, KeycloakJwtGuard } from "./features/keycloak-auth";
+import {
+  KeycloakAuthModule,
+  KeycloakJwtGuard,
+  PermissionGuard,
+} from "./features/keycloak-auth";
 import { ThemeModule } from "./features/theme";
 import { UserManagementModule } from "./features/user-management";
 import { HealthModule } from "./features/health";
@@ -27,6 +31,10 @@ import { ChatAgentModule } from "./features/chat-agent";
     {
       provide: APP_GUARD,
       useClass: KeycloakJwtGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionGuard,
     },
   ],
 })

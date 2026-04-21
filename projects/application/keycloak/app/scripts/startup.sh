@@ -133,7 +133,7 @@ else
       echo "Found realm-management client: $REALM_MGMT_CLIENT_ID"
 
       # Assign roles using add-roles command (simpler than creating role mappings)
-      for ROLE_NAME in manage-users view-users query-users; do
+      for ROLE_NAME in manage-users view-users query-users view-realm; do
         echo "Assigning role ${ROLE_NAME} to service account..."
         /opt/keycloak/bin/kcadm.sh add-roles \
           -r "$REALM" \

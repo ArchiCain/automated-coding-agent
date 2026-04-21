@@ -1,41 +1,49 @@
+import { Role } from '@features/keycloak-auth';
+
 export interface User {
   id: string;
   username: string;
   email: string;
   firstName?: string;
   lastName?: string;
-  roles: string[];
-  createdAt: string;
-  updatedAt: string;
+  enabled: boolean;
+  roles: Role[];
+  createdTimestamp?: number;
 }
 
 export interface CreateUserRequest {
-  username: string;
   email: string;
-  password: string;
   firstName?: string;
   lastName?: string;
-  roles: string[];
+  temporaryPassword: string;
+  role: Role;
 }
 
 export interface UpdateUserRequest {
-  email?: string;
   firstName?: string;
   lastName?: string;
-  roles?: string[];
+  role?: Role;
 }
+
+export type SortDirection = 'asc' | 'desc';
+export type UserSortField = 'username' | 'email' | 'firstName' | 'lastName' | 'createdTimestamp';
 
 export interface UserListQuery {
   search?: string;
   page?: number;
-  limit?: number;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
+  pageSize?: number;
+  sortBy?: UserSortField;
+  sortDirection?: SortDirection;
+}
+
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 }
 
 export interface UserListResponse {
   users: User[];
-  total: number;
-  page: number;
-  limit: number;
+  pagination: PaginationMeta;
 }

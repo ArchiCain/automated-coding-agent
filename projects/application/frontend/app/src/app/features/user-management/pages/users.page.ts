@@ -13,6 +13,7 @@ import { UserManagementApiService } from '../services/user-management.api';
 import { UsersTableComponent } from '../components/users-table/users-table.component';
 import { User, UserListQuery } from '../types';
 
+
 @Component({
   selector: 'app-users-page',
   imports: [MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, UsersTableComponent],
@@ -59,7 +60,7 @@ export class UsersPage implements OnInit {
   private readonly dialog = inject(MatDialog);
 
   readonly users = signal<User[]>([]);
-  private query: UserListQuery = { page: 1, limit: 25 };
+  private query: UserListQuery = { page: 1, pageSize: 25 };
 
   ngOnInit(): void {
     this.loadUsers();
@@ -72,7 +73,12 @@ export class UsersPage implements OnInit {
   }
 
   onSort(sort: Sort): void {
-    this.query = { ...this.query, sortBy: sort.active, sortOrder: sort.direction || 'asc' };
+    const sortBy = sort.active as UserListQuery['sortBy'];
+    this.query = {
+      ...this.query,
+      sortBy,
+      sortDirection: sort.direction === 'desc' ? 'desc' : 'asc',
+    };
     this.loadUsers();
   }
 
