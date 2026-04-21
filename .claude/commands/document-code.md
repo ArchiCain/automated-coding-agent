@@ -2,6 +2,38 @@ Generate or update `.docs/` documentation for the code at $ARGUMENTS (or the cur
 
 This command works at any level: a single feature, a project, or an entire application. It creates the full `.docs/` structure from scratch if none exists, or updates existing docs to match the current code reality.
 
+## Priorities (in order)
+
+1. **Accuracy** — every claim must trace to actual source code you read. If you can't verify it, don't write it.
+2. **Completeness** — cover every meaningful behavior, endpoint, and flow. Undocumented behavior is a bug.
+3. **Digestibility & token efficiency** — docs are for humans too. Prefer tables, bullets, and terse prose over walls of text.
+
+When these conflict, accuracy wins. When 1 and 2 are satisfied, trim ruthlessly for 3.
+
+## Length guidance (not hard limits — cut if content is thin, extend if accuracy requires it)
+
+| File | Target |
+|---|---|
+| `spec.md` | ~60–120 lines |
+| `flows.md` | ~80–150 lines |
+| `contracts.md` | as needed (code blocks don't count) |
+| `test-plan.md` | ~50–100 lines |
+| `test-data.md` | as needed |
+| `overview.md` | ~80–120 lines |
+| `standards/coding.md` | ~100–180 lines |
+
+If you blow past the target by 2x, you're probably explaining instead of specifying. Cut.
+
+## Source citations (required)
+
+Every non-trivial claim in the docs must be traceable to a source file. Include inline references in the format `` `relative/path.ts:LINE` `` (or a line range `` `relative/path.ts:12-34` ``) anywhere a reader might ask "says who?":
+- Behavior bullets in `spec.md`
+- Steps in `flows.md` that branch or call something specific
+- Every endpoint in `contracts.md`
+- Every table row mapping components/services
+
+Paths should be relative to the repo root. If a claim spans many files, cite the most authoritative one.
+
 ## Instructions
 
 ### Step 1: Determine scope and read the standard
@@ -172,7 +204,8 @@ Before finishing, re-read each doc file you created and ask:
 
 ### Step 8: Report what you did
 
-Summarize:
+Summarize (keep it tight — this goes back to the orchestrator):
+
 ```
 ## Documentation Generated: {target path}
 
@@ -186,18 +219,27 @@ Summarize:
 - {Y} components/services documented
 - {Z} flows traced
 
-### Notes
-- {Anything ambiguous in the code that you had to interpret}
-- {Anything you couldn't document without more context}
-- {Suggested decisions.md entries for non-obvious patterns}
+### Discrepancies (doc/code drift you found)
+- {Claim in prior docs that no longer matches code — with file:line}
+- {Behavior in code that was never documented}
+- {Anything you couldn't verify and flagged as TODO in the doc}
+
+### Open questions
+- {Anything ambiguous you had to interpret — name the assumption}
+- {Anything that needs human input}
 ```
+
+Report Discrepancies and Open questions accurately even if short — they are the orchestrator's signal for follow-up work.
 
 ## Rules
 
-- **Document reality, not intent.** Write what the code does. If it's broken, note it but document the apparent intent.
-- **Preserve existing accurate docs.** If `.docs/` exists and content is still correct, keep it. Update only what's stale. Add what's missing.
+- **Document reality, not intent.** Write what the code does. If it's broken, note it in the Discrepancies section but document the apparent intent in the doc body.
+- **Cite sources.** Every non-trivial claim must reference the source file (and line when specific). See "Source citations" above.
+- **Preserve existing accurate docs.** If `.docs/` exists and content is still correct, keep it. Update only what's stale. Add what's missing. Delete claims that no longer match code (and call them out in Discrepancies).
+- **Skip `decisions.md`.** WHY-decisions cannot be reliably derived from code alone. Do not generate this file unless explicitly asked — leave it to humans.
 - **Follow the standard templates exactly.** The doc structure must match `.docs/standards/docs-driven-development.md` so agents can parse it.
 - **Be deliberate with context.** You have a limited context window. Read systematically — search first, then read targeted files. Don't try to read an entire large codebase at once.
-- **Create the `.docs/` directory if it doesn't exist.** Use `mkdir -p` via the shell or create files directly — the directory structure should match the standard.
+- **Respect the length targets.** If you're over by 2x, you're probably over-explaining. Trim.
+- **Create the `.docs/` directory if it doesn't exist.** Create files directly with the Write tool — the directory structure should match the standard.
 - **Never modify source code.** This command only writes to `.docs/` directories. The code is the source of truth here.
-- **Commit your docs.** After generating documentation, commit with a message like: "docs: generate .docs/ for {feature/project} from source code"
+- **Do NOT commit.** The orchestrator will commit in logical batches after reviewing your output. Just write files and report.
