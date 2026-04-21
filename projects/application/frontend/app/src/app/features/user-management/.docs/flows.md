@@ -1,119 +1,80 @@
-# User Management Page — Flows
+# User Management — Flows
 
-## Flow 1: View Users (Initial Load)
+All flows assume the user has already signed in; `authGuard` passes because `AuthService.isAuthenticated()` is true or `GET /auth/check` revives the session (`features/keycloak-auth/guards/auth.guard.ts:7-24`). There is no permission guard on these routes (see `spec.md` Discrepancies).
 
-1. Admin navigates to `/users`
-2. `permissionGuard('users:read')` passes
-3. Page loads, shows loading spinner
-4. `GET /api/users?page=1&pageSize=10&sortBy=username&sortDirection=asc` is called
-5. Table renders with first page of users
-6. `mat-paginator` shows total count (e.g. "1-10 of 42")
-7. Each row shows: email, firstName, lastName, role chip, enabled toggle, created date
+## Flow 1: List load
 
-## Flow 2: Search Users
+1. User navigates to `/admin/users`.
+2. Router lazy-loads `UsersPage` (`app.routes.ts:26-29`).
+3. `UsersPage.ngOnInit` calls `loadUsers()` with `this.query = { page: 1, limit: 25 }` (`pages/users.page.ts:62-66`).
+4. `UserManagementApiService.getUsers` builds `HttpParams` with `page=1` and `limit=25` and issues `GET ${backendUrl}/users?page=1&limit=25` with `withCredentials: true` (`services/user-management.api.ts:18-27`).
+5. `authInterceptor` forwards; backend (global `KeycloakJwtGuard`) validates the cookie and the controller returns `{ users: [...], pagination: { page, pageSize, total, totalPages } }`.
+6. The FE reads `response.users` and calls `this.users.set(response.users)` (`pages/users.page.ts:99-103`). `response.pagination` is ignored.
+7. `UsersTableComponent` renders rows via `mat-table`.
 
-1. Admin types "jane" in the search field
-2. After 300ms debounce, `GET /api/users?page=1&pageSize=10&search=jane` is called
-3. Table updates with filtered results
-4. Paginator resets to page 1
-5. Admin clears search → table shows all users again
+Note: the FE sends `limit=25` but the backend query DTO uses `pageSize` — the backend silently defaults to `pageSize=10`, so only 10 rows come back.
 
-## Flow 3: Sort Users
+## Flow 2: Search
 
-1. Admin clicks the "Email" column header
-2. Sort indicator appears (ascending arrow)
-3. `GET /api/users?page=1&pageSize=10&sortBy=email&sortDirection=asc` is called
-4. Table re-renders with sorted results
-5. Admin clicks "Email" again → sort flips to descending
-6. `GET /api/users?page=1&pageSize=10&sortBy=email&sortDirection=desc` is called
+1. User types in the search input (`pages/users.page.ts:29-33`).
+2. Each `input` event fires `onSearch` (no debounce), setting `query = { ...query, search: value, page: 1 }` (`pages/users.page.ts:68-72`).
+3. `loadUsers()` -> `GET /users?page=1&limit=25&search=<value>`.
+4. Table re-renders with the returned page.
 
-## Flow 4: Paginate
+## Flow 3: Sort
 
-1. Admin clicks "next page" on paginator
-2. `GET /api/users?page=2&pageSize=10` is called
-3. Table updates with page 2 results
-4. Admin changes page size to 25
-5. `GET /api/users?page=1&pageSize=25` is called (resets to page 1)
+1. User clicks a sortable header (`username`, `email`, or `createdAt`).
+2. `MatSort` emits a `Sort` event `{ active, direction }` (`components/users-table/users-table.component.html:1`).
+3. `onSort` sets `query = { ...query, sortBy: sort.active, sortOrder: sort.direction || 'asc' }` (`pages/users.page.ts:74-77`). Current `page` is preserved.
+4. `loadUsers()` -> `GET /users?page=<current>&limit=25&sortBy=...&sortOrder=asc|desc`.
+5. Note: the backend query DTO expects `sortDirection`, not `sortOrder`, so the server silently uses the default `sortDirection='asc'`.
 
-## Flow 5: Create User — Happy Path
+## Flow 4: Create user
 
-1. Admin clicks "Create User" button
-2. CreateUserDialog opens
-3. Admin fills in:
-   - Email: `newuser@example.com`
-   - First Name: `New`
-   - Last Name: `User`
-   - Temporary Password: `temppass123`
-   - Role: `user`
-4. Admin clicks "Create"
-5. `POST /api/users` with `{ email: "newuser@example.com", firstName: "New", lastName: "User", temporaryPassword: "temppass123", role: "user" }`
-6. Backend returns 201 with the new UserDto
-7. Dialog closes
-8. Snackbar: "User created successfully"
-9. Table refreshes (re-fetches current page)
+1. User clicks "New User" button on `UsersPage` -> `router.navigate(['/admin/users/new'])` (`pages/users.page.ts:23-26`).
+2. Router lazy-loads `UserPage`; `route.snapshot.params['id']` is undefined, so `isEditMode` is false (`pages/user.page.ts:39-41`).
+3. `UserFormComponent.ngOnInit` adds `Validators.required, minLength(8)` to `password` and renders the password field (`components/user-form/user-form.component.ts:51-54`, `user-form.component.html:12-17`).
+4. User fills `username` (>=3 chars), `email` (valid email), `password` (>=8 chars), optional `firstName`/`lastName`, selects one or more `roles` (default `['user']`).
+5. User clicks "Create". `onSubmit` checks `form.valid`, then emits `form.getRawValue()` as `CreateUserRequest` (`user-form.component.ts:57-61`).
+6. `UserPage.onSubmit` calls `userApi.createUser(data)` -> `POST ${backendUrl}/users` with the emitted body (`pages/user.page.ts:50-60`, `services/user-management.api.ts:33-35`).
+7. On success, `router.navigate(['/admin/users'])`. No snackbar. On error, the subscription has no error handler (request fails silently in the UI; error lands in the dev console).
 
-## Flow 6: Create User — Duplicate Email
+Note: the request body does NOT match backend `CreateUserDto` (missing `temporaryPassword`, `role`; extra `username`, `password`, `roles[]`). In practice the backend will reject or mis-handle it.
 
-1. Admin opens CreateUserDialog
-2. Admin enters email that already exists: `admin@example.com`
-3. Admin fills other fields and clicks "Create"
-4. Backend returns 400 `{ statusCode: 400, message: "User with this email already exists" }`
-5. Error message displayed in dialog below the form
-6. Dialog stays open, user can fix and retry
+## Flow 5: Edit user
 
-## Flow 7: Edit User
+1. User clicks the edit icon on a row in `UsersTableComponent` -> emits `editUser` (`users-table.component.html:29-31`).
+2. `UsersPage.onEdit` calls `router.navigate(['/admin/users', user.id])` (`pages/users.page.ts:79-81`).
+3. `UserPage.ngOnInit` reads `:id`, calls `userApi.getUser(id)` -> `GET ${backendUrl}/users/:id` (`pages/user.page.ts:43-47`, `services/user-management.api.ts:29-31`).
+4. When the response arrives `this.user.set(user)`; `UserFormComponent` receives the user via the `user` input.
+5. `UserFormComponent.ngOnInit` patches the form, disables `username`, clears `password` validators, and the password field is not rendered (`user-form.component.ts:39-55`, `user-form.component.html:12-17`).
+6. User edits `firstName`, `lastName`, and/or `roles`.
+7. User clicks "Update". `form.getRawValue()` is emitted as `UpdateUserRequest` (`user-form.component.ts:57-61`).
+8. `UserPage.onSubmit` calls `userApi.updateUser(id, data)` -> `PUT ${backendUrl}/users/:id` (`pages/user.page.ts:52-55`, `services/user-management.api.ts:37-39`).
+9. On success, `router.navigate(['/admin/users'])`. No snackbar, no error handling.
 
-1. Admin clicks a row in the table (e.g. "jane@example.com")
-2. UserDetailDialog opens with current data pre-filled
-3. Email shown as read-only text
-4. Admin changes lastName from "Doe" to "Smith"
-5. Admin changes role from "user" to "admin"
-6. Admin clicks "Save"
-7. `PUT /api/users/{jane-id}` with `{ lastName: "Smith", role: "admin" }`
-8. Backend returns 200 with updated UserDto
-9. Dialog closes
-10. Snackbar: "User updated successfully"
-11. Table refreshes
+Note: backend reads singular `dto.role`, not the `roles: string[]` the form sends. Role changes from this UI are silently discarded by the backend.
 
-## Flow 8: Delete User
+## Flow 6: Delete user
 
-1. Admin opens UserDetailDialog for a user
-2. Admin clicks "Delete" button (bottom-left of dialog)
-3. ConfirmDialog opens: "Confirm Delete" / "Are you sure you want to delete this user? This will disable their account."
-4. Admin clicks "Delete" in confirmation
-5. `DELETE /api/users/{user-id}` is called
-6. Backend returns 200 `{ message: "User deleted successfully" }`
-7. Both dialogs close
-8. Snackbar: "User deleted successfully"
-9. Table refreshes
+1. User clicks the warn-colored delete icon on a row -> emits `deleteUser` (`users-table.component.html:32-34`).
+2. `UsersPage.onDelete` opens `ConfirmationModalComponent` with `{ title: 'Delete User', message: 'Are you sure you want to delete "{username}"?', confirmText: 'Delete' }` (`pages/users.page.ts:83-90`).
+3. `ref.afterClosed().subscribe(confirmed => ...)` (`pages/users.page.ts:92-96`).
+4. If `confirmed === true`: `userApi.deleteUser(user.id)` -> `DELETE ${backendUrl}/users/:id`. Backend responds `{ message: 'User deleted successfully' }` after disabling (not removing) the user.
+5. On success: `loadUsers()` re-fires the current query. No snackbar.
+6. If `confirmed` is falsy: no API call; dialog closes.
 
-## Flow 9: Delete User — Cancel
+## Flow 7: Cancel form
 
-1. Admin opens UserDetailDialog, clicks "Delete"
-2. ConfirmDialog opens
-3. Admin clicks "Cancel"
-4. ConfirmDialog closes, UserDetailDialog remains open
-5. No API call is made
+1. On the Create or Edit screen the user clicks "Cancel".
+2. `UserFormComponent` emits `cancelForm` (`user-form.component.html:39`, `user-form.component.ts:22`).
+3. `UserPage` passes `(cancelForm)="router.navigate(['/admin/users'])"` in its template, so the router navigates back to the list (`pages/user.page.ts:21`). No confirmation prompt; unsaved edits are discarded.
 
-## Flow 10: Enable/Disable Toggle
+## Flow 8: Unauthenticated access
 
-1. Admin sees a user with enabled=true (toggle is ON)
-2. Admin clicks the toggle
-3. `PATCH /api/users/{user-id}/enabled` with `{ enabled: false }`
-4. Backend returns 200 with updated UserDto
-5. Toggle reflects new state (OFF)
-6. Snackbar: "User disabled"
-7. Admin clicks toggle again → `{ enabled: true }` → "User enabled"
+1. Unauthenticated user navigates to `/admin/users`.
+2. `authGuard` sees `AuthService.isAuthenticated()` is false, calls `GET /auth/check`; the session cookie is missing so the check fails.
+3. Guard returns a `UrlTree` to `/login` (`features/keycloak-auth/guards/auth.guard.ts`).
+4. The user never reaches `UsersPage`.
 
-## Flow 11: Empty State
-
-1. Admin types a search term that matches no users (e.g. "zzzzznonexistent")
-2. Table shows "No users found" message centered in the table area
-3. Paginator shows "0 of 0"
-
-## Flow 12: Unauthorized Access
-
-1. Regular user (without `users:read`) tries to navigate to `/users`
-2. `permissionGuard('users:read')` fails
-3. User is redirected to `/home`
-4. User never sees the users page
+There is no equivalent flow for "authenticated but unauthorized" because no permission guard runs on these routes.

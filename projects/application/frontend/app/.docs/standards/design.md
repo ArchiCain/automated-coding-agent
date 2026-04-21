@@ -1,388 +1,179 @@
-# Benchmark Frontend — Design Specification
+# Design Specification
 
-## Design Philosophy
+Derived from `src/styles.scss`, `src/app/features/theme/styles/_light-theme.scss`, `_dark-theme.scss`, and the actual component templates. All claims here trace to those files.
 
-Strictly Material Design via Angular Material. No custom component library. No CSS frameworks. No gradients, glows, particles, or decorative elements. The UI should look like a well-built internal tool — clean, professional, boring.
+## Philosophy
 
----
+Angular Material 21 with `mat.theme()` (M3 API) as the foundation. Custom look is driven through CSS custom properties (`--app-*`) defined per theme class on `:root`. A short list of global Material overrides (rounded corners, hover lift) lives in `src/styles.scss`. No gradients, no custom component library.
 
-## Theme
+## Themes
 
-Supports both dark and light modes. User preference is stored server-side via `/api/theme`. Default to dark if no preference exists.
+Two theme classes on the `<html>` element, toggled by `ThemeService.applyTheme()` (`features/theme/services/theme.service.ts:32-36`): `light-theme` (default) and `dark-theme`. The preference is persisted server-side via `GET /theme` / `PUT /theme` (`theme.service.ts:39-53`).
 
-### Color Palette — Dark Mode
+Material palette configuration (`features/theme/styles/_light-theme.scss:7-15`, `_dark-theme.scss:7-15`):
 
-```scss
-// Background hierarchy (darkest to lightest)
-$background-page:    #121212;   // Page/body background
-$background-surface: #1e1e1e;   // Cards, dialogs, sidenav
-$background-hover:   #2a2a2a;   // Hover states on surfaces
-$background-input:   #1e1e1e;   // Form field backgrounds (same as surface)
+| Theme | Primary palette | Tertiary palette | Theme type |
+|---|---|---|---|
+| Light | `mat.$blue-palette` | `mat.$green-palette` | `light` |
+| Dark | `mat.$azure-palette` | `mat.$green-palette` | `dark` |
 
-// Text hierarchy
-$text-primary:       #ffffff;                    // Headings, primary content
-$text-secondary:     rgba(255, 255, 255, 0.7);   // Labels, secondary content
-$text-disabled:      rgba(255, 255, 255, 0.38);  // Disabled/placeholder text
-$text-hint:          rgba(255, 255, 255, 0.5);   // Hints, captions
-```
+Wired in `src/styles.scss:5-15` via `@include mat.theme(light.$light-theme)` on `html`, overridden by `html.dark-theme { @include mat.theme(dark.$dark-theme) }`.
 
-### Color Palette — Light Mode
+## CSS Custom Properties
 
-```scss
-// Background hierarchy
-$background-page:    #fafafa;   // Page/body background
-$background-surface: #ffffff;   // Cards, dialogs, sidenav
-$background-hover:   #f5f5f5;   // Hover states on surfaces
-$background-input:   #ffffff;   // Form field backgrounds
+These are the variables components should reach for. Defined per theme class.
 
-// Text hierarchy
-$text-primary:       rgba(0, 0, 0, 0.87);   // Headings, primary content
-$text-secondary:     rgba(0, 0, 0, 0.6);    // Labels, secondary content
-$text-disabled:      rgba(0, 0, 0, 0.38);   // Disabled/placeholder text
-$text-hint:          rgba(0, 0, 0, 0.5);    // Hints, captions
-```
+### Backgrounds
 
-### Shared Colors (both themes)
+| Token | Light | Dark |
+|---|---|---|
+| `--app-bg-default` | `#ffffff` | `#212121` |
+| `--app-bg-paper` | `#ffffff` | `#2a2a2a` |
+| `--app-bg-chat-user` | `#f3f6f9` | `#343434` |
+| `--app-bg-chat-assistant` | `#ffffff` | `#2a2a2a` |
 
-```scss
-// Borders and dividers
-$divider:            rgba(255, 255, 255, 0.12);  // Dark mode
-$divider-light:      rgba(0, 0, 0, 0.12);        // Light mode
+### Text
 
-// Accent (use sparingly — only for interactive elements)
-$accent-primary:     #90caf9;   // Primary buttons, active nav items, links
-$accent-hover:       #bbdefb;   // Hover on accent elements
+| Token | Light | Dark |
+|---|---|---|
+| `--app-text-primary` | `#1a2027` | `#e7ebf0` |
+| `--app-text-secondary` | `#3e5060` | `#b2bac2` |
 
-// Status colors (same in both themes)
-$status-success:     #66bb6a;   // Green — healthy, success, up, enabled
-$status-warning:     #ffa726;   // Orange — degraded, warning
-$status-error:       #ef5350;   // Red — error, down, failed, disabled
-$status-info:        #42a5f5;   // Blue — info badges
+### Primary accent
 
-// Role badge colors
-$role-admin:         #42a5f5;   // Blue chip
-$role-user:          #78909c;   // Gray chip
-```
+| Token | Light | Dark |
+|---|---|---|
+| `--app-primary` | `#007fff` | `#ececec` |
+| `--app-primary-light` | `#66b2ff` | `#ffffff` |
+| `--app-primary-dark` | `#0059b2` | `#b4b4b4` |
 
-### Angular Material Theme Setup
+### Semantic
 
-```scss
-// In styles.scss — define BOTH themes
-@use '@angular/material' as mat;
+| Token | Light | Dark | Usage |
+|---|---|---|---|
+| `--app-success` | `#1aa251` | `#1db45a` | healthy, up |
+| `--app-warning` | `#dea500` | `#e9ab13` | degraded |
+| `--app-error` | `#eb0014` | `#ff4c4f` | errors, destructive |
 
-// Dark theme
-$dark-theme: mat.define-dark-theme((
-  color: (
-    primary: mat.define-palette(mat.$blue-palette, 200),
-    accent: mat.define-palette(mat.$blue-grey-palette, 200),
-    warn: mat.define-palette(mat.$red-palette),
-  ),
-));
+### Borders & interaction
 
-// Light theme
-$light-theme: mat.define-light-theme((
-  color: (
-    primary: mat.define-palette(mat.$blue-palette, 700),
-    accent: mat.define-palette(mat.$blue-grey-palette, 700),
-    warn: mat.define-palette(mat.$red-palette),
-  ),
-));
+| Token | Light | Dark |
+|---|---|---|
+| `--app-divider` | `rgba(194,224,255,0.08)` | `rgba(194,224,255,0.08)` |
+| `--app-border-subtle` | `rgba(0,0,0,0.08)` | `rgba(255,255,255,0.08)` |
+| `--app-hover-overlay` | `rgba(0,127,255,0.08)` | `rgba(51,153,255,0.08)` |
+| `--app-hover-shadow` | `0 4px 12px rgba(51,153,255,0.3)` | (same) |
+| `--app-focus-ring` | `#3399ff` | `#3399ff` |
 
-// Default: dark
-@include mat.all-component-themes($dark-theme);
+### Dark-only scrollbar
 
-// Light mode override via class on root element
-.theme-light {
-  @include mat.all-component-colors($light-theme);
-  background: #fafafa;
-  color: rgba(0, 0, 0, 0.87);
-}
+`--app-scrollbar-track: #212121`, `--app-scrollbar-thumb: #404040`, `--app-scrollbar-thumb-hover: #505050` (`_dark-theme.scss:48-52`). Applied via `scrollbar-width: thin; scrollbar-color: ...` and `::-webkit-scrollbar` rules (`styles.scss:27-51`). Light mode uses the browser default.
 
-body {
-  margin: 0;
-  background: #121212;
-  color: #ffffff;
-  font-family: Roboto, sans-serif;
-}
+## Global Material overrides
 
-body.theme-light {
-  background: #fafafa;
-  color: rgba(0, 0, 0, 0.87);
-}
-```
+From `src/styles.scss:54-102`. These apply app-wide — do not re-override per component:
 
-### Theme Switching
-
-The `ThemeService` applies `theme-light` or `theme-dark` class to the `<body>` element. The root `app.component.ts` subscribes to the theme signal and updates the class.
-
-### CRITICAL: What NOT to Do
-
-1. **Do NOT set `border-radius` on `mat-form-field` or its internal elements.** Angular Material's MDC notched outline is composed of 3 SVG segments (leading, notch, trailing). Setting border-radius on these segments individually creates a scalloped/broken appearance. Leave them at the Material default (4px).
-
-2. **Do NOT override Material component geometry** (padding, margins, heights) unless absolutely necessary. Override colors and borders only.
-
-3. **Do NOT use `::ng-deep`** unless there is no other way to reach a Material internal element. Prefer the theme system and CSS custom properties.
-
-4. **Do NOT set `box-shadow` on cards** — use `mat-elevation-z2` or `mat-elevation-z4` classes instead.
-
-5. **Do NOT add `border-radius` to global styles** for Material components. The default 4px is correct.
-
----
-
-## Layout
-
-### Page Structure
-
-```
-┌──────────────────────────────────────────────┐
-│ mat-sidenav-container (full viewport)        │
-│ ┌────────────┐ ┌───────────────────────────┐ │
-│ │ mat-sidenav│ │ mat-sidenav-content       │ │
-│ │            │ │                           │ │
-│ │ Navigation │ │  Page content             │ │
-│ │            │ │  (padding: 24px)          │ │
-│ │            │ │                           │ │
-│ │            │ │                           │ │
-│ │ Theme tog. │ │                           │ │
-│ │ User info  │ │                           │ │
-│ │ Logout btn │ │                           │ │
-│ └────────────┘ └───────────────────────────┘ │
-└──────────────────────────────────────────────┘
-```
-
-- **Sidenav width:** 240px
-- **Sidenav mode:** `side` on desktop (>960px), `over` on mobile
-- **Content padding:** 24px
-- **Max content width:** none (fluid)
-
-### Login Page (no sidenav)
-
-```
-┌──────────────────────────────────────────────┐
-│                                              │
-│                                              │
-│          ┌─────────────────────┐             │
-│          │  Sign In            │             │
-│          │                     │             │
-│          │  [Email          ]  │             │
-│          │  [Password       ]  │             │
-│          │                     │             │
-│          │  [ Sign In       ]  │             │
-│          │                     │             │
-│          │  Error message      │             │
-│          └─────────────────────┘             │
-│                                              │
-└──────────────────────────────────────────────┘
-```
-
-- **Card max-width:** 400px
-- **Card centered:** vertically and horizontally (flexbox)
-- **Card background:** #1e1e1e (dark) / #ffffff (light)
-- **Card elevation:** mat-elevation-z4
-
----
+- **Buttons** (`.mat-mdc-button, .mat-mdc-raised-button, .mat-mdc-flat-button, .mat-mdc-outlined-button`): `border-radius: 10px`, `font-weight: 700`, `text-transform: none`, `letter-spacing: 0.02em`, hover lifts `translateY(-1px)`.
+- **Cards** (`.mat-mdc-card`): `border-radius: 12px`, hover lifts `translateY(-2px)` with a 300ms transition.
+- **Icon buttons** (`.mat-mdc-icon-button`): `border-radius: 8px`, hover uses `--app-hover-overlay` and `scale(1.05)`.
+- **Chips** (`.mat-mdc-chip`): `border-radius: 8px`, `font-weight: 600`.
+- **Form fields**: outlined notch segments get `border-radius: 10px` (`styles.scss:98-102`).
 
 ## Typography
 
-Use Angular Material's typography system. No custom font sizes.
+- Font stack: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif, ...emoji fonts` (`styles.scss:22-23`). Roboto 300/400/500 is preloaded via Google Fonts in `index.html:12-14`.
+- Icon font: Material Icons (`index.html:15`).
+- Page title weight: `600` at `1.1rem` for the toolbar app title (`app-header.component.ts:32-36`).
+- Use Material Typography classes (`mat-headline-5`, `mat-headline-6`, `mat-body-1`, `mat-caption`) rather than custom sizes.
 
-| Element | Material class | Size |
-|---------|---------------|------|
-| Page heading | `mat-headline-5` | 24px |
-| Card heading | `mat-headline-6` | 20px |
-| Body text | `mat-body-1` | 16px |
-| Caption/secondary | `mat-caption` | 12px |
-| Button text | default mat-button | 14px |
+## Layout
 
----
+### Authenticated shell
+
+`AppLayoutComponent` (`features/layouts/components/app-layout/app-layout.component.html`):
+
+```
+┌──────────────────────────────────────────────┐
+│ app-header (sticky, z-index: 1100)           │
+├──────────────┬───────────────────────────────┤
+│ sidenav 280 │ mat-sidenav-content           │
+│ (side mode  │  <router-outlet />            │
+│  on desktop,│                               │
+│  over mode  │                               │
+│  <1200px)   │                               │
+└──────────────┴───────────────────────────────┘
+```
+
+Breakpoints (`features/layouts/services/layout.service.ts:5-9`):
+
+| Name | Range |
+|---|---|
+| Desktop | `min-width: 1200px` |
+| Tablet | `768px – 1199px` |
+| Mobile | `max-width: 767px` |
+
+`LayoutService.showPersistentSidebar` is true only on desktop. On tablet/mobile the sidenav is an overlay drawer controlled by `toggleDrawer()` from the header menu button.
+
+Left sidebar width: `280px` (`features/navigation/components/left-navigation-sidebar/left-navigation-sidebar.component.ts:17`). Header is `sticky; top: 0; z-index: 1100` with a bottom divider.
+
+### Login page
+
+Centered card with max-width `440px`, `padding: 32px`, `border-radius: 12px`, 600 ms slide-up-fade-in animation (`features/keycloak-auth/pages/login.page.ts:27-62`). Animation is disabled via `@media (prefers-reduced-motion: reduce)`.
 
 ## Component Patterns
 
 ### Buttons
 
-| Type | Usage | Style |
-|------|-------|-------|
-| `mat-flat-button color="primary"` | Primary actions (Sign In, Create User, Check Now) | Filled blue |
-| `mat-button` | Secondary actions (Cancel, Close) | Text only |
-| `mat-icon-button` | Icon-only actions (menu toggle, refresh, delete) | Icon only |
-| `mat-stroked-button` | Tertiary actions (Edit) | Outlined |
+| Use | Component |
+|---|---|
+| Primary action | `mat-flat-button` (default color) |
+| Secondary / cancel | `mat-button` |
+| Icon-only | `mat-icon-button` |
+| Destructive | `mat-flat-button color="warn"` (see `ConfirmationModalComponent`) |
 
-### Form Fields
+### Form fields
 
 ```html
 <mat-form-field appearance="outline">
-  <mat-label>Email</mat-label>
-  <input matInput formControlName="email" />
-  <mat-error *ngIf="...">Required</mat-error>
+  <mat-label>Search users</mat-label>
+  <input matInput ... />
+  <mat-icon matSuffix>search</mat-icon>
 </mat-form-field>
 ```
 
-- Always use `appearance="outline"`
-- Never set custom `border-radius`
-- Use `mat-error` for validation messages
-- Use `mat-hint` for helper text
-
-### Cards
-
-```html
-<mat-card>
-  <mat-card-header>
-    <mat-card-title>Title</mat-card-title>
-  </mat-card-header>
-  <mat-card-content>
-    Content here
-  </mat-card-content>
-</mat-card>
-```
-
-- Background: inherits from theme
-- Use `class="mat-elevation-z2"` for subtle elevation
-- No custom border-radius (Material default is fine)
-
-### Tables
-
-```html
-<table mat-table [dataSource]="dataSource" matSort (matSortChange)="onSort($event)">
-  <ng-container matColumnDef="email">
-    <th mat-header-cell *matHeaderCellDef mat-sort-header>Email</th>
-    <td mat-cell *matCellDef="let row">{{ row.email }}</td>
-  </ng-container>
-  <!-- ... -->
-  <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-  <tr mat-row *matRowDef="let row; columns: displayedColumns" (click)="openDetail(row)"></tr>
-</table>
-<mat-paginator [length]="totalItems" [pageSize]="pageSize" [pageSizeOptions]="[5, 10, 25]"
-               (page)="onPage($event)"></mat-paginator>
-```
-
-- matSort triggers server-side sort (not client-side)
-- mat-paginator triggers server-side pagination
-- Row click handler for detail views
+`appearance="outline"` is the project default (`users.page.ts:29`). Never set a custom `border-radius` on `mat-form-field` — the global 10px on the notch is already set in `styles.scss:98-102`.
 
 ### Dialogs
 
-```typescript
-this.dialog.open(UserDetailDialog, {
-  width: '480px',
-  data: { user: row },
-});
-```
+Opened via `MatDialog.open(Component, { data: { ... } })`. Generic destructive confirm: `ConfirmationModalComponent` in `@features/shared` — returns `true` on confirm, `false` on cancel (`features/shared/components/confirmation-modal/confirmation-modal.component.ts`).
 
-- Width: 400-600px depending on content
-- Always have a close button (X icon in top-right)
-- Use `mat-dialog-title`, `mat-dialog-content`, `mat-dialog-actions`
+### Navigation tree
 
-### Confirm Dialog
+`NavigationTreeComponent` renders `navigationConfig.items` as `mat-nav-list`. Items with `children` become `mat-expansion-panel` groups. The active route gets `active-link` class: `background-color: var(--app-hover-overlay); font-weight: 600` (`features/navigation/components/navigation-tree/navigation-tree.component.ts:57-60`).
 
-For destructive actions (delete user):
+### Theme toggle
 
-```html
-<h2 mat-dialog-title>Confirm Delete</h2>
-<mat-dialog-content>
-  Are you sure you want to delete this user? This will disable their account.
-</mat-dialog-content>
-<mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Cancel</button>
-  <button mat-flat-button color="warn" (click)="confirm()">Delete</button>
-</mat-dialog-actions>
-```
+`mat-icon-button` swapping between the `light_mode` and `dark_mode` Material icons based on `ThemeService.isDark()` (`features/theme/components/theme-toggle/theme-toggle.component.ts:11-13`).
 
-### Status Indicators
+### Chat surface
 
-```html
-<span class="status-dot" [class.up]="status === 'ok'" [class.down]="status !== 'ok'"></span>
-```
+- `chat-page` occupies the full layout viewport minus the 64px toolbar, with `margin: -24px` to neutralize the default content padding (`features/chat/pages/chat.page.ts:36-40`).
+- User vs assistant bubbles use `--app-bg-chat-user` / `--app-bg-chat-assistant`.
 
-```scss
-.status-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  &.up { background: #66bb6a; }
-  &.down { background: #ef5350; }
-}
-```
+## Accessibility
 
-Also used for user enabled/disabled status:
-- Enabled: green dot or `mat-slide-toggle` checked
-- Disabled: red dot or `mat-slide-toggle` unchecked
-
-### Role Badges
-
-```html
-<mat-chip [class]="'role-' + user.roles[0]">{{ user.roles[0] }}</mat-chip>
-```
-
-```scss
-.role-admin {
-  background: #42a5f5 !important;
-  color: white !important;
-}
-.role-user {
-  background: #78909c !important;
-  color: white !important;
-}
-```
-
-### Loading States
-
-- Use `mat-spinner` (diameter="20" for inline, default for full-page)
-- For tables: show skeleton rows or centered spinner
-- For cards: show `mat-progress-bar mode="indeterminate"` at top of card
-
-### Snackbar (Feedback Toast)
-
-```typescript
-// Success
-this.snackBar.open('User created successfully', 'Dismiss', { duration: 3000 });
-
-// Error
-this.snackBar.open('Something went wrong', 'Dismiss', {
-  duration: 5000,
-  panelClass: ['error-snackbar'],
-});
-```
-
-### Theme Toggle
-
-In the sidenav footer, use a `mat-slide-toggle`:
-
-```html
-<mat-slide-toggle [checked]="isDarkMode()" (change)="toggleTheme()">
-  Dark Mode
-</mat-slide-toggle>
-```
-
----
+- `mat-icon-button`s carry `aria-label` (`app-header.component.ts:16`, `theme-toggle.component.ts:11`).
+- Respect `prefers-reduced-motion` for any new animations (`login.page.ts:44-48`).
+- Templates are linted with `angular.configs.templateAccessibility` (`eslint.config.js:42`).
 
 ## Spacing
 
-Use multiples of 8px consistently.
+Multiples of 8px. Page padding defaults to 24px (observed `margin-bottom: 24px` on page headers, `gap: 24px` on the smoke-tests grid, `padding: 32px` on the login card). Prefer 4 / 8 / 16 / 24 / 32 px rather than introducing new values.
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| xs | 4px | Dense internal spacing |
-| sm | 8px | Between related elements |
-| md | 16px | Between groups |
-| lg | 24px | Page padding, section gaps |
-| xl | 32px | Large section separators |
+## What NOT to do
 
----
-
-## Responsive Breakpoints
-
-| Breakpoint | Width | Layout change |
-|------------|-------|---------------|
-| Mobile | <600px | Sidenav becomes overlay drawer, single column cards |
-| Tablet | 600-960px | Sidenav overlay, 2 column cards |
-| Desktop | >960px | Sidenav side mode, 3 column cards |
-
-Use Angular CDK `BreakpointObserver` for responsive logic:
-
-```typescript
-private breakpointObserver = inject(BreakpointObserver);
-
-isMobile$ = this.breakpointObserver.observe([Breakpoints.Handset])
-  .pipe(map(result => result.matches));
-```
+1. Do not hardcode colors — use the `--app-*` tokens so both themes work.
+2. Do not re-override global Material radii/hover effects already set in `styles.scss`.
+3. Avoid `::ng-deep` — the `--app-*` tokens and Material theming should cover nearly every case.
+4. Do not set `border-radius` on `mat-form-field` inner segments — the global rule handles it.
+5. Do not add animations without a `prefers-reduced-motion` escape.

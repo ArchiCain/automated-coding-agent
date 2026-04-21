@@ -1,138 +1,133 @@
-# Auth Feature — Test Data
+# Keycloak Auth (Frontend) — Test Data
 
-## Test Accounts
+Test accounts come from the Keycloak `application` realm seed (`projects/application/keycloak/app/realm-config/realm-export.json:154-183`, documented in `projects/application/keycloak/.docs/spec.md`). The FE is a thin consumer — there is no FE-side seed.
 
-| Email | Password | Role | Permissions |
-|-------|----------|------|-------------|
-| `admin@example.com` | `admin123` | admin | users:read, users:create, users:update, users:delete, conversations:read, conversations:create, conversations:delete |
-| `user@example.com` | `user123` | user | conversations:read, conversations:create |
+## Test Accounts (seeded in realm `application`)
 
-## Permission Model
+| Username | Password | Email | Keycloak roles | FE permissions (via `ROLE_PERMISSIONS`) |
+|---|---|---|---|---|
+| `testuser` | `password` | `test@example.com` | `user` | `conversations:read`, `conversations:write`, `conversations:delete` |
+| `admin` | `admin` | `admin@example.com` | `user`, `admin` | all 7 FE permissions (admin is a superset) |
 
-Permissions are resolved server-side. The frontend receives them from `GET /api/auth/check`.
+Keycloak admin console (for dev setup only, not login to the app): `admin` / `admin` on port 8081 (`keycloak/.docs/spec.md:17`).
 
-| Permission | What it controls in the frontend |
-|------------|--------------------------------|
-| `users:read` | Access to `/users` route, "Users" nav item visibility, User Management feature card on welcome page |
-| `users:create` | "Create User" button visibility on users page |
-| `users:update` | Edit form in user detail dialog, enable/disable toggle |
-| `users:delete` | "Delete" button in user detail dialog |
+> The FE login field is labeled `Username` (`login-form.component.html:3`) and submits `username`, not `email`. Use the values in the `Username` column above.
 
-## Auth Check Response Examples
+## Form validation cases (no API calls)
 
-**Admin:**
-```json
-{
-  "authenticated": true,
-  "user": {
-    "id": "uuid-admin",
-    "username": "admin@example.com",
-    "email": "admin@example.com",
-    "roles": ["admin"],
-    "firstName": "Admin",
-    "lastName": "User"
-  },
-  "permissions": [
-    "users:read", "users:create", "users:update", "users:delete",
-    "conversations:read", "conversations:create", "conversations:delete"
-  ]
-}
-```
+| Input | Result |
+|---|---|
+| Username empty + touched | `mat-error`: "Username is required" |
+| Username `ab` + touched | `mat-error`: "Username must be at least 3 characters" |
+| Password empty + touched | `mat-error`: "Password is required" |
+| Both empty, click Sign In | Button disabled (`form.invalid`); no API call |
+| `notanemail` / `somepass` | Accepted — no email-format validator |
 
-**Regular user:**
-```json
-{
-  "authenticated": true,
-  "user": {
-    "id": "uuid-user",
-    "username": "user@example.com",
-    "email": "user@example.com",
-    "roles": ["user"],
-    "firstName": "Regular",
-    "lastName": "User"
-  },
-  "permissions": [
-    "conversations:read", "conversations:create"
-  ]
-}
-```
+## API request / response examples
 
-**Unauthenticated (no cookie / expired):**
-```
-GET /api/auth/check
-Response: 401
-{ "statusCode": 401, "message": "No token provided" }
-```
+### Login success (admin)
 
-## Cookie Behavior
-
-| Cookie | Set by | HTTP-only | Secure (prod) | SameSite | Max-Age |
-|--------|--------|-----------|---------------|----------|---------|
-| `access_token` | POST /auth/login, POST /auth/refresh | Yes | Yes | strict (prod) / lax (dev) | Token expiry (from Keycloak) |
-| `refresh_token` | POST /auth/login, POST /auth/refresh | Yes | Yes | strict (prod) / lax (dev) | 30 days |
-
-Both cookies are cleared by `POST /auth/logout`.
-
-## Error Scenarios
-
-| Scenario | Trigger | Interceptor Behavior |
-|----------|---------|---------------------|
-| Expired access token | Any API returns 401 | Refresh → retry original request |
-| Expired refresh token | Refresh returns 401 | Redirect to /login |
-| Insufficient permissions | API returns 403 | Snackbar "Access denied" |
-| Server error | API returns 5xx | Snackbar "Something went wrong" |
-| No cookies at all | App bootstrap | checkSession returns null, guard redirects to /login |
-
----
-
-# Login Page — Test Data
-
-## Test Accounts
-
-These accounts are seeded in Keycloak and available in all environments.
-
-| Email | Password | Role | Permissions | First Name | Last Name |
-|-------|----------|------|-------------|------------|-----------|
-| `admin@example.com` | `admin123` | admin | users:read, users:create, users:update, users:delete, conversations:read, conversations:create, conversations:delete | Admin | User |
-| `user@example.com` | `user123` | user | conversations:read, conversations:create | Regular | User |
-
-## Error Scenarios
-
-| Input | Expected Status | Expected Message |
-|-------|----------------|-----------------|
-| `admin@example.com` / `wrongpassword` | 401 | "Invalid credentials" |
-| `nonexistent@example.com` / `anything` | 401 | "Invalid credentials" |
-| Empty email / empty password | No API call | Form validation errors shown |
-| `notanemail` / `password` | No API call | Email format validation error |
-
-## API Request/Response
-
-**Success:**
 ```
 POST /api/auth/login
-Body: { "username": "admin@example.com", "password": "admin123" }
-Response: 200
+Content-Type: application/json
+Cookie: (none)
+Body: { "username": "admin", "password": "admin" }
+```
+
+```
+HTTP/1.1 200 OK
+Set-Cookie: access_token=<jwt>; HttpOnly; Path=/; SameSite=Lax; Max-Age=300
+Set-Cookie: refresh_token=<jwt>; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000
+Content-Type: application/json
+
 {
   "message": "Login successful",
   "user": {
-    "id": "uuid-admin",
-    "username": "admin@example.com",
+    "id": "<keycloak-sub>",
+    "username": "admin",
     "email": "admin@example.com",
-    "roles": ["admin"],
+    "roles": ["admin", "user", "default-roles-application", "offline_access", "uma_authorization"],
     "firstName": "Admin",
     "lastName": "User"
   }
 }
-Cookies: access_token (HTTP-only), refresh_token (HTTP-only)
 ```
 
-**Failure:**
+Exact role list depends on realm defaults; the FE only cares that `"admin"` and/or `"user"` is present for its local permission mapping.
+
+### Login failure
+
 ```
 POST /api/auth/login
-Body: { "username": "admin@example.com", "password": "wrong" }
-Response: 401
+Body: { "username": "admin", "password": "wrong" }
+
+HTTP/1.1 401 Unauthorized
+{ "statusCode": 401, "message": "Invalid credentials", "error": "Unauthorized" }
+```
+
+`AuthService.error()` -> `"Invalid credentials"` (`auth.service.ts:47`).
+
+### Check session — authenticated
+
+```
+GET /api/auth/check
+Cookie: access_token=<jwt>
+
+HTTP/1.1 200 OK
 {
-  "statusCode": 401,
-  "message": "Invalid credentials"
+  "authenticated": true,
+  "user": {
+    "id": "...", "username": "testuser", "email": "test@example.com",
+    "roles": ["user", ...], "firstName": null, "lastName": null
+  },
+  "permissions": ["conversations:read", "conversations:create"]
 }
 ```
+
+FE stores the whole envelope on `_user` (typed as `User`), so `_user().id`/`roles` become `undefined` — see `contracts.md` "Discrepancy". Post-`checkAuth`, `permissions()` computed from `undefined` roles returns `[]` until the next login.
+
+### Check session — unauthenticated
+
+```
+GET /api/auth/check
+Cookie: (none or expired)
+
+HTTP/1.1 401 Unauthorized
+{ "statusCode": 401, "message": "No token provided", "error": "Unauthorized" }
+```
+
+`AuthService.checkAuth()` swallows this in `catchError` and emits `null`; `authGuard` then returns a `UrlTree` to `/login`.
+
+### Logout
+
+```
+POST /api/auth/logout
+Cookie: access_token=<jwt>; refresh_token=<jwt>
+Body: {}
+
+HTTP/1.1 200 OK
+Set-Cookie: access_token=; Max-Age=0
+Set-Cookie: refresh_token=; Max-Age=0
+{ "message": "Logout successful" }
+```
+
+FE ignores the body; clears `_user` and routes to `/login` regardless of outcome.
+
+## Cookie behavior (observed)
+
+| Cookie | HttpOnly | Secure (prod) | SameSite | Max-Age |
+|---|---|---|---|---|
+| `access_token` | yes | yes | `strict` in prod, `lax` otherwise | `expires_in * 1000` ms (Keycloak default 300s) |
+| `refresh_token` | yes | yes | `strict` in prod, `lax` otherwise | 30 days |
+
+See `backend/.../keycloak-auth/.docs/contracts.md` for the authoritative definition.
+
+## Runtime config
+
+Tests that hit the real backend need `public/config.json` to resolve to the sandbox's `/api`:
+
+```json
+{ "backendUrl": "/api" }
+```
+
+Loaded at bootstrap via `provideAppInitializer` (`app.config.ts:17-20`). Accessing `AppConfigService.backendUrl` before `load()` throws (`features/api-client/services/app-config.service.ts`).

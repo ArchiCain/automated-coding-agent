@@ -1,43 +1,51 @@
-# Layout Feature — Flows
+# Layouts — Flows
 
-## Flow 1: Desktop Navigation
+## Flow 1: Route-based layout selection
 
-1. Admin is on `/home` (desktop viewport >960px)
-2. Sidenav is visible in `side` mode, content pushed right
-3. Nav items visible: Welcome (highlighted), Users, Smoke Tests
-4. Admin clicks "Users" nav item
-5. Navigated to `/users`, "Users" is now highlighted
-6. Sidenav remains visible throughout
+1. User navigates to any path under the application.
+2. The router matches against `app.routes.ts:5-47`:
+   - `/login` loads `LoginPage` directly — no layout shell (`app.routes.ts:6-10`).
+   - Any other path matches the empty-path parent, which runs `canActivate: [authGuard]` and lazy-loads `AppLayoutComponent` (`app.routes.ts:12-17`).
+3. If `authGuard` returns `false` the user is redirected to `/login` and `AppLayoutComponent` is never instantiated. Otherwise the layout mounts and the matched child route renders into its `<router-outlet />` (`app-layout.component.html:20-22`).
+4. `AppLayoutComponent` injects `LayoutService` (root singleton) — the service was already constructed on first injection and has been observing breakpoints since then (`layout.service.ts:27-39`).
 
-## Flow 2: Mobile Navigation
+## Flow 2: Initial layout selection by viewport
 
-1. User is on `/home` (mobile viewport <600px)
-2. Sidenav is hidden, toolbar visible with hamburger icon
-3. User taps hamburger icon
-4. Sidenav slides over content as overlay
-5. User taps "Smoke Tests"
-6. Navigated to `/smoke-tests`, sidenav closes automatically
+1. `LayoutService` constructor subscribes to `BreakpointObserver.observe([desktop, tablet, mobile])` with queries `min-width: 1200px`, `768-1199px`, `max-width: 767px` (`layout.service.ts:28-30`).
+2. The first synchronous emission populates `_isDesktop`, `_isTablet`, `_isMobile` signals (`layout.service.ts:31-33`).
+3. `showPersistentSidebar = computed(() => _isDesktop())` is read by the template (`layout.service.ts:25`).
+4. Template branches via `@if (layout.showPersistentSidebar())` (`app-layout.component.html:5-18`):
+   - True: render `<mat-sidenav mode="side" [opened]="true">`.
+   - False: render `<mat-sidenav mode="over" [opened]="layout.drawerOpen()" (closed)="layout.closeDrawer()">`.
+5. Both branches render `<app-left-navigation-sidebar />` inside the sidenav.
 
-## Flow 3: Permission-Based Nav Visibility
+## Flow 3: Mobile/tablet drawer open
 
-1. Regular user (no `users:read` permission) is authenticated
-2. Layout renders sidenav with nav items
-3. "Welcome" is visible
-4. "Users" is NOT visible (hidden via `hasPermission$('users:read')`)
-5. "Smoke Tests" is visible
+1. Viewport is `<1200px`; template is showing the overlay sidenav with `drawerOpen()` returning `false`, so the drawer is closed.
+2. User taps the menu button in `<app-header>`. The header emits `menuToggle` (`app-header.component.ts:45`).
+3. `(menuToggle)="layout.toggleDrawer()"` on `<app-header>` calls `LayoutService.toggleDrawer()` (`app-layout.component.html:2`, `layout.service.ts:42-44`).
+4. `toggleDrawer()` flips `_drawerOpen` to `true`. The signal update propagates to the bound `[opened]="layout.drawerOpen()"` input and the Material sidenav animates in as an overlay.
 
-## Flow 4: Logout
+## Flow 4: Mobile/tablet drawer close
 
-1. User clicks "Logout" at bottom of sidenav
-2. `authService.logout()` is called
-3. Session cleared, redirected to `/login`
-4. Layout component is destroyed (login page doesn't use it)
+There are two close paths:
 
-## Flow 5: Responsive Breakpoint Change
+1. User taps the scrim/backdrop or presses Escape. Material fires `(closed)` on the sidenav, which invokes `LayoutService.closeDrawer()` (`app-layout.component.html:13`, `layout.service.ts:46-48`). `_drawerOpen` is set to `false`.
+2. User presses the menu button again. `toggleDrawer()` flips the signal back to `false`.
 
-1. User is on desktop (sidenav in `side` mode)
-2. User resizes window below 960px
-3. Sidenav switches to `over` mode (hides, shows hamburger)
-4. Content fills full width
-5. User resizes back above 960px
-6. Sidenav switches back to `side` mode (visible, pushes content)
+Child route navigation does NOT auto-close the drawer — there is no navigation listener in `LayoutService` or `AppLayoutComponent`. Closing relies on the user or on a desktop breakpoint transition (Flow 5).
+
+## Flow 5: Responsive breakpoint change
+
+1. User resizes the browser so the viewport crosses a breakpoint.
+2. `BreakpointObserver` emits a new result; the subscription updates `_isDesktop`, `_isTablet`, `_isMobile` (`layout.service.ts:31-33`).
+3. If the new state is desktop, `_drawerOpen` is force-set to `false` to guarantee the next persistent-sidebar render is clean (`layout.service.ts:36-38`).
+4. `showPersistentSidebar()` recomputes. `@if` in the template re-evaluates:
+   - Entered desktop: persistent `<mat-sidenav mode="side" [opened]="true">` replaces the overlay variant.
+   - Left desktop: overlay `<mat-sidenav mode="over">` replaces the persistent variant; its `[opened]` binding reflects `drawerOpen()` (false immediately after the transition).
+5. Content in `<mat-sidenav-content>` reflows. Only the content area scrolls (`overflow-y: auto` on `.main-content`).
+
+## Flow 6: Service teardown
+
+1. The Angular platform tears down (full app destruction — `LayoutService` is `providedIn: 'root'` so it is not destroyed on route change).
+2. `LayoutService.ngOnDestroy()` runs and unsubscribes the stored `BreakpointObserver` subscription (`layout.service.ts:50-52`).

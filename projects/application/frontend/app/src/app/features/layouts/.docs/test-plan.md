@@ -1,33 +1,40 @@
-# Layout — Test Plan
+# Layouts — Test Plan
 
-## Sidenav Structure
+## Shell Structure
 
-- [ ] Sidenav renders at 240px width
-- [ ] Desktop (>960px): sidenav in `side` mode, always visible, pushes content
-- [ ] Tablet/Mobile (<960px): sidenav in `over` mode, overlay with hamburger toggle
-- [ ] Content renders in `mat-sidenav-content` with 24px padding
+- [ ] `AppLayoutComponent` renders an `<app-header>`, a `<mat-sidenav-container>` with exactly one `<mat-sidenav>` and a `<mat-sidenav-content>`, and a `<router-outlet />` inside the content.
+- [ ] Host `.app-layout` is `height: 100vh` with `display: flex; flex-direction: column`.
+- [ ] `.layout-container` has `flex: 1; overflow: hidden`.
+- [ ] `.main-content` has `padding: 24px` and `overflow-y: auto`.
+- [ ] Login route (`/login`) does not mount `AppLayoutComponent`.
 
-## Navigation Items
+## Responsive Sidenav
 
-- [ ] "Welcome" with `home` icon, routes to `/home`, always visible
-- [ ] "Users" with `people` icon, routes to `/users`, visible only if `hasPermission$('users:read')`
-- [ ] "Smoke Tests" with `monitor_heart` icon, routes to `/smoke-tests`, always visible
-- [ ] Active route highlighted with accent color
+- [ ] Viewport `>=1200px`: sidenav is `mode="side"`, `opened="true"`, class `.persistent-sidebar`, width `280px`, right border `1px solid var(--app-divider)`.
+- [ ] Viewport `768-1199px` and `<=767px`: sidenav is `mode="over"`, class `.drawer-sidebar`, width `280px`, closed by default.
+- [ ] Both sidenav variants have `background-color: var(--app-bg-paper)`.
+- [ ] Resizing from `<1200px` up to `>=1200px` while the drawer was open results in `drawerOpen() === false` before the persistent sidenav mounts.
+- [ ] Resizing from `>=1200px` down to `<1200px` produces a closed overlay sidenav (`drawerOpen() === false`).
 
-## Sidenav Footer
+## LayoutService
 
-- [ ] Theme toggle (`mat-slide-toggle`) switches between light and dark
-- [ ] User name displayed (firstName lastName)
-- [ ] User email displayed (smaller text)
-- [ ] Logout button present
+- [ ] `BREAKPOINTS` queries match `min-width: 1200px`, `min-width: 768px and max-width: 1199px`, `max-width: 767px`.
+- [ ] Signals `isDesktop`, `isTablet`, `isMobile` reflect the current viewport after each `BreakpointObserver` emission.
+- [ ] `showPersistentSidebar()` returns exactly `isDesktop()`.
+- [ ] `toggleDrawer()` flips `drawerOpen` between `true` and `false`.
+- [ ] `closeDrawer()` sets `drawerOpen` to `false` (idempotent when already closed).
+- [ ] Entering the desktop breakpoint sets `drawerOpen` to `false` regardless of its previous value.
+- [ ] `ngOnDestroy()` unsubscribes the `BreakpointObserver` subscription (no emissions update signals afterwards).
 
-## Responsive Behavior
+## Drawer Behavior (mobile / tablet)
 
-- [ ] Breakpoint change (resize) dynamically switches sidenav mode
-- [ ] Mobile: sidenav closes after navigation
-- [ ] Mobile: toolbar shows hamburger menu icon
+- [ ] Clicking the header's menu button fires `menuToggle`, which calls `LayoutService.toggleDrawer()` and opens the drawer.
+- [ ] Firing a second `menuToggle` closes the drawer via `toggleDrawer()`.
+- [ ] The overlay sidenav's `(closed)` event invokes `LayoutService.closeDrawer()` (backdrop click, Escape).
+- [ ] Navigating to a child route does NOT auto-close the drawer (current behavior — no router subscription).
 
-## Logout
+## Integration
 
-- [ ] Logout button calls `authService.logout()`
-- [ ] Session cleared, app redirects to `/login`
+- [ ] `AppLayoutComponent` is lazy-loaded from `app.routes.ts` under the empty-path parent guarded by `authGuard`.
+- [ ] Child route components render inside `<mat-sidenav-content>` via `<router-outlet />`.
+- [ ] `<app-left-navigation-sidebar />` is rendered inside both sidenav variants (persistent and drawer).

@@ -1,181 +1,76 @@
-# Auth Feature — Flows
+# Keycloak Auth (Frontend) — Flows
 
-## Flow 1: App Bootstrap (Valid Session)
+All HTTP calls pass through `authInterceptor` which sets `withCredentials: true` and handles 401 refresh for non-`/auth/*` URLs (`features/api-client/interceptors/auth.interceptor.ts:12-25`). The activity interceptor resets the inactivity clock on every request (`interceptors/activity.interceptor.ts`).
 
-1. User opens the app (any route)
-2. `APP_INITIALIZER` runs `authService.checkSession()`
-3. `GET /api/auth/check` is sent (browser includes cookies automatically)
-4. Backend validates the cookie, resolves permissions, returns:
-   ```json
-   { "authenticated": true, "user": { ... }, "permissions": ["users:read", ...] }
-   ```
-5. AuthService stores user + permissions in signals
-6. `isAuthenticated()` returns true
-7. App finishes bootstrapping, route guards evaluate
-8. If user was navigating to `/login` and is already authenticated, redirect to `/home`
-9. Otherwise, render the requested route
+## Flow 1: Login — Happy Path
 
-## Flow 2: App Bootstrap (No Session / Expired)
+1. User navigates to `/login`. Public route, `authGuard` does not run (`app.routes.ts:6-10`).
+2. `LoginPage` renders; `LoginFormComponent` shows empty `username` + `password` fields (`login-form.component.ts:28-31`).
+3. User fills both fields; `form.invalid` flips to false; submit button enables (`login-form.component.html:21`).
+4. User clicks `Sign In`. `onSubmit()` checks `form.valid` and emits `submitCredentials` with `{ username, password }` (`login-form.component.ts:33-37`).
+5. `LoginPage.onLogin` calls `AuthService.login(credentials)` (`login.page.ts:69-71`).
+6. Service sets `_isLoading=true`, `_error=null`, then issues `POST {backendUrl}/auth/login` with body `{ username, password }` and `withCredentials: true` (`auth.service.ts:36-39`). The interceptor adds `withCredentials: true` again — redundant but harmless.
+7. Backend returns `200 { message: "Login successful", user }` and sets `access_token` + `refresh_token` HTTP-only cookies (`backend/.../keycloak-auth/.docs/contracts.md`).
+8. `next` handler sets `_user = response.user`, `_isLoading=false`, then `router.navigate(['/'])` (`auth.service.ts:41-45`).
+9. Router hits the protected parent route; `authGuard` runs and sees `isAuthenticated()` true, admits the user; `/` redirects to `smoke-tests` (`app.routes.ts:19`).
+10. `AuthService.permissions()` is computed locally from `user.roles` via `ROLE_PERMISSIONS`. The backend's `permissions` field from `/auth/check` is not used here because `login` only calls `/auth/login`.
 
-1. User opens the app at `/home`
-2. `APP_INITIALIZER` runs `authService.checkSession()`
-3. `GET /api/auth/check` returns 401 (no cookie or expired)
-4. AuthService sets user=null, permissions=[]
-5. `isAuthenticated()` returns false
-6. App finishes bootstrapping
-7. `authGuard` fires for `/home` → user not authenticated → redirect to `/login`
+## Flow 2: Login — Invalid Credentials
 
-## Flow 3: Login
+1. Steps 1–6 as above.
+2. Backend returns `401 { statusCode, message: "Invalid credentials", error }`.
+3. `error` handler sets `_error = err.error?.message ?? 'Login failed'` and `_isLoading=false` (`auth.service.ts:46-49`).
+4. `LoginPage` template re-renders: the `@if (auth.error())` branch shows the message above the form (`login.page.ts:19-21`).
+5. Form state is preserved — username and password values remain, validators untouched. User can edit and retry immediately.
+6. No navigation occurs.
 
-1. User submits credentials on the login page
-2. `authService.login(email, password)` is called
-3. `POST /api/auth/login` with `{ username: email, password }`
-4. Backend authenticates via Keycloak, sets HTTP-only cookies
-5. AuthService calls `checkSession()` to load user + permissions
-6. `GET /api/auth/check` returns full profile + permissions
-7. AuthService stores everything in signals
-8. Login method returns the AuthUser
-9. Login page navigates to `/home`
+## Flow 3: Page Refresh with Valid Cookie (Session Revival)
 
-## Flow 4: Token Refresh (Transparent)
+1. User refreshes the page at, e.g., `/smoke-tests`.
+2. App bootstraps; `provideAppInitializer` only runs `AppConfigService.load()` — it does NOT call `checkAuth` (`app.config.ts:17-20`).
+3. Router starts resolving `/smoke-tests`; the protected parent route's `canActivate: [authGuard]` fires (`app.routes.ts:17`).
+4. `authGuard` reads `auth.isAuthenticated()` — false, since `_user` is null on a fresh bootstrap.
+5. Guard calls `auth.checkAuth()` which issues `GET {backendUrl}/auth/check` with credentials (`auth.service.ts:67-80`).
+6. Backend validates the `access_token` cookie, returns `200 { authenticated: true, user, permissions }` (`backend/.../keycloak-auth/.docs/contracts.md`).
+7. Service casts the response to `User` and sets `_user = response`. Because the response is actually wrapped, `_user.id`/`username`/`roles` are `undefined`; only `authenticated` and `user`/`permissions` keys exist on the stored value (see Discrepancies in `spec.md`). `isAuthenticated()` still becomes true because the object is non-null.
+8. `authGuard` observes the emitted non-null value, returns true, route activates.
 
-1. User is using the app, access token expires
-2. Next API call returns 401
-3. `authErrorInterceptor` catches the 401
-4. Interceptor checks: is this NOT an auth endpoint? (avoids infinite loop)
-5. Interceptor calls `authService.refreshToken()`
-6. `POST /api/auth/refresh` — browser sends refresh_token cookie
-7. Backend issues new tokens, sets new cookies
-8. Interceptor retries the original failed request
-9. User never notices — the request completes normally
+## Flow 4: Page Refresh Without / Expired Cookie
 
-## Flow 5: Token Refresh (Concurrent Requests)
+1. Steps 1–5 as above.
+2. `GET /auth/check` returns 401 (guard is global on the backend; `/auth/check` is not `@Public`).
+3. `authService.checkAuth()`'s `catchError` branch sets `_user = null` and emits `of(null)` (`auth.service.ts:74-78`). No error surfaces to the guard.
+4. `authGuard` maps the null emission to `router.createUrlTree(['/login'])` (`auth.guard.ts:17-22`).
+5. Router redirects; `/login` renders.
 
-1. Access token expires
-2. Three API calls fail with 401 simultaneously
-3. First 401 triggers `authService.refreshToken()`
-4. Second and third 401s queue behind the refresh (BehaviorSubject lock)
-5. Refresh completes, new cookies set
-6. All three original requests retry with new cookies
-7. Only ONE refresh call was made
+## Flow 5: Logout
 
-## Flow 6: Token Refresh (Failed — Full Logout)
+1. User clicks `Logout` in the avatar menu (`features/app-header/components/avatar-menu/avatar-menu.component.ts:21` calls `auth.logout()`).
+2. `AuthService.logout()` issues `POST {backendUrl}/auth/logout` with credentials (`auth.service.ts:53-64`).
+3. Backend revokes the refresh token at Keycloak and clears both cookies; returns `200 { message: "Logout successful" }`.
+4. On `complete`: set `_user = null`, navigate to `/login`.
+5. If the request errors (network / 401): same cleanup — `_user = null` + navigate to `/login`. State is never left stale.
 
-1. Access token expires
-2. API call returns 401
-3. `authErrorInterceptor` calls `authService.refreshToken()`
-4. `POST /api/auth/refresh` also fails (refresh token expired or revoked)
-5. `refreshToken()` returns false
-6. Interceptor navigates to `/login`
-7. AuthService clears user + permissions
+## Flow 6: 401 on a Protected API Call (Transparent Refresh)
 
-## Flow 7: Logout
+1. User is on, e.g., `/admin/users`; `UserManagementApiService` issues `GET /users`.
+2. Backend returns 401 because the `access_token` cookie is expired.
+3. `authInterceptor.catchError` sees status 401 and URL does not contain `/auth/` (`auth.interceptor.ts:19-22`).
+4. If no refresh is already in flight: `isRefreshing=true`, `refreshSubject.next(false)`, and call `SessionManagementService.refreshToken()` -> `POST /auth/refresh` (`auth.interceptor.ts:32-41`, `session-management.service.ts:49-55`).
+5. Backend rotates cookies, returns 200. Interceptor clears the flag, emits `refreshSubject.next(true)`, and retries the original request (`auth.interceptor.ts:37-41`).
+6. Any other requests that hit 401 while refreshing subscribe to `refreshSubject`, wait for `true`, then retry exactly once (`auth.interceptor.ts:50-54`).
+7. If `/auth/refresh` itself fails, `catchError` calls `sessionService.logout()` which clears timers and navigates to `/login` (`auth.interceptor.ts:42-46`, `session-management.service.ts:57-65`).
 
-1. User clicks "Logout" in sidenav
-2. `authService.logout()` is called
-3. `POST /api/auth/logout` — backend revokes tokens at Keycloak, clears cookies
-4. AuthService sets user=null, permissions=[]
-5. App navigates to `/login`
+## Flow 7: Proactive Refresh / Inactivity Timeout — currently dormant
 
-## Flow 8: Permission Guard (Authorized)
+1. `SessionManagementService.startTimers()` defines a 4-minute `interval` that calls `refreshToken()` and a 1-minute check that calls `logout()` if `Date.now() - lastActivity > 30 min` (`session-management.service.ts:22-36`).
+2. `startTimers()` is NOT invoked anywhere in `src/` — there is no `ngOnInit` / login-success hook that calls it today. Only reactive 401-driven refresh (Flow 6) happens.
+3. `activityInterceptor` still records activity on every request (`activity.interceptor.ts:7-11`), but with no inactivity timer running the value is unobserved.
 
-1. Admin navigates to `/users`
-2. `authGuard` passes (user is authenticated)
-3. `permissionGuard('users:read')` fires
-4. `authService.hasPermission('users:read')` → true (admin has this permission)
-5. Route activates, page renders
+## Flow 8: Permission-Gated UI via `RequirePermissionDirective`
 
-## Flow 9: Permission Guard (Unauthorized)
-
-1. Regular user navigates to `/users` (e.g. by typing URL directly)
-2. `authGuard` passes (user is authenticated)
-3. `permissionGuard('users:read')` fires
-4. `authService.hasPermission('users:read')` → false
-5. Guard redirects to `/home` (not `/login` — user IS authenticated)
-
-## Flow 10: 403 Error Handling
-
-1. User somehow reaches a UI that triggers an API call they're not authorized for
-2. Backend returns 403 `{ statusCode: 403, message: "Insufficient permissions" }`
-3. `authErrorInterceptor` catches the 403
-4. Snackbar shows "Access denied" for 5 seconds
-5. No redirect — user stays on current page
-
-## Flow 11: 5xx Error Handling
-
-1. Any API call returns 500+
-2. `authErrorInterceptor` catches it
-3. Snackbar shows "Something went wrong. Please try again." for 5 seconds
-4. Original error is still thrown (calling code can handle it additionally)
-
----
-
-# Login Page — Flows
-
-## Flow 1: Successful Login (Admin)
-
-1. User navigates to `/login`
-2. Page shows centered card with "Sign In" heading
-3. User enters `admin@example.com` in Email field
-4. User enters `admin123` in Password field
-5. User clicks "Sign In"
-6. Button shows loading spinner, form inputs are disabled
-7. `POST /api/auth/login` is sent with `{ username: "admin@example.com", password: "admin123" }`
-8. Backend returns 200 with `{ message: "Login successful", user: { ... } }` and sets cookies
-9. Frontend calls `GET /api/auth/check` to load permissions
-10. AuthService stores user profile + permissions in signals
-11. User is redirected to `/home`
-12. Sidenav shows "Admin User" at bottom
-13. "Users" nav item is visible (admin has `users:read` permission)
-
-## Flow 2: Successful Login (Regular User)
-
-1. User navigates to `/login`
-2. User enters `user@example.com` / `user123`
-3. User clicks "Sign In"
-4. Same flow as above — backend returns 200, cookies set
-5. User is redirected to `/home`
-6. Sidenav shows "Regular User" at bottom
-7. "Users" nav item is **NOT visible** (no `users:read` permission)
-
-## Flow 3: Invalid Credentials
-
-1. User enters `admin@example.com` / `wrongpassword`
-2. User clicks "Sign In"
-3. Button shows loading spinner
-4. `POST /api/auth/login` returns 401 `{ statusCode: 401, message: "Invalid credentials" }`
-5. Loading spinner stops, form re-enables
-6. Error message appears below form: "Invalid credentials"
-7. Form fields retain their values (NOT cleared)
-8. User can modify fields and retry immediately
-
-## Flow 4: Empty Form Submission
-
-1. User clicks "Sign In" without entering anything
-2. Form validation fires — both fields show `mat-error` "Required"
-3. No API call is made
-4. Email field shows "Required" error
-5. Password field shows "Required" error
-
-## Flow 5: Invalid Email Format
-
-1. User enters `notanemail` in Email field
-2. User enters a password
-3. User clicks "Sign In"
-4. Email field shows `mat-error` for invalid email format
-5. No API call is made
-
-## Flow 6: Already Authenticated
-
-1. User has a valid session (cookies from previous login)
-2. User navigates to `/login`
-3. Page checks `authService.isAuthenticated()` — returns true
-4. User is immediately redirected to `/home` without seeing the login form
-
-## Flow 7: Server Error
-
-1. User enters valid credentials
-2. User clicks "Sign In"
-3. Backend returns 500
-4. Error interceptor shows snackbar "Something went wrong. Please try again."
-5. Login form remains usable for retry
+1. A template author writes e.g. `<button *appRequirePermission="'users:read'">Create</button>`.
+2. The directive's `effect()` runs, reads `auth.hasPermission('users:read')`, which reads the `permissions` computed signal (`require-permission.directive.ts:15-27`, `auth.service.ts:26-29,82-84`).
+3. If true and view not yet created, `viewContainer.createEmbeddedView(templateRef)` renders the host template.
+4. If the user's roles change later (e.g. after a future `checkAuth` that repopulates `_user`), the computed fires and the directive tears down or re-renders the view accordingly.
+5. This is the only live permission check in the app today — route-level permission guarding (`permissionGuard`) exists but is not wired to any route.
