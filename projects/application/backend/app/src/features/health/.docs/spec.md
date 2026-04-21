@@ -1,45 +1,64 @@
 # Health — Spec
 
-## Purpose
+## What it is
 
-A lightweight, unauthenticated liveness/readiness endpoint for the backend. Serves Kubernetes `livenessProbe` / `readinessProbe` (`projects/application/backend/chart/templates/deployment.yaml:34-45`), local `curl` health checks (`projects/application/backend/Taskfile.yml:45`), and any external monitoring that needs to confirm the Nest process is up and serving HTTP.
+A lightweight, unauthenticated health endpoint at `/health` that confirms the backend process is up and serving HTTP. It is used by Kubernetes liveness and readiness probes, by local smoke checks during development, and by any external monitor that wants to know the service is alive.
 
-## Behavior
+## How it behaves
 
-- Exposes a single route `GET /health` on the backend's main HTTP listener (`app/src/features/health/controllers/health.controller.ts:5-8`).
-- Bypasses the global `KeycloakJwtGuard` via `@Public()` applied at the class level (`health.controller.ts:1-5`), so no cookie or `Authorization` header is required (guard opt-out behavior: `app/src/features/keycloak-auth/guards/keycloak-jwt.guard.ts` + `@Public()` metadata key `"isPublic"`).
-- Always responds synchronously with HTTP `200` and a JSON body `{ status: "ok", timestamp, service: "backend" }` — there is no failure branch (`health.controller.ts:7-14`).
-- `timestamp` is generated per-request via `new Date().toISOString()` (`health.controller.ts:11`), yielding ISO 8601 / RFC 3339 format (e.g. `2026-04-20T12:34:56.789Z`).
-- `service` is the hardcoded literal string `"backend"` (`health.controller.ts:12`).
-- Response `Content-Type` is `application/json` (default Nest behavior for returned objects; asserted in `app/test/integration/health.integration.spec.ts:73-81`).
-- The check does NOT probe any dependency — no DB query, no Keycloak ping. It only confirms the Node/Nest process is accepting and handling HTTP. A dependency outage will not cause `/health` to fail.
+### Answering a health check
 
-## Components / Endpoints / Services
+Anyone can call `GET /health` without signing in, without a cookie, and without an authorization header. The endpoint always responds immediately with HTTP 200 and a small JSON body containing a status of `"ok"`, the current time as an ISO 8601 timestamp, and the service name `"backend"`. There is no failure branch — if the process is running well enough to answer the request, it answers with 200.
 
-| Part | File | Notes |
-|------|------|-------|
-| `HealthModule` | `app/src/features/health/health.module.ts:4-7` | Registers `HealthController`; no providers, no imports. Wired into `AppModule` at `app/src/app.module.ts:9`. |
-| `HealthController` | `app/src/features/health/controllers/health.controller.ts:4-15` | `@Public() @Controller("health")` with a single `@Get() check()` method. |
-| Barrel | `app/src/features/health/index.ts:1` | Exports `HealthModule` only. |
-| Unit test | `app/src/features/health/controllers/health.controller.spec.ts` | Pure controller invocation, no Nest `TestingModule`. |
-| Integration test | `app/test/integration/health.integration.spec.ts` | `supertest` against running stack. |
+### What the check does and does not cover
 
-## Consumers
+The endpoint only confirms that the backend's HTTP listener is accepting and handling requests. It does not probe the database, the auth provider, or any other dependency. An outage in a downstream system will not cause `/health` to fail.
 
-| Consumer | Path | Notes |
-|----------|------|-------|
-| K8s liveness probe | `chart/templates/deployment.yaml:34-39` | `httpGet` path from `values.yaml` `healthCheck.path` (`/health`), `service.port`. `initialDelaySeconds: 30`, `periodSeconds: 10`. |
-| K8s readiness probe | `chart/templates/deployment.yaml:40-45` | Same path/port; `initialDelaySeconds: 5`, `periodSeconds: 5`. |
-| Local smoke check | `projects/application/backend/Taskfile.yml:45` | `curl -f http://localhost:${BACKEND_PORT}/health`. |
+### How it is used
 
-## Acceptance Criteria
+Kubernetes calls `/health` on a schedule as both a liveness probe (restart the pod if it stops answering) and a readiness probe (don't send traffic to a pod that isn't answering yet). The backend's Taskfile uses the same endpoint for a local smoke check after start.
 
-- [ ] `GET /health` returns HTTP `200` with no credentials supplied.
-- [ ] Response body is a JSON object with exactly the keys `status`, `timestamp`, `service`.
+## Acceptance criteria
+
+- [ ] `GET /health` returns HTTP 200 with no credentials supplied.
+- [ ] The response body is a JSON object with exactly the keys `status`, `timestamp`, and `service`.
 - [ ] `status` equals the literal string `"ok"`.
 - [ ] `service` equals the literal string `"backend"`.
-- [ ] `timestamp` is a valid ISO 8601 string (parseable by `new Date()` into a valid date).
-- [ ] `timestamp` reflects the time of the current request (monotonically non-decreasing across sequential calls).
-- [ ] Response `Content-Type` header matches `application/json`.
-- [ ] Endpoint works without `access_token` cookie or `Authorization` header (confirms `@Public()` opt-out is effective).
-- [ ] Endpoint path `/health` matches the Helm chart probe path in `chart/values.yaml:28` — any rename must change both.
+- [ ] `timestamp` is a valid ISO 8601 string parseable into a valid date.
+- [ ] `timestamp` reflects the time of the current request (non-decreasing across sequential calls).
+- [ ] The response `Content-Type` header is `application/json`.
+- [ ] The endpoint works without an `access_token` cookie or `Authorization` header.
+- [ ] The endpoint path `/health` matches the path configured for the Kubernetes probes — a rename must update both.
+- [ ] A dependency outage (database, auth provider, etc.) does not cause `/health` to fail.
+
+## Known gaps
+
+None known. The endpoint has no failure branch and no dependency probing by design; if deeper checks are ever required, that would be a new scope rather than a gap against this spec.
+
+## Code map
+
+Paths are relative to `projects/application/backend/app/`.
+
+| Concern | File · lines |
+|---|---|
+| Route `GET /health` on the main HTTP listener | `src/features/health/controllers/health.controller.ts:5-8` |
+| Public opt-out from `KeycloakJwtGuard` via `@Public()` at class level | `src/features/health/controllers/health.controller.ts:1-5` |
+| Guard that honors `@Public()` via the `"isPublic"` metadata key | `src/features/keycloak-auth/guards/keycloak-jwt.guard.ts` |
+| Synchronous 200 response with `{ status, timestamp, service }` | `src/features/health/controllers/health.controller.ts:7-14` |
+| `timestamp` generated per request via `new Date().toISOString()` | `src/features/health/controllers/health.controller.ts:11` |
+| `service` hardcoded to the literal `"backend"` | `src/features/health/controllers/health.controller.ts:12` |
+| `Content-Type: application/json` (default Nest behavior for returned objects) | asserted in `test/integration/health.integration.spec.ts:73-81` |
+| `HealthModule` registers `HealthController`; no providers, no imports | `src/features/health/health.module.ts:4-7` |
+| `HealthModule` wired into `AppModule` | `src/app.module.ts:9` |
+| Barrel exports `HealthModule` only | `src/features/health/index.ts:1` |
+| Unit test (pure controller invocation, no Nest `TestingModule`) | `src/features/health/controllers/health.controller.spec.ts` |
+| Integration test (`supertest` against running stack) | `test/integration/health.integration.spec.ts` |
+
+### Consumers
+
+| Consumer | File · lines | Notes |
+|---|---|---|
+| Kubernetes liveness probe | `projects/application/backend/chart/templates/deployment.yaml:34-39` | `httpGet` path from `values.yaml` `healthCheck.path` (`/health`), `service.port`. `initialDelaySeconds: 30`, `periodSeconds: 10`. |
+| Kubernetes readiness probe | `projects/application/backend/chart/templates/deployment.yaml:40-45` | Same path/port. `initialDelaySeconds: 5`, `periodSeconds: 5`. |
+| Helm probe path value | `projects/application/backend/chart/values.yaml:28` | `healthCheck.path` — must match the route above. |
+| Local smoke check | `projects/application/backend/Taskfile.yml:45` | `curl -f http://localhost:${BACKEND_PORT}/health`. |

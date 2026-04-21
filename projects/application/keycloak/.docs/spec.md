@@ -1,87 +1,66 @@
 # Keycloak — Spec
 
-## Purpose
+## What it is
 
-Centralized authentication and authorization service for the `application` stack. Provides a single OIDC realm with test users, realm roles, and a confidential client (`backend-service`) that the backend uses to exchange credentials, validate JWTs, and manage users via the Admin API. The frontend never talks to Keycloak directly — all auth flows go through the backend (`projects/application/backend/app/src/features/keycloak-auth/services/keycloak-auth.service.ts:15-19`).
+A Keycloak instance deployed via a Helm chart that serves as the identity provider for the `application` stack. It owns a single realm named `application` and a single confidential OIDC client named `backend-service`. The frontend never talks to Keycloak directly; only the backend exchanges credentials, validates JWTs, and manages users through it.
 
-## Behavior
+## How it behaves
 
-- Keycloak 23.0.3 runs in dev mode with PostgreSQL as the backing store (`projects/application/keycloak/dockerfiles/Dockerfile:6,47`).
-- Listens on port `8080` inside the container; locally exposed on `8081` (per `README.md:54`).
-- On startup, a wrapper script waits for PostgreSQL (30 retries × 2s), creates the `keycloak` schema, runs `envsubst` on the realm JSON to substitute `${FRONTEND_URL}`, then starts Keycloak with `start-dev --import-realm` (`app/scripts/startup.sh:33-67`, `dockerfiles/Dockerfile:52`).
-- After Keycloak is healthy, the script uses `kcadm` to assign `manage-users`, `view-users`, `query-users` client roles on `realm-management` to the `service-account-backend-service` user. Assignment is idempotent via a `/tmp/.keycloak_roles_configured` marker file (`app/scripts/startup.sh:99-154`).
-- Realm `application` is auto-imported from `app/realm-config/realm-export.json` on first startup (`dockerfiles/Dockerfile:31,52`).
-- Realm security: `sslRequired=external`, `bruteForceProtected=true` (3 failures → 15 min wait with 60s increment), `verifyEmail=true`, `registrationAllowed=false`, `loginWithEmailAllowed=true` (`app/realm-config/realm-export.json:7-29`).
-- Token lifespans: access 300s, SSO idle 1800s, SSO max 36000s, offline idle 2,592,000s, offline max 5,184,000s (`app/realm-config/realm-export.json:17-22`).
-- Default realm role `user` is auto-assigned to new users (`app/realm-config/realm-export.json:30`).
-- Admin console credentials come from `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` (defaults `admin` / `admin`, see `app/scripts/startup.sh:103-104`).
+### Startup sequence
 
-## Realm: `application`
+When the container starts, a wrapper script waits for PostgreSQL to come up (retrying for about a minute), creates the `keycloak` schema if it isn't there, fills in the deployment's public frontend URL everywhere the realm config needs it, and then launches Keycloak in dev mode with realm auto-import enabled. On first boot the `application` realm is imported from the bundled realm export; on later boots it's already in the database and the import is a no-op. Once Keycloak reports healthy, the script uses the admin CLI to grant the backend's service account the three `realm-management` client roles it needs to administer users. This grant is idempotent — a marker file prevents re-applying it on restart.
 
-### Roles
+### What the realm provides
 
-| Role | Type | Description | Source |
-|---|---|---|---|
-| `user` | Realm (default) | Basic user access | `app/realm-config/realm-export.json:33-37` |
-| `admin` | Realm | Administrator with full access | `app/realm-config/realm-export.json:38-41` |
-| `manage-users`, `view-users`, `query-users` | Client roles on `realm-management` | Granted to `backend-service` service account at startup | `app/scripts/startup.sh:136-143` |
+The `application` realm requires SSL for external requests, allows login by email, disables self-registration, and requires email verification for new accounts. Brute-force protection is on: three failed logins trigger a 15-minute lockout that grows by a minute each subsequent failure. Access tokens live for 5 minutes, SSO sessions idle out after 30 minutes and cap at 10 hours, and offline tokens last up to 60 days. Every new user automatically gets the default realm role `user`.
 
-### Client: `backend-service`
+### What clients, roles, and users exist
 
-| Property | Value | Source |
-|---|---|---|
-| Client ID | `backend-service` | `app/realm-config/realm-export.json:46` |
-| Type | Confidential (`publicClient: false`) | `app/realm-config/realm-export.json:62` |
-| Client secret | `backend-service-secret` (dev default) | `app/realm-config/realm-export.json:51` |
-| Service account | Enabled | `app/realm-config/realm-export.json:63` |
-| Standard flow | Enabled | `app/realm-config/realm-export.json:66` |
-| Direct access grants | Enabled (password grant used by backend login) | `app/realm-config/realm-export.json:65` |
-| Implicit flow | Disabled | `app/realm-config/realm-export.json:64` |
-| Redirect URIs | `http://localhost:3000/*`, `http://localhost:8080/*`, `${FRONTEND_URL}/*` | `app/realm-config/realm-export.json:52-56` |
-| Web origins | `http://localhost:3000`, `http://localhost:8080`, `${FRONTEND_URL}` | `app/realm-config/realm-export.json:57-61` |
+The realm defines two realm roles — `user` (the default) and `admin` — plus three client roles on the built-in `realm-management` client (`manage-users`, `view-users`, `query-users`) that the startup script assigns to the backend's service account.
 
-### Token Mappers (on `backend-service`)
+The realm has one OIDC client, `backend-service`. It is confidential, has standard flow and direct-access-grants enabled, has implicit flow disabled, and has its service account enabled. Its allowed redirect URIs and web origins cover localhost development ports plus the deployment's public frontend URL. Its access and ID tokens carry the user's email, preferred username, realm roles (as a `roles` claim), and — for access tokens only — the user's `realm-management` client roles and `realm-management` in the audience.
 
-| Mapper | Claim | Source |
-|---|---|---|
-| `email` | `email` (access, id, userinfo) | `app/realm-config/realm-export.json:84-97` |
-| `username` | `preferred_username` (access, id, userinfo) | `app/realm-config/realm-export.json:111-124` |
-| `realm roles` | `roles` on access token (multivalued) | `app/realm-config/realm-export.json:99-110` |
-| `realm-management client roles` | `resource_access.realm-management.roles` (access only) | `app/realm-config/realm-export.json:125-138` |
-| `realm-management audience` | adds `realm-management` to `aud` (access only) | `app/realm-config/realm-export.json:139-149` |
+The realm ships with three users: `testuser` (password `password`, role `user`), `admin` (password `admin`, roles `user` + `admin`), and the `backend-service` service account (which holds the three `realm-management` client roles). All human users are marked email-verified.
 
-### Seeded Users
+### What consumes it
 
-| Username | Email | Password | Roles | Source |
-|---|---|---|---|---|
-| `testuser` | `test@example.com` | `password` | `user` | `app/realm-config/realm-export.json:154-168` |
-| `admin` | `admin@example.com` | `admin` | `user`, `admin` | `app/realm-config/realm-export.json:169-183` |
-| `service-account-backend-service` | — | (service account) | `realm-management` client roles `manage-users`, `view-users`, `query-users` | `app/realm-config/realm-export.json:184-196` |
+The backend is the only direct consumer. It logs users in via the direct-access-grants password flow, validates incoming JWTs against the realm, and calls the Admin API using its service account to create and manage users. The frontend reaches Keycloak only indirectly, through the backend's `keycloak-auth` feature.
 
-## Environment Variables
+## Acceptance criteria
 
-| Variable | Default | Description | Source |
-|---|---|---|---|
-| `KC_DB_URL_HOST` | `database` | Postgres host | `app/scripts/startup.sh:8` |
-| `KC_DB_URL_PORT` | `5432` | Postgres port | `app/scripts/startup.sh:9` |
-| `KC_DB_URL_DATABASE` | `postgres` | Database name | `app/scripts/startup.sh:10` |
-| `KC_DB_USERNAME` / `KC_DB_PASSWORD` | `postgres` / `postgres` | DB creds | `app/scripts/startup.sh:11-12` |
-| `KC_DB_SCHEMA` | `keycloak` | Schema name | `app/scripts/startup.sh:13` |
-| `DATABASE_SSL` | (unset) | `false` disables psql SSL | `app/scripts/startup.sh:18-24` |
-| `FRONTEND_URL` | — | Substituted into redirect URIs and web origins | `app/scripts/startup.sh:65-67` |
-| `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` | `admin` / `admin` | Admin console login | `app/scripts/startup.sh:103-104` |
-| `KC_REALM` | `application` | Realm name for post-start role assignment | `app/scripts/startup.sh:101` |
-| `KC_CLIENT_ID` | `backend-service` | Client for role assignment | `app/scripts/startup.sh:102` |
-| `KC_HTTP_ENABLED`, `KC_HOSTNAME_STRICT(_HTTPS)`, `KC_PROXY=edge`, `KC_HEALTH_ENABLED`, `KC_METRICS_ENABLED`, `KC_DB=postgres` | set in image | Runtime flags | `dockerfiles/Dockerfile:39-49` |
+- [ ] Realm `application` is imported on first startup and remains intact on restart.
+- [ ] Client `backend-service` exists as confidential, with standard flow and direct-access-grants enabled, implicit flow disabled, and service account enabled.
+- [ ] The `service-account-backend-service` user has the `manage-users`, `view-users`, and `query-users` client roles on `realm-management` after startup.
+- [ ] Re-running the startup script does not duplicate the service-account role grants.
+- [ ] Users `testuser` and `admin` exist with the documented passwords, roles, and `emailVerified=true`.
+- [ ] Access tokens for human users include claims for `email`, `preferred_username`, `roles` (realm roles), and an `aud` that contains `realm-management`.
+- [ ] Access tokens for the backend service account include `resource_access.realm-management.roles` with the three admin roles.
+- [ ] Deployment-time frontend URL placeholders in the realm's `redirectUris` and `webOrigins` are replaced with the actual value before import.
+- [ ] Brute-force protection triggers after 3 failed logins with a 15-minute lockout.
+- [ ] The `/health` endpoint reports healthy, so the Helm chart's liveness and readiness probes pass.
 
-## Acceptance Criteria
+## Known gaps
 
-- [ ] Realm `application` is imported on first startup from `realm-export.json`.
-- [ ] Client `backend-service` exists as confidential with direct-access-grants and standard-flow enabled and service account enabled.
-- [ ] Service account `service-account-backend-service` has client roles `manage-users`, `view-users`, `query-users` on `realm-management` after startup, and re-running startup does not duplicate the assignment.
-- [ ] Users `testuser` and `admin` exist with the passwords and roles above and `emailVerified=true`.
-- [ ] Access tokens for users contain `email`, `preferred_username`, `roles` (realm roles), and `aud` including `realm-management`.
-- [ ] Service account tokens include `resource_access.realm-management.roles` with the three admin roles.
-- [ ] `${FRONTEND_URL}` placeholders in `redirectUris` and `webOrigins` are replaced with the actual env value before import.
-- [ ] Brute-force protection triggers after 3 failed logins (`failureFactor=3`, `maxFailureWaitSeconds=900`).
-- [ ] Keycloak health endpoint at `/health` returns healthy (used by the Helm chart liveness/readiness probes).
+- The Taskfile still references an `export-realm` path that no longer matches the current layout; running that task will fail or export to the wrong place.
+- The `backend-service` client secret is a hard-coded dev default baked into both the realm JSON and the backend's config; there is no mechanism to rotate it or inject a real secret at deploy time.
+- The Helm values set `image.tag: latest` and do not pin a registry, so every deployer is implicitly expected to override both; nothing in this project enforces that.
+
+## Code map
+
+Paths are relative to the repo root.
+
+| Concern | File · lines |
+|---|---|
+| Base image, realm import flag, entrypoint | `projects/application/keycloak/dockerfiles/Dockerfile:6,31,39-52` |
+| Startup: wait for Postgres, create schema, substitute frontend URL, start Keycloak | `projects/application/keycloak/app/scripts/startup.sh:33-67` |
+| Startup: post-start kcadm role assignment + idempotency marker | `projects/application/keycloak/app/scripts/startup.sh:99-154` |
+| Realm security settings (SSL, brute force, email, registration) | `projects/application/keycloak/app/realm-config/realm-export.json:7-29` |
+| Token lifespans | `projects/application/keycloak/app/realm-config/realm-export.json:17-22` |
+| Default realm role `user` | `projects/application/keycloak/app/realm-config/realm-export.json:30` |
+| Realm roles (`user`, `admin`) | `projects/application/keycloak/app/realm-config/realm-export.json:33-41` |
+| Client `backend-service` core config | `projects/application/keycloak/app/realm-config/realm-export.json:46,51,62-66` |
+| Client redirect URIs and web origins (with `${FRONTEND_URL}` placeholder) | `projects/application/keycloak/app/realm-config/realm-export.json:52-61` |
+| Token mappers: `email`, `username`, realm roles, realm-management client roles, realm-management audience | `projects/application/keycloak/app/realm-config/realm-export.json:84-149` |
+| Seeded users `testuser`, `admin`, and `service-account-backend-service` | `projects/application/keycloak/app/realm-config/realm-export.json:154-196` |
+| DB and admin environment variable defaults | `projects/application/keycloak/app/scripts/startup.sh:8-24,101-104` |
+| Backend-side consumer (only direct caller) | `projects/application/backend/app/src/features/keycloak-auth/services/keycloak-auth.service.ts:15-19` |

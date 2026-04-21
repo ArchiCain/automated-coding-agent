@@ -1,97 +1,66 @@
 # Database — Spec
 
-## Purpose
+## What it is
 
-Provide a single shared PostgreSQL 16 instance (with `pgvector`) for the `application`
-stack. This project packages the server: an image reference and a Helm chart that
-deploys a single-replica StatefulSet with a persistent volume, internal ClusterIP
-Service, and an optional pgweb admin UI. Schema creation and migrations are the
-responsibility of the consuming services, not this chart.
+A single shared Postgres 16 server (with the `pgvector` extension) packaged as a Helm chart and deployed into the cluster. It is the one database behind the `application` stack: the backend connects to it for app data and Keycloak connects to it for its own schema. The chart ships only the server — schemas, tables, and migrations are owned by the services that use it.
 
-## Behavior
+## How it behaves
 
-- Runs `pgvector/pgvector:pg16` in a StatefulSet named after the Helm release, with
-  one replica and an attached PVC mounted at `/var/lib/postgresql/data` (`subPath:
-  pgdata`) (`projects/application/database/chart/templates/statefulset.yaml:19-52`).
-- Exposes port `5432` via a ClusterIP `Service` named after the release
-  (`projects/application/database/chart/templates/service.yaml`). No Ingress is
-  attached to the database Service itself — it is reachable only from inside the
-  cluster.
-- Credentials and database name are sourced from Helm values under `.Values.env` and
-  materialized into a Kubernetes `Secret` named `{release}-secret`; the StatefulSet
-  consumes it via `envFrom.secretRef`
-  (`projects/application/database/chart/templates/secret.yaml`,
-  `projects/application/database/chart/templates/statefulset.yaml:24-28`). Expected
-  keys: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
-  (`infrastructure/k8s/helmfile.yaml.gotmpl:103-106`).
-- Persistence is on by default: `volumeClaimTemplates` requests `10Gi`
-  `ReadWriteOnce`, optional `storageClass` override. Setting
-  `persistence.enabled=false` skips the PVC (ephemeral, used for sandbox tests)
-  (`projects/application/database/chart/values.yaml:11-14`,
-  `projects/application/database/chart/templates/statefulset.yaml:47-65`).
-- Liveness and readiness probes both run
-  `pg_isready -U $POSTGRES_USER -d $POSTGRES_DB`. Liveness starts after 10s, period
-  5s; readiness starts after 5s, period 5s
-  (`projects/application/database/chart/templates/statefulset.yaml:29-44`).
-- Default resources: requests 256Mi / 100m, limits 512Mi / 500m
-  (`projects/application/database/chart/values.yaml:16-22`).
-- Optional pgweb UI (`pgweb.enabled=true`) deploys `sosedoff/pgweb` on container port
-  `8081`, connects with `PGWEB_DATABASE_URL=postgres://$USER:$PASSWORD@{release}:5432/$DB?sslmode=disable`,
-  and is exposed via a Traefik Ingress on `pgweb.ingress.host` (TLS optional)
-  (`projects/application/database/chart/templates/pgweb-deployment.yaml`,
-  `projects/application/database/chart/templates/pgweb-ingress.yaml`).
+### The database server
 
-## Components
+The chart runs a single Postgres 16 pod from the `pgvector/pgvector:pg16` image, reachable on port 5432 inside the cluster under the Helm release name. Nothing outside the cluster can reach it directly — there is no Ingress on the database itself. The pod is marked healthy once `pg_isready` against the configured user and database succeeds; the liveness check waits 10 seconds before its first run, the readiness check waits 5, and both re-run every 5 seconds. Default resource footprint is 256Mi / 100m CPU requested and 512Mi / 500m CPU capped.
 
-| Resource | Kind | Purpose |
-|---|---|---|
-| `{release}` | StatefulSet | Postgres 16 pod with PVC at `/var/lib/postgresql/data` (`.../statefulset.yaml`) |
-| `{release}` | Service (ClusterIP) | Internal DB endpoint on port 5432 (`.../service.yaml`) |
-| `{release}-secret` | Secret | Holds `POSTGRES_USER/PASSWORD/DB` when `.Values.env` is set (`.../secret.yaml`) |
-| `{release}-pgweb` | Deployment | pgweb UI container, port 8081 (`.../pgweb-deployment.yaml`) |
-| `{release}-pgweb` | Service (ClusterIP) | UI Service on port 8081 (`.../pgweb-service.yaml`) |
-| `{release}-pgweb` | Ingress (Traefik) | Optional TLS/non-TLS routing to pgweb (`.../pgweb-ingress.yaml`) |
+### Credentials
 
-## Configuration (Helm values)
+The database user, password, and database name are passed in as Helm values. When they are set, the chart materializes them into a Kubernetes Secret named after the release and loads them into the Postgres container as environment variables (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`). In the cluster deployment these come from `DATABASE_USERNAME`, `DATABASE_PASSWORD`, and `DATABASE_NAME` in the Helmfile environment.
 
-| Key | Default | Source |
-|---|---|---|
-| `image.repository` | `pgvector/pgvector` | `values.yaml:1-4` |
-| `image.tag` | `pg16` | `values.yaml:1-4` |
-| `service.port` | `5432` | `values.yaml:6-7` |
-| `env.POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | unset; supplied by Helmfile | `values.yaml:9`, `helmfile.yaml.gotmpl:103-106` |
-| `persistence.enabled` | `true` | `values.yaml:11-14` |
-| `persistence.size` | `10Gi` | `values.yaml:11-14` |
-| `persistence.storageClass` | `""` (cluster default) | `values.yaml:11-14` |
-| `resources.requests/limits` | 256Mi/100m — 512Mi/500m | `values.yaml:16-22` |
-| `healthCheck.initialDelaySeconds` | `10` | `values.yaml:24-26` |
-| `healthCheck.periodSeconds` | `5` | `values.yaml:24-26` |
-| `pgweb.enabled` | `false` (chart); `true` (Helmfile) | `values.yaml:28-29`, `helmfile.yaml.gotmpl:117-122` |
-| `pgweb.ingress.host` | `db.${DEV_HOSTNAME}` | `helmfile.yaml.gotmpl:121` |
+### Persistence
 
-## Schema Ownership (informational — not created by this chart)
+By default the database claims a 10Gi persistent volume (ReadWriteOnce) from the cluster's default storage class and mounts it at `/var/lib/postgresql/data` under a `pgdata` subdirectory, so data survives pod restarts. Size and storage class are overridable. Setting `persistence.enabled=false` skips the volume entirely — useful for sandbox tests where data does not need to stick around.
 
-| Schema | Owner | Created By |
-|---|---|---|
-| `example_schema` | Backend (NestJS/TypeORM) | `projects/application/backend/app/src/features/typeorm-database-client/migrations/1734056400000-InitialSchema.ts` |
-| `keycloak` | Keycloak | Liquibase on Keycloak startup (`KC_DB_SCHEMA=keycloak`, `infrastructure/k8s/helmfile.yaml.gotmpl:180`) |
-| `public` | — | Default; not used by app code |
+### pgweb admin UI (optional)
 
-`uuid-ossp` and `vector` extensions are created by the backend's initial migration,
-not by this chart (`...1734056400000-InitialSchema.ts:19-21`).
+When `pgweb.enabled` is on, the chart also ships a `sosedoff/pgweb` web UI on port 8081 that connects to the same Postgres instance using the chart's credentials. A Traefik Ingress routes to it on a configurable host (default `db.${DEV_HOSTNAME}` from the Helmfile), optionally over TLS. pgweb is off by default in the chart but the Helmfile turns it on for the live deployment.
 
-## Acceptance Criteria
+### Schema ownership (informational)
 
-- [ ] Helm install renders a StatefulSet running `pgvector/pgvector:pg16` with a
-      10Gi PVC (or the configured size) mounted at `/var/lib/postgresql/data`.
-- [ ] `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` from Helmfile reach the
-      container via `{release}-secret` → `envFrom`.
-- [ ] Pod becomes Ready once `pg_isready -U $POSTGRES_USER -d $POSTGRES_DB` succeeds.
-- [ ] Service `{release}` resolves to the pod on port 5432, ClusterIP-only.
-- [ ] Data persists across pod restart when `persistence.enabled=true`.
-- [ ] When `persistence.enabled=false`, no PVC is created and data is ephemeral.
-- [ ] When `pgweb.enabled=true`, pgweb Deployment/Service are created, and Ingress is
-      created when `pgweb.ingress.enabled=true`, routed via Traefik to port 8081.
-- [ ] Backend connects using `DATABASE_HOST=database`, port 5432, and its migrations
-      succeed (extensions + `example_schema` created on first boot).
-- [ ] Keycloak connects via JDBC and Liquibase creates the `keycloak` schema.
+The chart does not create schemas or extensions. The backend's TypeORM initial migration creates the `uuid-ossp` and `vector` extensions and its application schema on first boot. Keycloak creates its own `keycloak` schema via Liquibase when it starts. The `public` schema is untouched.
+
+## Acceptance criteria
+
+- [ ] Helm install renders a Postgres 16 pod (`pgvector/pgvector:pg16`) reachable on port 5432 inside the cluster.
+- [ ] The database Service is ClusterIP-only (not exposed via Ingress).
+- [ ] `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` from Helm values reach the container through the release's Secret.
+- [ ] The pod becomes Ready only after `pg_isready -U $POSTGRES_USER -d $POSTGRES_DB` succeeds.
+- [ ] With persistence enabled, a 10Gi (or configured size) volume is mounted at `/var/lib/postgresql/data` and data survives a pod restart.
+- [ ] With `persistence.enabled=false`, no volume is created and data is ephemeral.
+- [ ] With `pgweb.enabled=true`, the pgweb UI is deployed on port 8081 and (when its Ingress is enabled) reachable via Traefik at the configured host.
+- [ ] The backend reaches the database at host `database` on port 5432 and its migrations create the `uuid-ossp` and `vector` extensions plus its application schema on first boot.
+- [ ] Keycloak reaches the database over JDBC and Liquibase creates the `keycloak` schema on first boot.
+
+## Known gaps
+
+- The local Taskfile (`Taskfile.yml`) drives everything through `docker compose -f infrastructure/docker/compose.yml`, but that compose file does not exist in the repo — none of the `local:*` or `pgweb:*` tasks will run as written.
+- `dockerfiles/postgres.Dockerfile` contains Jinja-style placeholders (`{{DATABASE_NAME}}`, `{{MASTER_USERNAME}}`) that nothing in the repo substitutes, and the Helm chart does not reference this Dockerfile — it pulls `pgvector/pgvector:pg16` directly. The Dockerfile is effectively dead code.
+- The README lists `DATABASE_PORT=5437`, but every live config (chart values, Service, Helmfile, backend) uses 5432. The README value is stale.
+
+## Code map
+
+Paths are relative to the repo root.
+
+| Concern | File · lines |
+|---|---|
+| Postgres pod definition, health probes, volume mount | `projects/application/database/chart/templates/statefulset.yaml:1-65` |
+| Internal ClusterIP endpoint on port 5432 | `projects/application/database/chart/templates/service.yaml:1-15` |
+| Credentials Secret (created only when `env` is set) | `projects/application/database/chart/templates/secret.yaml:1-13` |
+| Persistent volume claim template (10Gi default, RWO) | `projects/application/database/chart/templates/statefulset.yaml:47-65` |
+| Chart defaults (image, persistence, resources, probes, pgweb) | `projects/application/database/chart/values.yaml:1-45` |
+| pgweb UI container and DB connection URL | `projects/application/database/chart/templates/pgweb-deployment.yaml:1-37` |
+| pgweb internal Service on port 8081 | `projects/application/database/chart/templates/pgweb-service.yaml:1-16` |
+| pgweb Traefik Ingress (optional TLS) | `projects/application/database/chart/templates/pgweb-ingress.yaml:1-31` |
+| Live release wiring: image, credentials, persistence, pgweb host | `infrastructure/k8s/helmfile.yaml.gotmpl:95-122` |
+| Backend initial migration (creates extensions + app schema) | `projects/application/backend/app/src/features/typeorm-database-client/migrations/1734056400000-InitialSchema.ts:19-21` |
+| Keycloak schema wiring (`KC_DB_SCHEMA=keycloak`) | `infrastructure/k8s/helmfile.yaml.gotmpl:180` |
+| Local dev tasks (reference a missing compose file) | `projects/application/database/Taskfile.yml:1-93` |
+| Unused Dockerfile with unsubstituted placeholders | `projects/application/database/dockerfiles/postgres.Dockerfile:1-12` |
+| README with stale port `5437` | `projects/application/database/README.md:49-58` |
