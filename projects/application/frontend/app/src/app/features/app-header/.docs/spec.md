@@ -1,44 +1,65 @@
 # App Header — Spec
 
-**Feature directory:** `src/app/features/app-header/`
+## What it is
 
-## Purpose
+The sticky top toolbar that sits above every page of the authenticated app shell. It shows the app's brand title ("RTS AI Platform") and gives the user three controls: a menu button to toggle the side navigation on narrow screens, a theme toggle, and an avatar button that opens a small menu with the current username and a Sign Out action.
 
-Sticky top toolbar for the authenticated application shell. Provides the drawer toggle (mobile/tablet), the app brand title, a theme toggle, and a user avatar menu with a Sign Out action. Rendered once by `AppLayoutComponent` above the sidenav and router outlet (`features/layouts/components/app-layout/app-layout.component.html:2`).
+## How it behaves
 
-## Behavior
+### Toggling the side navigation
 
-- Toolbar renders as a `mat-toolbar` with `position: sticky; top: 0; z-index: 1100`, `background-color: var(--app-bg-paper)`, a bottom divider, and no box-shadow (`components/app-header/app-header.component.ts:24-31`).
-- Left side: `mat-icon-button` with the `menu` icon and `aria-label="Toggle navigation"`. Clicking it emits the `menuToggle` output (`app-header.component.ts:14-16,45`). The parent `AppLayoutComponent` wires this to `LayoutService.toggleDrawer()` (`features/layouts/components/app-layout/app-layout.component.html:2`) — the menu button only affects the overlay drawer on tablet/mobile.
-- Brand title reads `RTS AI Platform`, rendered as a `span.app-title` with `margin-left: 8px; font-weight: 600; font-size: 1.1rem` (`app-header.component.ts:17,32-36`).
-- A flex spacer (`.spacer { flex: 1 }`) pushes the theme toggle and avatar menu to the right edge (`app-header.component.ts:18,37-39`).
-- Right side renders `<app-theme-toggle />` then `<app-avatar-menu />` in that order (`app-header.component.ts:19-20`).
-- `AvatarMenuComponent` shows a `mat-icon-button` with the `account_circle` icon and `aria-label="User menu"` that triggers a `mat-menu` via `matMenuTriggerFor` (`components/avatar-menu/avatar-menu.component.ts:12-14`).
-- When `AuthService.user()` is non-null, the menu renders a `.user-info` header with the `username` from `User.username` (`avatar-menu.component.ts:16-20`; `features/keycloak-auth/types.ts:3`). When `user()` is null the user-info block is omitted but the Sign Out button still renders.
-- The "Sign Out" `mat-menu-item` uses the `logout` icon and calls `AuthService.logout()` on click (`avatar-menu.component.ts:21-24`).
-- `AuthService.logout()` sends `POST ${backendUrl}/auth/logout` with `withCredentials: true`; on complete or error it clears `_user` and navigates to `/login` (`features/keycloak-auth/services/auth.service.ts:53-65`).
-- All three components use `ChangeDetectionStrategy.OnPush` (`app-header.component.ts:41`, `avatar-menu.component.ts:37`). Both components are standalone with inline templates and inline styles.
-- `AppHeaderModule` imports and re-exports both standalone components for legacy NgModule consumers (`app-header.module.ts:5-8`). The public barrel exports `AppHeaderModule`, `AppHeaderComponent`, and `AvatarMenuComponent` (`index.ts:1-3`).
+On the left of the toolbar is a menu button labeled "Toggle navigation". Clicking it tells the surrounding app layout to open or close the overlay drawer. This only has a visible effect on tablet and mobile widths; on desktop the sidenav is permanent, so the click is effectively a no-op.
 
-## Components
+### Toggling the theme
 
-| Component | Selector | Inputs / Outputs | Dependencies |
-|---|---|---|---|
-| `AppHeaderComponent` | `app-header` | `menuToggle: output<void>()` | `MatToolbarModule`, `MatIconModule`, `MatButtonModule`, `ThemeToggleComponent` (`@features/theme`), `AvatarMenuComponent` |
-| `AvatarMenuComponent` | `app-avatar-menu` | — | `MatButtonModule`, `MatIconModule`, `MatMenuModule`, `AuthService` (`@features/keycloak-auth`) |
+To the right of the title, the theme toggle lets the user switch between light and dark modes. It lives in its own feature and is embedded here in the toolbar.
 
-## Design References
+### Opening the avatar menu
 
-Colors and tokens used (`--app-bg-paper`, `--app-divider`) are defined in the project-level design spec — see `projects/application/frontend/app/.docs/standards/design.md` (Backgrounds and Borders sections). The toolbar's sticky placement and z-index match the "Authenticated shell" diagram in that document.
+The avatar button, at the far right, shows a generic person icon and is labeled "User menu". Clicking it opens a small dropdown. If the user is signed in, the top of the dropdown shows their username. A Sign Out entry with a logout icon is always present at the bottom.
 
-## Acceptance Criteria
+### Signing out
 
-- [ ] `mat-toolbar.app-header` is `position: sticky; top: 0; z-index: 1100` with `background-color: var(--app-bg-paper)` and a `1px solid var(--app-divider)` bottom border.
-- [ ] Menu `mat-icon-button` has `aria-label="Toggle navigation"` and the `menu` Material icon, and its click emits the `menuToggle` output.
-- [ ] The brand title text is exactly `RTS AI Platform`.
-- [ ] The theme toggle and avatar menu render, in that order, on the right side of the toolbar (flex spacer between title and controls).
-- [ ] The avatar button has `aria-label="User menu"`, the `account_circle` icon, and opens a `mat-menu`.
-- [ ] When `AuthService.user()` is non-null, the menu displays `user().username` inside a `.user-info` header; when null, no user-info block is shown.
-- [ ] The Sign Out `mat-menu-item` has the `logout` icon and invokes `AuthService.logout()` on click.
-- [ ] All three components (`AppHeaderComponent`, `AvatarMenuComponent`, and the consumed `ThemeToggleComponent`) declare `ChangeDetectionStrategy.OnPush`.
-- [ ] `AppHeaderModule` exports both `AppHeaderComponent` and `AvatarMenuComponent`; the barrel `index.ts` exposes all three symbols.
+Clicking Sign Out asks the backend to end the session. Regardless of whether the backend call succeeds or fails, the client immediately clears the locally cached user and sends the browser to `/login`.
+
+## Acceptance criteria
+
+- [ ] The toolbar is pinned to the top of the viewport and stays visible as the page scrolls.
+- [ ] The toolbar shows a bottom divider and no drop shadow.
+- [ ] The brand title reads exactly `RTS AI Platform`.
+- [ ] The menu button on the left is labeled "Toggle navigation"; clicking it toggles the app layout's drawer.
+- [ ] On desktop widths, clicking the menu button has no visible effect (the sidenav is permanent).
+- [ ] The theme toggle and the avatar button both appear on the right, in that order, pushed to the far edge.
+- [ ] The avatar button is labeled "User menu" and opens a dropdown when clicked.
+- [ ] When the user is signed in, the dropdown shows the current username at the top.
+- [ ] When the user is not signed in, the username block is not shown, but the Sign Out entry still appears.
+- [ ] Clicking Sign Out ends the session, clears the locally stored user, and navigates to `/login`.
+- [ ] Sign Out navigates to `/login` even if the backend logout request fails.
+
+## Known gaps
+
+- The username block only renders when the auth user is non-null; the Sign Out button renders unconditionally, so a signed-out viewer of the header would still see a Sign Out option.
+- Logout treats success and error identically: in both cases the cached user is cleared and the browser is redirected to `/login`, so a failed server-side logout is indistinguishable from a successful one to the user.
+- The menu toggle button is rendered at all widths, but on desktop the sidenav is permanent and the toggle has no visible effect.
+
+## Code map
+
+Paths are relative to `projects/application/frontend/app/`.
+
+| Concern | File · lines |
+|---|---|
+| Toolbar layout, sticky positioning, divider, background | `src/app/features/app-header/components/app-header/app-header.component.ts:24-31` |
+| Menu button (icon, aria-label, click emits `menuToggle`) | `src/app/features/app-header/components/app-header/app-header.component.ts:14-16,45` |
+| Parent wires `menuToggle` to the layout drawer | `src/app/features/layouts/components/app-layout/app-layout.component.html:2` |
+| Brand title text and styling | `src/app/features/app-header/components/app-header/app-header.component.ts:17,32-36` |
+| Flex spacer between title and right-side controls | `src/app/features/app-header/components/app-header/app-header.component.ts:18,37-39` |
+| Theme toggle + avatar menu render order | `src/app/features/app-header/components/app-header/app-header.component.ts:19-20` |
+| Avatar button (icon, aria-label, menu trigger) | `src/app/features/app-header/components/avatar-menu/avatar-menu.component.ts:12-14` |
+| Username block is conditional on `AuthService.user()` | `src/app/features/app-header/components/avatar-menu/avatar-menu.component.ts:16-20` |
+| `User.username` source of truth | `src/app/features/keycloak-auth/types.ts:3` |
+| Sign Out item (icon, click handler) | `src/app/features/app-header/components/avatar-menu/avatar-menu.component.ts:21-24` |
+| Logout: POST `/auth/logout`, clear user, navigate on success and error | `src/app/features/keycloak-auth/services/auth.service.ts:53-65` |
+| OnPush change detection on both components | `src/app/features/app-header/components/app-header/app-header.component.ts:41`, `src/app/features/app-header/components/avatar-menu/avatar-menu.component.ts:37` |
+| NgModule wrapper re-exports both standalone components | `src/app/features/app-header/app-header.module.ts:5-8` |
+| Public barrel | `src/app/features/app-header/index.ts:1-3` |
+| Design tokens used (`--app-bg-paper`, `--app-divider`) | `projects/application/frontend/app/.docs/standards/design.md` |

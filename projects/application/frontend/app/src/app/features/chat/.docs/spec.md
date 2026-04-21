@@ -1,86 +1,88 @@
 # Chat — Spec
 
-## Purpose
+## What it is
 
-Real-time chat surface at `/chat` that connects to the AI agent over Socket.IO and a small REST API. Users pick or create a session in a left sidebar, stream user/assistant/tool messages in the center pane, and send or cancel turns from a textarea at the bottom. State is held in a `providedIn: 'root'` service so the connection survives component recomposition but is explicitly opened/closed by `ChatPage`.
+A real-time chat page at `/chat` where a signed-in user can have a conversation with the AI agent. Past conversations are listed in a sidebar on the left; the center column shows the current transcript; a composer at the bottom sends or cancels a reply.
 
-## Behavior
+## How it behaves
 
-### Connection
-- On `ChatPage` init, `ChatService.connect()` opens a Socket.IO client to `${backendUrl}/agent` with `transports: ['websocket', 'polling']` and `withCredentials: true` (`src/app/features/chat/services/chat.service.ts:25-31`).
-- Duplicate `connect()` calls are no-ops — the method returns early when `socket !== null` (`chat.service.ts:26`).
-- `ChatPage.ngOnInit` also calls `loadSessions()` (`src/app/features/chat/pages/chat.page.ts:54-57`).
-- On page destroy, `disconnect()` calls `socket.disconnect()` and nulls the reference (`chat.service.ts:104-107`, `chat.page.ts:59-61`). `ChatService.ngOnDestroy` also disconnects as a safety net (`chat.service.ts:109-112`).
+### Starting and leaving the chat page
 
-### Session management (REST)
-- Sessions load via `GET /agent/sessions` (`src/app/features/chat/services/chat.api.ts:19-21`). First session is auto-selected when the list is non-empty and none is currently active (`chat.service.ts:53-58`).
-- "New Chat" calls `POST /agent/sessions` with body `{ model?, role? }` (only `role` is ever passed today — `model` is always `undefined`, `chat.service.ts:68-73`). The returned session is prepended and auto-selected.
-- Delete calls `DELETE /agent/sessions/:id`. If the deleted session was active, the first remaining session is selected; if none remain, `activeSession` is set to `null` (`chat.service.ts:75-86`).
-- All HTTP calls pass `withCredentials: true` per call, redundant with `authInterceptor` (`chat.api.ts:20,27,32`).
+When the user opens `/chat`, the page opens a live connection to the agent and loads the list of the user's past sessions. If the list is non-empty and no session was already active, the first session is selected automatically. Leaving the page closes the live connection; coming back reopens it.
 
-### Messaging (Socket.IO)
-- `selectSession(session)` clears `messages` and `systemPrompt`, then emits `join:session` with `{ sessionId }` (`chat.service.ts:61-66`).
-- Server replies with `agent:history` carrying `{ sessionId, systemPrompt, messages }`; the service stores `systemPrompt` and replaces the message list (`chat.service.ts:33-36`).
-- `sendMessage(content)` optimistically appends `{ type: 'user', content }`, sets `isStreaming = true`, and emits `message` with `{ sessionId, message }` (`chat.service.ts:88-95`). Returns silently if no session or no socket.
-- Incoming `agent:message` events are appended to the message list (`chat.service.ts:38-40`).
-- `agent:done` sets `isStreaming = false` (`chat.service.ts:42-44`).
-- `agent:error` appends `{ type: 'error', content: <error.message> }` and sets `isStreaming = false` (`chat.service.ts:46-49`).
-- `cancelMessage()` emits `cancel` with `{ sessionId }` and immediately flips `isStreaming` to false — does not wait for server acknowledgement (`chat.service.ts:97-102`).
+### Managing sessions
 
-### UI
-- `ChatPage` renders a flex row: 260px `SessionSidebarComponent` + flex `chat-main` column containing `MessageListComponent` (grows) and `MessageInputComponent` (footer). The page uses `height: calc(100vh - 64px); margin: -24px` to fill the layout viewport under the 64px toolbar (`chat.page.ts:35-47`).
-- `MessageListComponent` auto-scrolls to the bottom whenever the `messages` input changes via an `effect()` + `setTimeout(0)` (`src/app/features/chat/components/message-list/message-list.component.ts:21-33`).
-- Message bubble styling per `type`: `user`/`assistant` as bubbles, `tool_use` with warning left border + `build` icon, `tool_result` with success left border + `check_circle` icon, `error` as red text + `error` icon. `system` exists in the type union but has no `@case` branch and is not rendered (`message-list.component.html:4-29`).
-- While `isStreaming()` is true, a spinner + "Agent is working..." label render below the message list (`message-list.component.html:33-38`).
-- `MessageInputComponent`: `mat-form-field` outline textarea with `cdkTextareaAutosize` (1–6 rows). Enter sends, Shift+Enter inserts newline (`message-input.component.ts:17-24,60-65`). While `isStreaming()`, the Send button is replaced with a red `mat-flat-button color="warn"` Stop button that emits `cancelMessage`. Send is disabled when the trimmed text is empty OR `disabled()` is true (`ChatPage` binds `disabled = !activeSession()`, `chat.page.ts:27`, `message-input.component.ts:31`).
-- `SessionSidebarComponent`: 260px wide, "New Chat" `mat-flat-button` at top, `mat-nav-list` of sessions showing `id | slice:0:8` and `createdAt | date:'shortTime'` with a close-icon delete button per row (`session-sidebar.component.ts:13-40,43-50`). Active row gets `background-color: var(--app-hover-overlay)`.
+The sidebar shows each session as a short identifier plus the time it was created. "New Chat" creates a session, puts it at the top of the list, and makes it active. Each row has a close icon that deletes that session; deleting the active session jumps to the next remaining one, or clears the main pane if none remain.
 
-## Components / Services
+### Selecting a session
 
-| Name | Type | Purpose |
-|---|---|---|
-| `ChatPage` | Page (`app-chat-page`) | Composes sidebar/list/input; calls `connect/loadSessions` on init, `disconnect` on destroy (`chat.page.ts:50-62`) |
-| `SessionSidebarComponent` | Component | Session list, create/select/delete (`session-sidebar.component.ts`) |
-| `MessageListComponent` | Component | Renders `ChatMessage[]`; auto-scrolls; shows streaming spinner (`message-list.component.ts`) |
-| `MessageInputComponent` | Component | Autosizing textarea; Enter-sends; toggles Send/Stop (`message-input.component.ts`) |
-| `ChatService` | `@Injectable({providedIn:'root'})` | Socket.IO client + signal state (`sessions`, `activeSession`, `messages`, `systemPrompt`, `isStreaming`) (`chat.service.ts`) |
-| `ChatApiService` | `@Injectable({providedIn:'root'})` | REST client for `/agent/sessions` CRUD (`chat.api.ts`) |
-| `ChatModule` | NgModule (thin wrapper) | Re-exports standalone components (`chat.module.ts`) |
+Clicking a session in the sidebar switches the center pane to that conversation. The page clears whatever was on screen, asks the server for the saved transcript and system prompt for that session, and replaces the pane with what comes back.
 
-## Types (`types.ts`)
+### Sending a message
 
-- `ChatSession { id, model, role?, createdAt, lastMessageAt?, isActive }`
-- `ChatMessage { type: 'user'|'assistant'|'tool_use'|'tool_result'|'error'|'system'; sessionId?; content?; tool?; input?; output? }`
-- `SessionHistory { sessionId, systemPrompt, messages }`
+The user types in the composer and presses Enter to send (Shift+Enter inserts a newline). The message shows up in the transcript immediately. The Send button is disabled until the user has typed something and has an active session.
 
-## Acceptance Criteria
+### Receiving a reply
 
-### Connection
-- [ ] Socket.IO connects to `${backendUrl}/agent` with `withCredentials: true` on `ChatPage` init
-- [ ] Duplicate `connect()` calls do not open a second socket
-- [ ] Socket disconnects on `ChatPage` destroy
+While the agent is replying, the Send button turns into a red Stop button and a spinner labeled "Agent is working..." shows under the transcript. Each message the agent sends back (assistant text, tool use, tool result) is appended to the transcript as it arrives. When the turn ends the Stop button reverts to Send and the spinner disappears. If something goes wrong on the server, a red error line is appended instead and the spinner disappears.
 
-### Session management
-- [ ] `GET /agent/sessions` runs on page init
-- [ ] First session is auto-selected only when none is currently active
-- [ ] "New Chat" calls `POST /agent/sessions`, prepends the result, and selects it
-- [ ] Deleting the active session selects the next remaining session; if none remain, `activeSession` becomes `null`
-- [ ] Each session row shows the first 8 chars of `id` and `createdAt` formatted as `shortTime`
-- [ ] Selecting a session emits `join:session` with `{ sessionId }` and clears prior messages
+### Canceling a reply
 
-### Messaging
-- [ ] Sending emits `message` with `{ sessionId, message }` and optimistically appends a user message
-- [ ] `agent:history` replaces the message list and stores `systemPrompt`
-- [ ] `agent:message` events are appended in order
-- [ ] `agent:done` clears the streaming indicator
-- [ ] `agent:error` appends an `error`-typed message and clears the streaming indicator
-- [ ] Stop button emits `cancel` with `{ sessionId }` and immediately clears the streaming indicator
-- [ ] Enter sends; Shift+Enter inserts a newline
-- [ ] Send button is disabled when the trimmed input is empty or no session is active
-- [ ] Message list scrolls to the bottom on every change to `messages`
+Clicking Stop during a reply immediately clears the spinner on the client and tells the server to stop generating. The client does not wait for confirmation.
 
-### Rendering
-- [ ] `user`/`assistant` messages render as bubbles with theme tokens
-- [ ] `tool_use` renders with a `build` icon + tool name
-- [ ] `tool_result` renders with a `check_circle` icon + `output`
-- [ ] `error` renders with an `error` icon in `--app-error` color
+### Message rendering
+
+The transcript styles messages by type: user and assistant messages render as bubbles; tool-use entries show with a wrench icon and the tool's name; tool-result entries show with a checkmark icon and the returned output; errors show with an error icon in red. The list auto-scrolls to the bottom whenever a new message arrives.
+
+## Acceptance criteria
+
+- [ ] Opening `/chat` loads the session list and opens the live connection.
+- [ ] The first session is auto-selected only when nothing is currently selected.
+- [ ] Leaving `/chat` closes the live connection; returning reopens it without duplicating it.
+- [ ] "New Chat" creates a session, puts it at the top of the sidebar, and selects it.
+- [ ] Deleting a session removes it; deleting the active one switches to the next, or empties the pane if none remain.
+- [ ] Switching sessions clears the transcript, then populates it from the server's saved transcript.
+- [ ] Pressing Enter in the composer sends the message; Shift+Enter inserts a newline.
+- [ ] Send is disabled when the input is empty or no session is active.
+- [ ] Sent messages appear in the transcript immediately.
+- [ ] During a reply: Send turns to Stop, a spinner shows, each agent message is appended in order.
+- [ ] When the reply ends normally: Stop reverts to Send, spinner clears.
+- [ ] Server-reported errors render as a red error line and clear the spinner.
+- [ ] Stop clears the spinner immediately and signals cancel to the server.
+- [ ] The transcript scrolls to the bottom whenever a message is added.
+
+## Known gaps
+
+- The `system` message type exists in the payload shape but is not rendered (no template branch). System-typed entries show as empty rows. See `message-list.component.html:4-29`.
+- Error handling is minimal on the REST side — 4xx/5xx from `/agent/sessions` surfaces as an unhandled RxJS error; users see no snackbar. See `chat.service.ts:53,69,76`.
+
+## Code map
+
+Precise pointers for an agent or a reader who needs the ground truth. Paths are relative to `projects/application/frontend/app/`.
+
+| Concern | File · lines |
+|---|---|
+| Page layout (260px sidebar + main column, fills under 64px toolbar) | `src/app/features/chat/pages/chat.page.ts:35-47` |
+| Open / close live connection on page init/destroy | `chat.page.ts:50-62`, `chat.service.ts:104-107` |
+| Live connection opens with cookies; deduped if already open | `chat.service.ts:25-31` |
+| Load session list on init | `chat.page.ts:54-57`, `chat.service.ts:52-59` |
+| Create session (`POST /agent/sessions`) | `chat.service.ts:68-73`, `chat.api.ts:23-29` |
+| Delete session (`DELETE /agent/sessions/:id`) + active-session shift | `chat.service.ts:75-86` |
+| Select session emits `join:session` and clears transcript | `chat.service.ts:61-66` |
+| Server → client: `agent:history`, `agent:message`, `agent:done`, `agent:error` | `chat.service.ts:33-49` |
+| Send message (optimistic append + `message` emit) | `chat.service.ts:88-95` |
+| Cancel (`cancel` emit, immediate local spinner off) | `chat.service.ts:97-102` |
+| Composer: autosizing textarea (1–6 rows), Enter-sends | `components/message-input/message-input.component.ts:17-24,60-65` |
+| Composer: Send toggles to Stop while streaming | `message-input.component.ts:31,78-85` |
+| Composer: Send disabled when empty or no active session | `chat.page.ts:27`, `message-input.component.ts:31` |
+| Message rendering by type (bubble / tool_use / tool_result / error) | `components/message-list/message-list.component.html:4-29` |
+| Auto-scroll to bottom on every messages change | `message-list.component.ts:21-33` |
+| Streaming spinner + label | `message-list.component.html:33-38` |
+| Sidebar row layout (short id + shortTime + delete) | `components/session-sidebar/session-sidebar.component.ts:13-40,43-50` |
+| Active-row highlight token | `--app-hover-overlay` |
+| Types: `ChatSession`, `ChatMessage`, `SessionHistory` | `src/app/features/chat/types.ts` |
+| Module (thin re-export wrapper) | `src/app/features/chat/chat.module.ts` |
+
+### Backend contract
+
+Shapes and events served by the `chat-agent` backend feature; see `projects/application/backend/app/src/features/chat-agent/.docs/spec.md` and `contracts.md`.

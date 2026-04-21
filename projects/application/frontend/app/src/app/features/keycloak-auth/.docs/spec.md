@@ -1,87 +1,89 @@
 # Keycloak Auth (Frontend) — Spec
 
-## Purpose
+## What it is
 
-Angular consumer of the backend `/auth/*` endpoints (`projects/application/backend/app/src/features/keycloak-auth/`). Holds signal-based session state, drives the `/login` page, gates the protected route tree with `authGuard`, and provides a declarative permission check for templates (`RequirePermissionDirective`). Tokens live in HTTP-only cookies set by the backend; the frontend never reads or stores them. Cross-cutting 401/refresh and activity logic lives in `@features/api-client` interceptors (`src/app/app.config.ts:15`), not here.
+Sign-in, session, and permission surface for the frontend. Provides the `/login` page, holds the current user and their permissions in memory, gates the protected route tree, revives a session on page refresh, and exposes a declarative way for templates to show or hide UI based on what the signed-in user is allowed to do. Tokens live in HTTP-only cookies set by the backend; the frontend never reads or stores them.
 
-## Behavior
+## How it behaves
 
-### `AuthService` (`services/auth.service.ts:13`)
-- `providedIn: 'root'` singleton. All HTTP uses `${AppConfigService.backendUrl}/auth` as the base.
-- Private signals `_user`, `_isLoading`, `_error`; exposed as `user`, `isLoading`, `error` via `.asReadonly()` (`auth.service.ts:18-24`).
-- `isAuthenticated = computed(() => _user() !== null)` (`auth.service.ts:25`).
-- `permissions = computed(...)` — resolves the current user's permissions LOCALLY via `getPermissionsForRoles(user.roles)` (`auth.service.ts:26-29`, `permissions/permissions.config.ts:17-26`). The `/auth/check` response is NOT consulted for permissions even though the backend returns one.
-- `login({ username, password })` — fires `POST /auth/login` with `withCredentials: true`. On 200 stores `response.user` and navigates to `/`; on error sets `error()` to `err.error?.message ?? 'Login failed'` (`auth.service.ts:35-51`).
-- `logout()` — fires `POST /auth/logout`. On both `complete` and `error` it clears `_user` and navigates to `/login` (`auth.service.ts:53-65`).
-- `checkAuth(): Observable<User | null>` — fires `GET /auth/check`, types the response as `User` and stores it. On any HTTP error it returns `of(null)` without surfacing an error (`auth.service.ts:67-80`). Known contract drift: the backend actually returns `{ authenticated, user, permissions }` (`backend/.../keycloak-auth/.docs/contracts.md`); the FE strips everything but top-level fields since it treats the whole body as `User`, so `username`, `roles`, etc. are left `undefined` on the resulting object. See Discrepancies.
-- `hasPermission(p)` — delegates to the pure helper on the computed `permissions()` (`auth.service.ts:82-84`).
+### Signing in
 
-### Login page (`pages/login.page.ts`)
-- Standalone component `app-login-page`, `ChangeDetectionStrategy.OnPush` (`login.page.ts:8-65`).
-- Centered `mat-card`, max-width 440px, `padding: 32px`, `border-radius: 12px`, 600ms slide-up-fade-in honoring `prefers-reduced-motion` (`login.page.ts:27-62`).
-- Card header `Sign In` / subtitle `RTS AI Platform`. Body shows `auth.error()` above the form when set (`login.page.ts:19-21`).
-- Hosts `<app-login-form>` and calls `auth.login(credentials)` on `submitCredentials` (`login.page.ts:69-71`).
-- Does NOT redirect if the user is already authenticated; the form and card render regardless.
+A user who is not signed in lands on `/login`, which renders a centered card titled "Sign In" with subtitle "RTS AI Platform" and a form asking for a username and password. The form validates locally: username is required and must be at least three characters; password is required. The submit button stays disabled while the form is invalid. On submit, the frontend posts the credentials to the backend with cookies enabled. If the backend accepts them, the returned user is stored in memory and the user is sent to `/`. If the backend rejects them, the server's error message is shown above the form (falling back to "Login failed" when the server gives nothing); the values the user typed are preserved. There is no loading spinner or input-disabling while the request is in flight, and the page does not redirect a user who is already signed in — the login card renders regardless.
 
-### Login form (`components/login-form/login-form.component.ts`)
-- Reactive form with two controls (`login-form.component.ts:28-31`):
-  - `username` — `Validators.required`, `Validators.minLength(3)`. Labelled `Username`, `autocomplete="username"` (`login-form.component.html:3-11`).
-  - `password` — `Validators.required`. `type="password"`, `autocomplete="current-password"` (`login-form.component.html:13-19`).
-- Submit is a `mat-flat-button` disabled while `form.invalid` (`login-form.component.html:21-23`). No loading spinner or input disabling while an auth request is in flight.
-- No email-format validation; the field is `input`/text and accepts any string of length 3+.
-- Emits `submitCredentials: LoginCredentials` via `output<T>()` — `username` + `password`, never `email` (`login-form.component.ts:26,35`, `types.ts:10-13`).
-- Inline field errors: "Username is required", "Username must be at least 3 characters", "Password is required" — all via `@if` + `mat-error` (`login-form.component.html:5-18`).
+### Staying signed in across a page refresh
 
-### `authGuard` (`guards/auth.guard.ts`)
-- `CanActivateFn` applied on the protected parent route in `app.routes.ts:17`.
-- If `AuthService.isAuthenticated()` is true, returns true immediately.
-- Otherwise calls `AuthService.checkAuth()` (`GET /auth/check`) and maps: truthy user -> true, otherwise `router.createUrlTree(['/login'])` (`auth.guard.ts:7-24`).
-- This is the sole mechanism for session revival on page refresh — there is no `provideAppInitializer` calling `checkAuth()` (verified in `app.config.ts:11-22`).
+When the user reloads the page, the protected route tree defers to the backend: if in-memory state already shows a signed-in user the route admits immediately; otherwise the frontend asks the backend who the caller is (`GET /auth/check`), stores the result as the current user, and admits them — or, if the backend says no one is signed in, redirects to `/login`. This route-time check is the only mechanism for session revival; there is no app-initializer running it on boot (verified in `app.config.ts:11-22`).
 
-### `permissionGuard` (`guards/permission.guard.ts`) — defined but not wired
-- Factory returning a `CanActivateFn` that returns true when `auth.hasPermission(perm)`, else redirects via `router.createUrlTree(['/'])` (`permission.guard.ts:7-18`).
-- Not applied to any route. The `app.routes.ts` tree applies `authGuard` only; `admin/users`, `admin/users/new`, `admin/users/:id` have no permission gate at the router level (`app.routes.ts:26-39`).
+### Signing out
 
-### `RequirePermissionDirective` (`directives/require-permission.directive.ts`) — the only active permission check
-- Structural directive `*appRequirePermission="'users:read'"`. Renders the host template when `auth.hasPermission(permission)` is true, clears it otherwise, via an `effect()` on the signal-backed permission check (`require-permission.directive.ts:15-27`).
-- Exported from `index.ts:5` and re-exported via `KeycloakAuthModule` (`keycloak-auth.module.ts:7-8`).
-- Currently NOT referenced in any template in `src/` — ready for use but unused today (verified by grep).
+Triggering logout posts to the backend and, regardless of whether that call succeeds or errors, clears the current user from memory and navigates to `/login`.
 
-### Permissions model (`permissions/permissions.types.ts`, `permissions/permissions.config.ts`)
-- `Permission` union: `users:read | users:write | users:delete | conversations:read | conversations:write | conversations:delete | admin:access` (`permissions.types.ts:1-8`). Differs from backend which uses `users:create|update|delete` and `conversations:create|delete` (see Discrepancies).
-- `Role` union: `admin | user | viewer` (`permissions.types.ts:10`). Backend realm has only `admin` and `user`.
-- `ROLE_PERMISSIONS`: admin -> all 7, user -> `conversations:{read,write,delete}`, viewer -> `conversations:read` (`permissions.config.ts:3-15`).
-- Helpers: `getPermissionsForRoles(roles)` unions unknown-role-tolerantly; `hasPermission(perms, required)` is a pure includes check (`permissions.config.ts:17-30`).
+### Hitting a protected route
 
-### Cross-cutting behavior delegated to `@features/api-client`
-- `authInterceptor` (`features/api-client/interceptors/auth.interceptor.ts:12-25`) sets `withCredentials: true` on every request; on 401 for any non-`/auth/*` URL it calls `SessionManagementService.refreshToken()` (`POST /auth/refresh`), queues concurrent 401s on a `BehaviorSubject`, retries the original request on success, and on refresh failure triggers `sessionService.logout()`.
-- `activityInterceptor` (`interceptors/activity.interceptor.ts`) calls `SessionManagementService.recordActivity()` on every request.
-- `SessionManagementService.startTimers()` starts a 4-minute proactive `POST /auth/refresh` loop and a 30-minute inactivity logout check (`session-management.service.ts:8-36`). It is NOT called from anywhere in `src/` today — the timers are dormant unless something starts them.
+All routes under the protected parent require a signed-in user (`app.routes.ts:17`). An unauthenticated visitor is bounced to `/login`. No route currently enforces a permission beyond "signed in" — see Known gaps.
 
-## Components / Services / Guards / Directives
+### Checking permissions in templates
 
-| Kind | Name | Source |
-|---|---|---|
-| Service | `AuthService` | `services/auth.service.ts:13` |
-| Page | `LoginPage` (`app-login-page`) | `pages/login.page.ts:8` |
-| Component | `LoginFormComponent` (`app-login-form`) | `components/login-form/login-form.component.ts:10` |
-| Guard | `authGuard` (applied in `app.routes.ts:17`) | `guards/auth.guard.ts:7` |
-| Guard | `permissionGuard(perm)` — factory, unwired | `guards/permission.guard.ts:7` |
-| Directive | `RequirePermissionDirective` (`[appRequirePermission]`) — unused | `directives/require-permission.directive.ts:6` |
-| Types | `User`, `LoginCredentials`, `AuthState` | `types.ts` |
-| Permissions | `Permission`, `Role`, `ROLE_PERMISSIONS`, `getPermissionsForRoles`, `hasPermission` | `permissions/*.ts` |
-| Module barrel | `KeycloakAuthModule` (re-exports standalones) | `keycloak-auth.module.ts`, `index.ts` |
+Templates can wrap any element in a structural directive that takes a permission name; the element renders when the current user has that permission and disappears when they don't, reacting live to changes in the signed-in user. Permissions are derived locally from the user's roles using a frontend-defined role-to-permissions map (`permissions/permissions.config.ts:3-15`); the permissions field in the backend's `/auth/check` response is ignored.
 
-## Acceptance Criteria
+## Acceptance criteria
 
-- [ ] `/login` renders a centered card with `Sign In` / `RTS AI Platform` header and the login form; route is public and sits outside the `authGuard`-protected tree (`app.routes.ts:6-10`).
-- [ ] Login form submits `{ username, password }` (never `email`) and is disabled while invalid.
-- [ ] Username field enforces required + min-length 3; password field enforces required; errors appear only after touch.
-- [ ] On 200, `AuthService.user()` becomes the returned `user` object and the router navigates to `/`.
-- [ ] On 401, `AuthService.error()` is set to the server message (falling back to `'Login failed'`); form values are preserved.
-- [ ] `AuthService.logout()` clears the user and navigates to `/login` whether the logout HTTP call succeeds or errors.
-- [ ] `authGuard` returns true when `isAuthenticated()` is true; otherwise calls `checkAuth()` and either admits or redirects to `/login`.
-- [ ] `AuthService.permissions()` is computed from the current user's `roles` via local `ROLE_PERMISSIONS` (NOT from the `/auth/check` permissions field).
-- [ ] `RequirePermissionDirective` renders/clears its template based on `AuthService.hasPermission(permission)` and reacts to signal changes.
-- [ ] `permissionGuard(perm)` is exported and callable but is NOT applied to any route — admin/users routes currently pass any authenticated user.
-- [ ] Every `/auth/*` request runs through `authInterceptor` which sets `withCredentials: true` and excludes `/auth/*` URLs from its 401-refresh branch.
+- `/login` renders a centered card with header "Sign In" and subtitle "RTS AI Platform" and is publicly reachable outside the protected route tree.
+- The login form submits username and password (never email) and its submit button is disabled while the form is invalid.
+- Username enforces required + min-length 3; password enforces required; field errors appear only after the field is touched.
+- On a successful login, the current user becomes the user object returned by the backend and the router navigates to `/`.
+- On a failed login, the error message from the server is shown above the form (falling back to "Login failed"), and the form keeps the values the user typed.
+- Logout clears the current user and navigates to `/login` whether the logout HTTP call succeeds or errors.
+- On a protected route, an already-signed-in user is admitted immediately; an unknown user triggers a backend identity check and is either admitted (if the backend recognizes them) or redirected to `/login`.
+- The current user's permissions are computed from their roles via the frontend's local role-to-permissions map, not from the backend's response body.
+- The permission directive renders its host element when the current user has the named permission and removes it otherwise, updating when the user changes.
+- Every outbound request is sent with cookies; `/auth/*` URLs are exempt from the 401-refresh retry branch.
+
+## Known gaps
+
+- The route-level permission guard is defined and exported but is not applied to any route; admin routes (`admin/users`, `admin/users/new`, `admin/users/:id`) currently admit any authenticated user regardless of permission (`guards/permission.guard.ts:7-18`, `app.routes.ts:26-39`).
+- The permission directive is exported and ready to use but is referenced in zero templates today (verified by grep) — the "show/hide by permission" surface is effectively dormant (`directives/require-permission.directive.ts:6`).
+- Session revival types the `/auth/check` response as `User`, but the backend actually returns `{ authenticated, user, permissions }`. The frontend keeps the whole body as if it were the user, so after revival the stored user is missing `username`, `roles`, and other fields, and the computed permissions collapse to `[]` (`services/auth.service.ts:67-80`, backend `keycloak-auth/.docs/contracts.md`).
+- The proactive-refresh and inactivity-logout timers in `SessionManagementService.startTimers()` are never called from anywhere in `src/`, so the 4-minute refresh loop and 30-minute inactivity check are dormant today (`session-management.service.ts:8-36`).
+- The frontend's `Permission` union uses `users:write` and includes `admin:access`, while the backend uses `users:create` / `users:update` and has no `admin:access` permission; the frontend's `Role` union adds `viewer`, which the backend realm does not define (`permissions/permissions.types.ts:1-10`).
+- `LoginCredentials` is `{ username, password }`, not `{ email, password }`; the login field is a plain text input with no email-format validation (`types.ts:10-13`, `components/login-form/login-form.component.html:3-11`).
+- `withCredentials: true` is set twice on every auth request — once in the auth service's HTTP calls and again in the shared auth interceptor — which is redundant (`services/auth.service.ts:35-51`, `features/api-client/interceptors/auth.interceptor.ts:12-25`).
+
+## Code map
+
+Paths relative to `projects/application/frontend/app/`.
+
+| Concern | File · lines |
+|---|---|
+| Current user + loading/error state (signals, read-only views) | `src/app/features/keycloak-auth/services/auth.service.ts:18-24` |
+| `isAuthenticated` derived from current user | `services/auth.service.ts:25` |
+| Permissions computed from user's roles via local map | `services/auth.service.ts:26-29`, `permissions/permissions.config.ts:17-26` |
+| Login request + on-success store + navigate to `/` | `services/auth.service.ts:35-51` |
+| Logout clears user and navigates to `/login` on success or error | `services/auth.service.ts:53-65` |
+| Session revival: `GET /auth/check`, returns `of(null)` on HTTP error | `services/auth.service.ts:67-80` |
+| `hasPermission` helper over computed permissions | `services/auth.service.ts:82-84` |
+| `/login` page layout: centered card, 440px max, slide-up-fade-in | `pages/login.page.ts:27-62` |
+| `/login` page renders server error above form | `pages/login.page.ts:19-21` |
+| `/login` page wires form submit to auth service | `pages/login.page.ts:69-71` |
+| Login form controls: required + min-length 3 on username, required on password | `components/login-form/login-form.component.ts:28-31` |
+| Login form markup + inline field errors | `components/login-form/login-form.component.html:3-19` |
+| Login form submit button (disabled while invalid) | `components/login-form/login-form.component.html:21-23` |
+| Login form emits `{ username, password }` credentials | `components/login-form/login-form.component.ts:26,35`, `types.ts:10-13` |
+| Route gate: admits when signed in, else calls revival + redirect | `guards/auth.guard.ts:7-24` |
+| Route gate applied to protected parent | `src/app/app.routes.ts:17` |
+| Permission route gate — defined, not wired to any route | `guards/permission.guard.ts:7-18` |
+| Admin routes (no permission gate today) | `src/app/app.routes.ts:26-39` |
+| `*appRequirePermission` directive — renders/clears on signal change | `directives/require-permission.directive.ts:15-27` |
+| Directive exported from module barrel | `keycloak-auth.module.ts:7-8`, `index.ts:5` |
+| `Permission` + `Role` unions (FE-side, diverges from backend) | `permissions/permissions.types.ts:1-10` |
+| `ROLE_PERMISSIONS` map (admin / user / viewer) | `permissions/permissions.config.ts:3-15` |
+| `getPermissionsForRoles` + pure `hasPermission` helper | `permissions/permissions.config.ts:17-30` |
+| `User`, `LoginCredentials`, `AuthState` shapes | `src/app/features/keycloak-auth/types.ts` |
+| Cross-cutting: `withCredentials` + 401 refresh + retry, excludes `/auth/*` | `src/app/features/api-client/interceptors/auth.interceptor.ts:12-25` |
+| Cross-cutting: activity recording on every request | `src/app/features/api-client/interceptors/activity.interceptor.ts` |
+| Cross-cutting: proactive-refresh + inactivity timers (dormant) | `src/app/features/api-client/services/session-management.service.ts:8-36` |
+| App config — interceptors registered, no initializer runs `checkAuth()` | `src/app/app.config.ts:11-22` |
+
+### Backend contract
+
+Shapes and routes served by the backend `keycloak-auth` feature; see `projects/application/backend/app/src/features/keycloak-auth/.docs/spec.md` and `contracts.md`.

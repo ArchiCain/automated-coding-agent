@@ -1,44 +1,67 @@
 # Theme — Spec
 
-## Purpose
+## What it is
 
-Light/dark theme toggle for the Angular SPA. A single `ThemeService` owns the current mode as a signal, toggles a class on `<html>` to drive Material M3 theming and `--app-*` custom properties, and persists the preference server-side via `GET /theme` / `PUT /theme`. A `mat-icon-button` theme toggle in the app header is the only UI entry point.
+Lets a signed-in user switch the app between light and dark appearance from a toggle button in the header, and remembers their choice on the server so it sticks across sessions and devices.
 
-## Behavior
+## How it behaves
 
-- Initial in-memory mode is `'dark'` — the private signal is initialized to `'dark'` (`src/app/features/theme/services/theme.service.ts:14`).
-- The service is `providedIn: 'root'` but is instantiated lazily — it is only constructed when `ThemeToggleComponent` injects it (`theme-toggle.component.ts:18`). `ThemeToggleComponent` is embedded in `AppHeaderComponent` (`src/app/features/app-header/components/app-header/app-header.component.ts:19`), which is rendered by `AppLayoutComponent` — the authenticated shell. Pre-auth (login page) the service is never constructed.
-- `ThemeService.initialize()` exists (`theme.service.ts:19-23`) but is **not called from anywhere** in the app (`app.config.ts`, `app.ts`, `login.page.ts` do not call it). `applyTheme` and `loadPreference` only run as side effects of construction + toggling.
-- Because the initial render happens before the service is constructed, `<html>` carries no theme class at first paint. The default Material palette from `styles.scss:9` (`mat.theme(light.$light-theme)`) applies, but the `--app-*` CSS custom properties — which are only defined inside `:root .light-theme` / `:root .dark-theme` selectors (`styles/_light-theme.scss:18`, `styles/_dark-theme.scss:18`) — are undefined until a class is added.
-- Once `AppLayoutComponent` mounts, `ThemeToggleComponent` -> `ThemeService` is constructed. Construction itself does NOT call `applyTheme` or `loadPreference`; no class is added and no request is sent until the user clicks the toggle. See Discrepancies.
-- `toggle()` flips the signal between `'light'` and `'dark'`, applies the class synchronously, then PUTs the new preference (`theme.service.ts:25-30`). The PUT is fire-and-forget (`.subscribe()` with no handlers — `theme.service.ts:52`).
-- `applyTheme(mode)` removes both `light-theme` and `dark-theme` classes from `document.documentElement` and adds the one matching `mode` (`theme.service.ts:32-36`). The `DOCUMENT` token is injected for SSR-safe DOM access (`theme.service.ts:1, 12`).
-- `loadPreference()` sends `GET {backendUrl}/theme` with `withCredentials: true` and, on success, replaces the mode and applies the class (`theme.service.ts:38-47`). Errors are silently swallowed — there is no `error` handler on the subscription, so a 401 / network failure leaves the signal untouched and the UI stays in its current state.
-- `savePreference(mode)` sends `PUT {backendUrl}/theme` with body `{ theme: mode }` and `withCredentials: true`. No response handling; errors are silently swallowed (`theme.service.ts:49-53`).
-- `withCredentials: true` is set per-call on both HTTP calls. `authInterceptor` already forces it for all requests, so these per-call flags are redundant (project coding standard, `features/api-client/interceptors/auth.interceptor.ts:15`).
-- The frontend ignores the `userId` field returned by the backend — only `response.theme` is read (`theme.service.ts:42-45`).
-- No `@IsEnum` enforcement exists on the client, and the backend has no global `ValidationPipe` (backend `.docs/spec.md:13`), so any string the backend returns would be assigned to `_mode` verbatim and applied as `<html class="{value}-theme">`. In normal operation the backend returns `'light'` or `'dark'`.
-- The toggle icon shows `light_mode` when dark (to switch to light) and `dark_mode` when light (`theme-toggle.component.ts:12`). `aria-label="Toggle theme"`.
-- `ThemeMode` is exported as a type from the feature barrel alongside `ThemeService` and `ThemeToggleComponent` (`index.ts:2-4`).
+### Loading the app
 
-## Components / Services
+The app opens in dark appearance by default. Until the user clicks the toggle, no light/dark class is attached to the page root, so colors driven by the app's custom palette tokens are not yet in effect — the page renders with Material's built-in light palette as a fallback. No request is made to the server to fetch the user's saved preference on boot.
 
-| Part | File | Role |
-|---|---|---|
-| `ThemeService` | `services/theme.service.ts:8-54` | Singleton (`providedIn: 'root'`). Owns `_mode` signal + `mode` / `isDark` readonly derivations. Methods: `initialize()` (unused), `toggle()`, `applyTheme()` (private), `loadPreference()` (private), `savePreference()` (private). |
-| `ThemeToggleComponent` | `components/theme-toggle/theme-toggle.component.ts:7-19` | `app-theme-toggle` selector. `mat-icon-button` bound to `themeService.toggle()`. `OnPush`. Public `themeService` field for template binding. |
-| `ThemeModule` | `theme.module.ts:4-8` | Thin NgModule wrapper re-exporting `ThemeToggleComponent` for module-style consumers. Not used by the app today. |
-| Light palette SCSS | `styles/_light-theme.scss:7-47` | `mat.define-theme` with `mat.$blue-palette` primary + `mat.$green-palette` tertiary; `--app-*` custom props under `:root .light-theme`. |
-| Dark palette SCSS | `styles/_dark-theme.scss:7-52` | `mat.define-theme` with `mat.$azure-palette` primary + `mat.$green-palette` tertiary; `--app-*` custom props under `:root .dark-theme` (including scrollbar tokens). |
-| Global wiring | `src/styles.scss:2-15` | `@use` light + dark partials, applies light by default to `html`, overrides on `html.dark-theme`. |
+### Pre-auth and the login page
 
-## Acceptance Criteria
+The login page does not render the app header, so the theme toggle never appears and the theme machinery is never started. The login screen uses Material's default appearance and does not reflect the user's saved preference.
 
-- [ ] `ThemeToggleComponent` renders a `mat-icon-button` with `aria-label="Toggle theme"` in the app header.
-- [ ] Icon is `light_mode` when `ThemeService.isDark()` is true, otherwise `dark_mode`.
-- [ ] Clicking the toggle flips `ThemeService.mode()` and swaps the `light-theme` / `dark-theme` class on `<html>` synchronously, before any network call.
-- [ ] Clicking the toggle sends `PUT {backendUrl}/theme` with body `{ theme: 'light' | 'dark' }` and `withCredentials`.
-- [ ] `GET {backendUrl}/theme` is sent only when `ThemeService.loadPreference()` is invoked; on success the response `theme` replaces the signal and the `<html>` class is updated.
-- [ ] GET / PUT failures do not throw or show UI — the service silently keeps the current in-memory mode.
-- [ ] The service starts with `mode === 'dark'`; no `<html>` theme class is added by the service until a user toggles or `loadPreference` succeeds (see Discrepancies).
-- [ ] All authenticated requests rely on the `authInterceptor`-supplied session cookie; no bearer token is managed by this feature.
+### Clicking the toggle while signed in
+
+Once the user is signed in and the authenticated shell is showing, the header shows a single icon button labeled "Toggle theme." The icon is a sun when the app is in dark appearance (click to go light) and a moon when in light appearance (click to go dark). Clicking it flips the appearance immediately — the page root class swaps right away, before any network call — and then sends the new choice to the server in the background. If that save request fails, nothing is shown to the user and the on-screen appearance stays as the user set it.
+
+### Fetching the saved preference
+
+There is a method on the theme service that can fetch the user's saved preference from the server and apply it, but it is not wired up anywhere in the app right now, so this never runs in practice. If it did run and the request failed, the failure would be ignored silently and the current appearance would stay put.
+
+## Acceptance criteria
+
+- [ ] The app header shows a single icon button with the accessible label "Toggle theme."
+- [ ] The icon is a sun when the app is in dark appearance and a moon when the app is in light appearance.
+- [ ] Clicking the toggle flips the appearance on screen immediately, before any network call.
+- [ ] Clicking the toggle sends the new choice to the server with the session cookie.
+- [ ] If the save request fails, no error is shown and the on-screen appearance does not revert.
+- [ ] The app starts in dark appearance by default.
+- [ ] The theme toggle is not shown on the login page.
+
+## Known gaps
+
+- There is an `initialize()` method on the theme service that would fetch and apply the saved preference on boot, but nothing in the app calls it. The user's saved preference is not loaded at startup — the app always opens in dark by default and only changes when the user clicks the toggle.
+- The class names applied to the page root are `light-theme` and `dark-theme` on the HTML element. This doesn't match older references to a `theme-dark` class on the body.
+- This feature lives at `features/theme/`, not under `features/shared/services/`.
+- Errors from the GET and PUT preference requests are swallowed silently — there is no user-visible error handling at all.
+- The login page does not apply any theme; it renders with Material's default palette regardless of the user's saved preference.
+
+## Code map
+
+Paths relative to `projects/application/frontend/app/`.
+
+| Concern | File · lines |
+|---|---|
+| Theme service: owns current mode signal, toggle, apply, load, save | `src/app/features/theme/services/theme.service.ts:8-54` |
+| Initial in-memory mode is `'dark'` | `src/app/features/theme/services/theme.service.ts:14` |
+| `initialize()` method (defined but never called) | `src/app/features/theme/services/theme.service.ts:19-23` |
+| `toggle()` flips signal, applies class synchronously, PUTs preference | `src/app/features/theme/services/theme.service.ts:25-30` |
+| `applyTheme()` swaps `light-theme` / `dark-theme` class on `<html>` | `src/app/features/theme/services/theme.service.ts:32-36` |
+| `loadPreference()` — `GET /theme`, errors swallowed | `src/app/features/theme/services/theme.service.ts:38-47` |
+| `savePreference()` — `PUT /theme`, errors swallowed | `src/app/features/theme/services/theme.service.ts:49-53` |
+| `DOCUMENT` token injected for SSR-safe DOM access | `src/app/features/theme/services/theme.service.ts:1,12` |
+| Toggle button component (icon swap, aria-label) | `src/app/features/theme/components/theme-toggle/theme-toggle.component.ts:7-19` |
+| Toggle embedded in app header (authenticated shell only) | `src/app/features/app-header/components/app-header/app-header.component.ts:19` |
+| Feature barrel exports `ThemeService`, `ThemeToggleComponent`, `ThemeMode` | `src/app/features/theme/index.ts:2-4` |
+| Thin module wrapper (unused by the app today) | `src/app/features/theme/theme.module.ts:4-8` |
+| Light palette and `--app-*` custom properties under `:root .light-theme` | `src/app/features/theme/styles/_light-theme.scss:7-47` |
+| Dark palette and `--app-*` custom properties under `:root .dark-theme` | `src/app/features/theme/styles/_dark-theme.scss:7-52` |
+| Global SCSS wiring; default Material light palette before any class is applied | `src/styles.scss:2-15` |
+
+### Backend contract
+
+Shapes and endpoints served by the backend `theme` feature; see `projects/application/backend/app/src/features/theme/.docs/spec.md` and `contracts.md`.

@@ -1,55 +1,69 @@
 # Layouts — Spec
 
-## Purpose
+## What it is
 
-The authenticated app shell. `AppLayoutComponent` wraps every protected route with a sticky header, a responsive left sidenav, and a scrollable content area that hosts a `<router-outlet />`. `LayoutService` owns the viewport-breakpoint signals and the mobile/tablet drawer open state so that the header's menu button, the sidenav, and the main content stay in sync. The login page is the only route that does NOT use this layout.
+The page shell that everything signed-in lives inside — a sticky toolbar on top, a navigation drawer on the side, and the routed content in the middle. Every protected route renders inside this shell; the login page is the only route that opts out.
 
-## Behavior
+## How it behaves
 
-- `AppLayoutComponent` is mounted under the empty-path route with `canActivate: [authGuard]` and all authenticated pages render inside its `<router-outlet />` (`src/app/app.routes.ts:12-46`).
-- Top-level vertical structure: sticky `<app-header>` on top, `<mat-sidenav-container>` filling the remaining viewport height (`src/app/features/layouts/components/app-layout/app-layout.component.html:1-24`, `app-layout.component.scss:1-10`).
-- The host element is `height: 100vh` with `display: flex; flex-direction: column`, and the sidenav container takes `flex: 1; overflow: hidden` so only the content area scrolls (`app-layout.component.scss:1-10`).
-- Sidenav rendering is chosen from `LayoutService.showPersistentSidebar()` (true only on desktop) (`layout.service.ts:25`, `app-layout.component.html:5-18`):
-  - Desktop: `<mat-sidenav mode="side" [opened]="true">` — always visible, pushes content (`app-layout.component.html:6-8`).
-  - Tablet / mobile: `<mat-sidenav mode="over" [opened]="layout.drawerOpen()" (closed)="layout.closeDrawer()">` — overlay drawer controlled by the header menu button (`app-layout.component.html:10-17`).
-- Both sidenav modes render `<app-left-navigation-sidebar />` (the nav tree lives in the `navigation` feature) and have width `280px` with `background-color: var(--app-bg-paper)`; the persistent variant adds `border-right: 1px solid var(--app-divider)` (`app-layout.component.scss:12-21`).
-- Main content (`<mat-sidenav-content class="main-content">`) applies `padding: 24px` and `overflow-y: auto` (`app-layout.component.scss:23-26`).
-- The header's `(menuToggle)` output is bound to `LayoutService.toggleDrawer()` (`app-layout.component.html:2`). The header itself owns brand, theme toggle, and avatar menu — see the `app-header` feature.
-- `LayoutService` is `providedIn: 'root'` and observes three CDK breakpoints via `BreakpointObserver` (`layout.service.ts:11-40`). See the `Breakpoints` section below for the ranges — they match `projects/application/frontend/app/.docs/standards/design.md`.
-- When the viewport transitions into desktop, `LayoutService` forces `drawerOpen` to `false` so the overlay drawer can never leak into the persistent-sidebar layout (`layout.service.ts:36-38`).
-- `LayoutService.ngOnDestroy()` unsubscribes the `BreakpointObserver` subscription (`layout.service.ts:50-52`).
-- No route guards, resolvers, or route-based layout switching live in this feature. `authGuard` (from `keycloak-auth`) is the only gate on the layout's parent route.
+### Entering a protected route for the first time
 
-## Components / Services
+When the user lands on any authenticated route, the shell mounts with the toolbar pinned to the top of the viewport and the content area filling the rest of the screen. The shell itself doesn't scroll — only the content area does. On a desktop-sized window the navigation drawer is already visible on the left and pushes the content over to make room for it. On a narrower window the drawer starts hidden and the content uses the full width.
 
-| Name | File | Role |
-|---|---|---|
-| `AppLayoutComponent` | `components/app-layout/app-layout.component.ts:10-24` | Standalone shell. Imports `RouterOutlet`, `MatSidenavModule`, `AppHeaderComponent`, `LeftNavigationSidebarComponent`. `OnPush`. Injects `LayoutService` as `layout` for template use. |
-| `LayoutService` | `services/layout.service.ts:11-53` | Root singleton. Signals: `isDesktop`, `isTablet`, `isMobile`, `drawerOpen`, `showPersistentSidebar` (computed). Methods: `toggleDrawer()`, `closeDrawer()`. |
-| `LayoutBreakpoints` | `types.ts:1-5` | Exported interface `{ desktop: boolean; tablet: boolean; mobile: boolean }`. Currently unused in the feature itself; exported for downstream consumers. |
-| `LayoutsModule` | `layouts.module.ts:1-8` | Thin NgModule that imports and re-exports `AppLayoutComponent` for module-style consumers. |
+### Resizing the viewport
 
-Public barrel (`index.ts:1-4`): `LayoutsModule`, `AppLayoutComponent`, `LayoutService`, `LayoutBreakpoints`.
+The shell watches the viewport size and swaps the drawer between two modes. Above the desktop threshold the drawer is persistent: always open, sitting alongside the content. Below that threshold the drawer becomes an overlay that floats on top of the content when opened. When the viewport grows from a narrow size back up to desktop, any open overlay drawer is forced closed so it can't linger into the persistent layout.
 
-## Breakpoints
+### Opening and closing the drawer on narrower viewports
 
-Ranges are defined in `layout.service.ts:5-9` and mirror `standards/design.md`:
+On tablet and mobile sizes the toolbar shows a menu button. Tapping it toggles the overlay drawer open or closed. The drawer can also close itself when the user taps outside it (its own close event feeds back into the shared open state). Clicking a link inside the drawer does not close it.
 
-| Name | Range | Sidenav behavior |
-|---|---|---|
-| Desktop | `min-width: 1200px` | Persistent `mode="side"`, always open |
-| Tablet | `768–1199px` | Overlay `mode="over"`, closed by default, opened by menu button |
-| Mobile | `max-width: 767px` | Overlay `mode="over"`, closed by default, opened by menu button |
+### Switching routes
 
-## Acceptance Criteria
+Navigating between authenticated routes swaps what's inside the content area but leaves the shell alone — the toolbar and drawer stay exactly where they were. Navigating to the login route unmounts the shell entirely; that page renders on its own.
 
-- [ ] `AppLayoutComponent` renders `<app-header>`, a `<mat-sidenav-container>` with a sidenav and `<mat-sidenav-content>`, and the content hosts `<router-outlet />`.
-- [ ] On viewports `>=1200px` the sidenav renders with `mode="side"` and `opened="true"` (persistent).
-- [ ] On viewports `<1200px` the sidenav renders with `mode="over"` and opens/closes via `LayoutService.drawerOpen()`.
-- [ ] Sidenav width is `280px` in both modes; persistent variant shows a right border using `--app-divider`.
-- [ ] Main content has `padding: 24px` and is the only scrollable area (`overflow-y: auto`); the shell itself is `height: 100vh`.
-- [ ] The header's `menuToggle` output toggles `LayoutService.drawerOpen`.
-- [ ] The overlay drawer's `(closed)` event sets `drawerOpen` to `false`.
-- [ ] Resizing from tablet/mobile up to desktop force-closes the drawer (`drawerOpen` becomes `false`).
-- [ ] `LayoutService` disposes its `BreakpointObserver` subscription on destroy.
-- [ ] The login route (`/login`) does NOT render `AppLayoutComponent`.
+## Acceptance criteria
+
+- [ ] Every authenticated route renders inside the shell; the login route does not.
+- [ ] The shell fills the full viewport height and only the content area scrolls.
+- [ ] The toolbar sits at the top of the shell and stays visible while the content scrolls.
+- [ ] On viewports at or above the desktop threshold, the drawer is persistent and always open alongside the content.
+- [ ] On viewports below the desktop threshold, the drawer is an overlay that starts closed.
+- [ ] The drawer is 280px wide in both modes; the persistent variant shows a right-edge divider.
+- [ ] The toolbar's menu button toggles the overlay drawer open and closed.
+- [ ] The overlay drawer's own close event sets the shared open state back to closed.
+- [ ] Resizing from a narrow viewport up into desktop force-closes the overlay drawer.
+- [ ] The content area has 24px of padding and hosts the routed view.
+- [ ] The viewport-size subscription is cleaned up when the shell is destroyed.
+
+## Known gaps
+
+- The drawer does not auto-close when the user navigates to a new route — there's no router subscription wired in, so on narrow viewports the drawer stays open across navigations until the user dismisses it.
+- `LayoutBreakpoints` is exported from the feature's public barrel but nothing in the feature uses it. It exists only for potential downstream consumers.
+- Older documentation described the breakpoints as 240px / 960px. Those numbers are obsolete — the drawer is 280px wide and the desktop threshold is 1200px.
+
+## Code map
+
+Paths are relative to `projects/application/frontend/app/`.
+
+| Concern | File · lines |
+|---|---|
+| Shell component (toolbar + sidenav container + content) | `src/app/features/layouts/components/app-layout/app-layout.component.ts:10-24` |
+| Shell template (persistent vs. overlay drawer branching) | `src/app/features/layouts/components/app-layout/app-layout.component.html:1-24` |
+| Shell fills viewport; only content scrolls | `src/app/features/layouts/components/app-layout/app-layout.component.scss:1-10` |
+| Drawer width (280px) and persistent-variant right border | `src/app/features/layouts/components/app-layout/app-layout.component.scss:12-21` |
+| Content padding (24px) and scroll | `src/app/features/layouts/components/app-layout/app-layout.component.scss:23-26` |
+| Mounts under the empty-path route with `authGuard` | `src/app/app.routes.ts:12-46` |
+| Viewport-size signals + drawer open state | `src/app/features/layouts/services/layout.service.ts:11-40` |
+| Breakpoint range definitions | `src/app/features/layouts/services/layout.service.ts:5-9` |
+| Computed flag that picks persistent vs. overlay | `src/app/features/layouts/services/layout.service.ts:25` |
+| Force-close drawer on desktop transition | `src/app/features/layouts/services/layout.service.ts:36-38` |
+| Subscription cleanup on destroy | `src/app/features/layouts/services/layout.service.ts:50-52` |
+| Toolbar menu button wired to drawer toggle | `src/app/features/layouts/components/app-layout/app-layout.component.html:2` |
+| `LayoutBreakpoints` type (exported, unused internally) | `src/app/features/layouts/types.ts:1-5` |
+| Module (thin re-export wrapper) | `src/app/features/layouts/layouts.module.ts:1-8` |
+| Public barrel | `src/app/features/layouts/index.ts:1-4` |
+
+### Related features
+
+The toolbar (brand, theme toggle, avatar menu) is the `app-header` feature. The drawer's contents (the nav tree) is the `navigation` feature. The auth gate on the shell's parent route comes from the `keycloak-auth` feature.

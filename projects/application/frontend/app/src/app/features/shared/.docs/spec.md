@@ -1,40 +1,52 @@
 # Shared — Spec
 
-**Feature directory:** `src/app/features/shared/`
+## What it is
 
-## Purpose
+A cross-feature utility bucket for UI pieces that do not belong to any single domain feature. Today it holds one thing: a generic confirmation dialog used by other features when they need the user to confirm a destructive action (currently only the user-management delete flow). It is also the drop-point for any future app-wide reusable component, directive, or pipe.
 
-Cross-feature UI utilities that do not belong to any single domain feature. At present this module contains one generic Angular Material dialog used for destructive-action confirmations by other features (currently `user-management`). It is the drop-point for any future app-wide reusable component, directive, or pipe.
+## How it behaves
 
-## Behavior
+### The confirmation dialog
 
-- Exports a standalone Angular Material confirmation dialog component (`ConfirmationModalComponent`) that:
-  - Renders a Material dialog with `<h2 mat-dialog-title>` showing `data.title` and a `<mat-dialog-content><p>` showing `data.message` (`components/confirmation-modal/confirmation-modal.component.ts:17-20`).
-  - Renders Cancel and Confirm buttons in `<mat-dialog-actions align="end">`; Cancel is a default `mat-button`, Confirm is `mat-flat-button color="warn"` (`confirmation-modal.component.ts:21-28`).
-  - Uses `data.cancelText` / `data.confirmText` when provided, else falls back to literal `'Cancel'` / `'Confirm'` (`confirmation-modal.component.ts:23,26`).
-  - Closes the dialog with boolean `true` on Confirm click and `false` on Cancel click via `MatDialogRef.close()` (`confirmation-modal.component.ts:22,25`).
-  - Receives its data through `MAT_DIALOG_DATA` injection (`confirmation-modal.component.ts:34`) — consumers pass `data: ConfirmationModalData` to `MatDialog.open()`.
-  - Declares `ChangeDetectionStrategy.OnPush` (`confirmation-modal.component.ts:30`), consistent with the project-wide ESLint rule.
-- Exports a `ConfirmationModalData` TypeScript interface used by callers to type the `data` payload (`confirmation-modal.component.ts:6-11`).
-- Exports an empty `SharedModule` NgModule that `imports` and re-exports `ConfirmationModalComponent` (`shared.module.ts:4-8`). This is a legacy module-style wrapper; no code in the repo imports it (see Discrepancies).
+The dialog shows a title and a message passed in by the caller, plus two buttons at the bottom: Cancel on the left and a red Confirm button on the right. The caller can override the button labels; if they don't, the buttons read "Cancel" and "Confirm". Clicking Confirm closes the dialog and hands the caller `true`; clicking Cancel closes it and hands back `false`. The caller opens the dialog by passing in a data object with the title, message, and optional custom button text.
 
-## Exports
+### The types it exports
 
-| Export | Kind | Purpose | Consumers |
-|---|---|---|---|
-| `ConfirmationModalComponent` | standalone component (`confirmation-modal.component.ts:33`) | Generic warn-styled confirm/cancel dialog | `features/user-management/pages/users.page.ts:10,84` (delete-user confirmation) |
-| `ConfirmationModalData` | TS interface (`confirmation-modal.component.ts:6-11`) | Type for `MAT_DIALOG_DATA` payload | `features/user-management/pages/users.page.ts:10,89` |
-| `SharedModule` | NgModule (`shared.module.ts:8`) | Module-style re-export of `ConfirmationModalComponent` | None — never imported anywhere in `src/` |
+The feature also exports a TypeScript type that describes the data payload the dialog expects — callers use it to type-check what they pass in.
 
-All exports are surfaced through the barrel `index.ts:1-3` and consumed via the `@features/shared` path alias (`tsconfig.json:18`).
+### Packaging
 
-## Acceptance Criteria
+Everything is surfaced through a single entry point so consumers import from `@features/shared` rather than reaching into individual files. A legacy module-style wrapper is exported alongside the dialog, but nothing in the app actually uses it.
 
-- [ ] `ConfirmationModalComponent` renders `data.title` inside `<h2 mat-dialog-title>` and `data.message` inside a `<p>` in `<mat-dialog-content>`.
-- [ ] Confirm button is rendered as `mat-flat-button` with `color="warn"`; Cancel button is a default `mat-button`.
-- [ ] `confirmText` defaults to the string `Confirm` and `cancelText` defaults to `Cancel` when the respective field is omitted from `ConfirmationModalData`.
-- [ ] Custom `confirmText` and `cancelText` override the defaults verbatim.
-- [ ] Clicking Confirm closes the dialog with boolean `true`; clicking Cancel closes the dialog with boolean `false`.
-- [ ] The component is standalone (no declaring NgModule required) and declares `ChangeDetectionStrategy.OnPush`.
-- [ ] `ConfirmationModalData` is exported as a `type` from `@features/shared` (not a runtime symbol).
-- [ ] The barrel `index.ts` exposes exactly `SharedModule`, `ConfirmationModalComponent`, and the `ConfirmationModalData` type.
+## Acceptance criteria
+
+- [ ] The dialog renders the caller's title at the top and the caller's message in the body.
+- [ ] The Confirm button is styled as a filled red (warn) button; Cancel is a plain text button.
+- [ ] When the caller omits the button labels, the buttons read "Confirm" and "Cancel".
+- [ ] When the caller provides custom button labels, those labels are used verbatim.
+- [ ] Clicking Confirm closes the dialog and returns `true` to the caller.
+- [ ] Clicking Cancel closes the dialog and returns `false` to the caller.
+- [ ] The dialog works as a standalone component — consumers do not need to import an NgModule to use it.
+- [ ] The data-payload type is exported as a TypeScript type (not a runtime value).
+- [ ] The `@features/shared` entry point exposes exactly the dialog, the data-payload type, and the legacy module wrapper.
+
+## Known gaps
+
+- The legacy module wrapper is exported from the feature's entry point but nothing in `src/` imports it — it is a dead export kept only for historical reasons.
+
+## Code map
+
+Paths are relative to `projects/application/frontend/app/`.
+
+| Concern | File · lines |
+|---|---|
+| Dialog template (title, message, action buttons) | `src/app/features/shared/components/confirmation-modal/confirmation-modal.component.ts:17-28` |
+| Default button labels ("Cancel" / "Confirm") | `confirmation-modal.component.ts:23,26` |
+| Close with `true` on confirm / `false` on cancel | `confirmation-modal.component.ts:22,25` |
+| Data-payload type (`ConfirmationModalData`) | `confirmation-modal.component.ts:6-11` |
+| Data injected via `MAT_DIALOG_DATA` | `confirmation-modal.component.ts:34` |
+| Standalone component + OnPush change detection | `confirmation-modal.component.ts:30,33` |
+| Legacy module-style wrapper (unused) | `src/app/features/shared/shared.module.ts:4-8` |
+| Barrel entry point (`@features/shared`) | `src/app/features/shared/index.ts:1-3` |
+| Path-alias registration | `tsconfig.json:18` |
+| Consumer: delete-user confirmation | `src/app/features/user-management/pages/users.page.ts:10,84,89` |
