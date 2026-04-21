@@ -13,7 +13,8 @@ From `app/package.json`:
 - **Database:** PostgreSQL via `@nestjs/typeorm` + `typeorm` + `pg`; schema `example_schema`; migrations auto-run on startup (`typeorm-database-client.module.ts:53`)
 - **Validation:** `class-validator`, `class-transformer` (used in theme DTOs only — no global `ValidationPipe` registered)
 - **Cookies:** `cookie-parser` middleware mounted in `src/main.ts:9`
-- **Websockets:** `@nestjs/websockets` + `socket.io` declared in deps but no gateway wired in `app.module.ts`
+- **Websockets:** `@nestjs/websockets` + `socket.io` — the `chat-agent` feature exposes a Socket.IO gateway on namespace `/agent` (`chat-agent/gateways/chat-agent.gateway.ts`)
+- **Agent runtime:** `@mastra/core` + `@mastra/memory` (LibSQL storage) + `@ai-sdk/anthropic` — used only by the `chat-agent` feature
 - **Swagger:** `@nestjs/swagger` decorators on `ThemeController` only; no `SwaggerModule.setup()` call in `main.ts`
 - **Testing:** Jest unit (`jest.config.js`, `*.spec.ts` under `src/`) + integration (`jest.integration.config.js`, `test/**/*.integration.spec.ts`)
 
@@ -27,6 +28,7 @@ From `app/package.json`:
 | [health](../app/src/features/health) | `/health` | `@Public()` (`health/controllers/health.controller.ts:4`) | Returns `{ status, timestamp, service }` |
 | [typeorm-database-client](../app/src/features/typeorm-database-client) | `/examples` (demo) | No auth opt-out → JWT required by global guard | TypeORM connection, `BaseEntity` with soft-delete, `TypeormGenericCrudService`, and demo `ExampleCrudController` |
 | [cors](../app/src/features/cors) | — | — | Parses `CORS_ORIGINS` env var (`*`, `false/none`, or comma list) and feeds `app.enableCors` in `src/main.ts:13` |
+| [chat-agent](../app/src/features/chat-agent) | `/agent/sessions` + WS `/agent` | REST: JWT required; WS: no auth today | Single Mastra agent (Anthropic Haiku) with per-session memory; REST for session CRUD, Socket.IO for streaming chat |
 
 ## Standards
 
@@ -76,6 +78,8 @@ Role-to-permission mapping lives in `ROLE_PERMISSIONS` (`permissions.constants.t
 | `KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET` | `keycloak-auth.service.ts:15-18`, `user-management.service.ts:53-59` | Keycloak OIDC + Admin API |
 | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `DATABASE_NAME` | `typeorm-database-client.module.ts:23-37` | PostgreSQL connection (all required — throws if missing) |
 | `DATABASE_SSL`, `DATABASE_LOGGING` | same | Optional flags; `DATABASE_SYNC` is ignored — hardcoded to `false` (`typeorm-database-client.module.ts:29`) |
+| `ANTHROPIC_API_KEY` | `@ai-sdk/anthropic` (read automatically) | Required by `chat-agent` — injected via `secretEnv` in the Helm chart |
+| `CHAT_MEMORY_DB_URL` | `chat-agent/agents/chat.agent.ts:17` | LibSQL URL for Mastra memory; defaults to `file:./chat-memory.db` |
 
 ## Deployment
 

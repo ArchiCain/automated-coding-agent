@@ -2,15 +2,12 @@ import { Injectable, inject, signal, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 
-import { AppConfigService } from '@features/api-client';
-
 import { ChatSession, ChatMessage, SessionHistory } from '../types';
 import { ChatApiService } from './chat.api';
 
 /** Manages chat state and Socket.IO connection to the agent backend. */
 @Injectable({ providedIn: 'root' })
 export class ChatService implements OnDestroy {
-  private readonly config = inject(AppConfigService);
   private readonly chatApi = inject(ChatApiService);
 
   private socket: Socket | null = null;
@@ -25,7 +22,7 @@ export class ChatService implements OnDestroy {
   connect(): void {
     if (this.socket) return;
 
-    this.socket = io(`${this.config.backendUrl}/agent`, {
+    this.socket = io('/agent', {
       transports: ['websocket', 'polling'],
       withCredentials: true,
     });

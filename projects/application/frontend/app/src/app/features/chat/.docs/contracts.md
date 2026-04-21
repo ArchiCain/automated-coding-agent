@@ -2,7 +2,7 @@
 
 Frontend-observed shapes. Base URL is `${AppConfigService.backendUrl}` (default `/api`). Citations are relative to `projects/application/frontend/app/`.
 
-> Status: the backend has no `/agent` REST controller or Socket.IO gateway wired (confirmed by searching `projects/application/backend/app/src` for `WebSocketGateway`, `/agent/sessions`, `AgentModule` — no matches). These contracts describe what the frontend expects, not what the backend currently serves. See `spec.md` Discrepancies.
+> Status: the backend now provides these endpoints via the `chat-agent` feature (`projects/application/backend/app/src/features/chat-agent/`). These shapes match the backend contract in `projects/application/backend/app/src/features/chat-agent/.docs/contracts.md` exactly.
 
 ## Shared Types
 

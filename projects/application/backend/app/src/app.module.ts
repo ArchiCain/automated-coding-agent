@@ -7,11 +7,13 @@ import { KeycloakAuthModule, KeycloakJwtGuard } from "./features/keycloak-auth";
 import { ThemeModule } from "./features/theme";
 import { UserManagementModule } from "./features/user-management";
 import { HealthModule } from "./features/health";
+import { ChatAgentModule } from "./features/chat-agent";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: [".env", "../../../../.env"],
     }),
     CorsModule,
     TypeormDatabaseClientModule.forRoot(),
@@ -19,6 +21,7 @@ import { HealthModule } from "./features/health";
     ThemeModule,
     UserManagementModule,
     HealthModule,
+    ChatAgentModule,
   ],
   providers: [
     {

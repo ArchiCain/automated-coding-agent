@@ -67,9 +67,6 @@ All citations are paths relative to repo root under `projects/application/fronte
 2. `ChatService.disconnect()` calls `socket.disconnect()` and sets `socket = null` (`services/chat.service.ts:104-107`). The service itself stays alive (root-provided) but with no socket, so `sendMessage`/`cancelMessage` calls would no-op until the user re-enters `/chat` and `connect()` runs again.
 3. `ChatService.ngOnDestroy` would also disconnect, but only fires if the entire injector is torn down (`services/chat.service.ts:109-112`).
 
-## Flow 8: Backend not implemented (current reality)
+## Flow 8: Backend contract
 
-Per backend inspection (no `WebSocketGateway` or `/agent/sessions` controller found under `projects/application/backend/app/src`), every flow above terminates at network errors today:
-
-- `GET /agent/sessions` returns 404 → `sessions` stays empty → sidebar is empty → `MessageInputComponent` is permanently disabled (because `!activeSession()` is always true).
-- Socket.IO connect attempt hits a backend that does not register the `/agent` namespace → the client will keep retrying silently; no user-visible error is surfaced by the service.
+The backend serves these endpoints and events from the `chat-agent` feature (`projects/application/backend/app/src/features/chat-agent/`). Its `.docs/` is authoritative for server-side behavior — see `backend/app/src/features/chat-agent/.docs/flows.md` for the matching server traces.
