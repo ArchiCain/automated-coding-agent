@@ -108,7 +108,7 @@ Already exists. Curates documentation by comparing docs against code reality.
 
 **Tools:** read_file, search_content, search_files, list_dir, edit_file, write_file, git read-only
 
-**Docs access:** All docs — requirements.md, flows.md, test-instructions.md, standards/, overview.md
+**Docs access:** All docs — spec.md, flows.md, test-plan.md, standards/, overview.md
 
 **System instructions (concise):**
 ```
@@ -122,7 +122,7 @@ When reviewing a feature:
 4. Compare: Are the docs accurate? Are there gaps? Is anything unclear?
 5. Update docs or flag issues
 
-You read ALL doc types including test-instructions.md.
+You read ALL doc types including test-plan.md.
 Be deliberate about what you read — you have a limited context window.
 ```
 
@@ -134,7 +134,7 @@ The core of the system. One syncing agent per feature. Its "role" (frontend, bac
 
 **Tools:** read_file, edit_file, write_file, search_content, search_files, list_dir, run_task, git (full — add, commit, push, status, diff, log)
 
-**Docs access:** requirements.md, flows.md, standards/, overview.md. **NOT** test-instructions.md — that's the tester's domain.
+**Docs access:** spec.md, flows.md, standards/, overview.md. **NOT** test-plan.md — that's the tester's domain.
 
 **System instructions (concise):**
 ```
@@ -148,7 +148,7 @@ When given a target feature directory:
 5. Make targeted changes to sync the code to the docs
 6. Commit frequently with detailed commit messages explaining what and why
 
-Do NOT read test-instructions.md — that is for the tester agent.
+Do NOT read test-plan.md — that is for the tester agent.
 Be deliberate about what you read. You have a limited context window.
 Use offset/limit on large files. Use search before reading entire directories.
 Start with .docs/, then read only the code files relevant to the gaps you found.
@@ -184,7 +184,7 @@ Use git_diff to compare specific commits or branches.
 
 ### Tester Agent
 
-Tests features in deployed sandbox environments. What it tests depends on what kind of feature it is — determined by reading the feature's `test-instructions.md`.
+Tests features in deployed sandbox environments. What it tests depends on what kind of feature it is — determined by reading the feature's `test-plan.md`.
 
 **Job:** Hit the real sandbox. For frontend features, use Playwright to navigate, interact, assert. For backend features, make HTTP requests to API endpoints, validate responses against the spec. Handle auth, sessions, tokens — test as if it were a real client.
 
@@ -192,15 +192,15 @@ Tests features in deployed sandbox environments. What it tests depends on what k
 
 **Future tools:** Playwright tools (when we add Playwright MCP back for automated UI testing)
 
-**Docs access:** requirements.md, flows.md, **test-instructions.md** (primary playbook), overview.md. **NOT** standards/coding.md — the tester doesn't care about code conventions, only behavior.
+**Docs access:** spec.md, flows.md, **test-plan.md** (primary playbook), overview.md. **NOT** standards/coding.md — the tester doesn't care about code conventions, only behavior.
 
 **System instructions (concise):**
 ```
 You are a tester agent. You test features in deployed sandbox environments.
 
 When testing a feature:
-1. Read the feature's test-instructions.md for your testing playbook
-2. Read requirements.md and flows.md to understand expected behavior
+1. Read the feature's test-plan.md for your testing playbook
+2. Read spec.md and flows.md to understand expected behavior
 3. Test against the live sandbox — hit real endpoints, navigate real pages
 4. For backend: make HTTP requests, validate response shapes, status codes, auth flows
 5. For frontend: use Playwright to navigate, interact, and assert
@@ -240,16 +240,19 @@ Be specific: file, line, what's wrong, what it should be.
 
 ## Scoped Docs Per Agent Type
 
-| Doc File | Syncing Agent | Tester Agent | Doc Assistant | History Agent | PR Reviewer |
-|----------|:---:|:---:|:---:|:---:|:---:|
-| `overview.md` | yes | yes | yes | yes | yes |
-| `requirements.md` | yes | yes | yes | yes | yes |
-| `flows.md` | yes | yes | yes | yes | yes |
-| `standards/coding.md` | yes | no | yes | yes | yes |
-| `standards/design.md` | yes | no | yes | yes | yes |
-| `test-instructions.md` | **no** | **yes (primary)** | yes | yes | yes |
+| Doc File | Syncing Agent | Test Writer | Tester Agent | Doc Assistant | History Agent | PR Reviewer |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| `overview.md` | yes | yes | yes | yes | yes | yes |
+| `spec.md` | yes | yes | yes | yes | yes | yes |
+| `flows.md` | yes | yes | yes | yes | yes | yes |
+| `contracts.md` | yes | yes | yes | yes | yes | yes |
+| `standards/coding.md` | yes | no | no | yes | yes | yes |
+| `standards/design.md` | yes | no | no | yes | yes | yes |
+| `test-plan.md` | **no** | **yes (primary)** | **yes (primary)** | yes | yes | yes |
+| `test-data.md` | **no** | **yes** | **yes** | yes | yes | yes |
+| `decisions.md` | yes (read) | no | no | yes | yes (read+write) | yes |
 
-The syncing agent never reads `test-instructions.md` — saves tokens and avoids confusion between implementation and testing concerns. The tester agent's primary playbook IS `test-instructions.md`.
+The syncing agent never reads `test-plan.md` or `test-data.md` — saves tokens and avoids confusion between implementation and testing concerns. The test writer's primary input is `spec.md` + `flows.md` + `contracts.md`. The tester agent's primary playbook is `test-plan.md`.
 
 ---
 
@@ -620,7 +623,7 @@ Each bubble:
 **Tasks:**
 1. Build post-sync check: is feature branch ahead of DEPLOY_BRANCH?
 2. Build deterministic sandbox deployment (reuse existing deploy_sandbox logic)
-3. Create tester agent with `http_request` tool and `test-instructions.md` playbook
+3. Create tester agent with `http_request` tool and `test-plan.md` playbook
 4. Build test result → syncing agent feedback loop (spawn syncing agent with test failures)
 5. Build deterministic PR creation (feature branch → DEPLOY_BRANCH)
 6. Create PR reviewer agent
@@ -712,7 +715,7 @@ projects/the-dev-team/frontend/app/src/
 | Two core agent types + three supporting | Syncing agent + doc assistant are the core. History, tester, PR reviewer support the pipeline. |
 | No predefined roles | The directory context IS the role. Project `.docs/` defines conventions. Feature `.docs/` defines the spec. |
 | Agent relay pattern | 100k is a session limit, not a feature limit. Agents relay via commits + handoff reports. |
-| Scoped docs per agent type | Syncing agent skips test-instructions.md. Tester agent skips coding standards. Saves tokens, prevents confusion. |
+| Scoped docs per agent type | Syncing agent skips test-plan.md. Tester agent skips coding standards. Saves tokens, prevents confusion. |
 | Deterministic pipeline | Worktree creation, deployment, PR creation are code, not LLM calls. Agents only run where judgment is needed. |
 | Feature guard on syncing agent | Can't start syncing unless in a feature dir. Prevents aimless conversations. |
 | Haiku for all agents | Cost experiment — prove docs-driven makes tasks scoped enough for Haiku |
@@ -725,7 +728,7 @@ projects/the-dev-team/frontend/app/src/
 ## Open Questions
 
 1. **Ripgrep/fd availability:** Pi's grep/find tools shell out to `rg` and `fd`. Are these in the backend pod? If not, add to Dockerfile or use Node-native alternatives.
-2. **http_request tool design:** For the tester agent — should this be a raw HTTP tool or something higher-level that handles auth flows (login → get token → use token)? The `test-instructions.md` could document the auth flow and let the agent figure it out.
+2. **http_request tool design:** For the tester agent — should this be a raw HTTP tool or something higher-level that handles auth flows (login → get token → use token)? The `test-plan.md` could document the auth flow and let the agent figure it out.
 3. **Multiple syncing agents in parallel:** Can we run multiple feature syncs simultaneously? The architecture supports it (separate worktrees) but the UI needs design for multiple active sync bubbles.
 4. **Handoff report — deterministic vs LLM-assisted:** The deterministic version (git log + diff summary) is fast and free. An LLM-assisted version could also identify what's remaining based on the docs. Worth testing both.
 5. **Project rename:** When do we rename from "the-dev-team" to "doc-driven-development" in directory structure and K8s? Deferred — too much churn while actively building.

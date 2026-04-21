@@ -15,11 +15,11 @@ A NestJS REST API that handles authentication (via Keycloak), user management, t
 
 | Feature | Base Route | Auth | Description |
 |---------|-----------|------|-------------|
-| [Auth](features/auth/requirements.md) | `/auth` | Public/Protected | Login, logout, token refresh, session check via Keycloak |
-| [Users](features/users/requirements.md) | `/users` | `users:*` permissions | Full CRUD user management via Keycloak Admin API |
-| [Theme](features/theme/requirements.md) | `/theme` | JWT required | User theme preference (light/dark) persisted to database |
-| [Health](features/health/requirements.md) | `/health` | Public | Service health check |
-| [Database](features/database/requirements.md) | — | — | TypeORM connection, entities, migrations, generic CRUD |
+| [Auth](features/auth/spec.md) | `/auth` | Public/Protected | Login, logout, token refresh, session check via Keycloak |
+| [Users](features/users/spec.md) | `/users` | `users:*` permissions | Full CRUD user management via Keycloak Admin API |
+| [Theme](features/theme/spec.md) | `/theme` | JWT required | User theme preference (light/dark) persisted to database |
+| [Health](features/health/spec.md) | `/health` | Public | Service health check |
+| [Database](features/database/spec.md) | — | — | TypeORM connection, entities, migrations, generic CRUD |
 
 ## Standards
 

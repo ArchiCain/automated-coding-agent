@@ -1,153 +1,142 @@
-# Rapid AI Development Template
+# Automated Coding Agent
 
-A comprehensive template for building AI-powered applications with enterprise-grade architecture, modern development tools, and proven patterns.
+An autonomous software development system where agents read `.docs/` specifications and sync code to match. Deploy, test, PR, iterate — humans guide the specs, agents write the code.
 
-## 📚 Documentation
+## Prerequisites
 
-**[Complete Documentation →](docs/README.md)**
+### 1. Install Nix
 
-## Quick Start
+All tooling (Node.js, Terraform, kubectl, Helm, Minikube, etc.) is managed through a Nix flake. No manual tool installation needed.
 
-> **Prerequisites**: macOS, Linux, or WSL2 on Windows
-
-## Getting Started
-
-### 1. Install Dependencies
-
-<details>
-<summary><b>macOS</b></summary>
-
-**Install Nix**:
+**macOS:**
 ```bash
 sh <(curl -L https://nixos.org/nix/install)
 ```
-After installation, restart your terminal or run:
-```bash
-. ~/.nix-profile/etc/profile.d/nix.sh
-```
 
-**Install direnv**:
-```bash
-brew install direnv
-```
-
-**Configure your shell**:
-- **For Zsh (default):**
-  ```bash
-  echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc
-  source ~/.zshrc
-  ```
-- **For Bash:**
-  ```bash
-  echo 'eval "$(direnv hook bash)"' >> ~/.bash_profile
-  source ~/.bash_profile
-  ```
-</details>
-
-<details>
-<summary><b>Linux</b></summary>
-
-**Install Nix**:
+**Linux:**
 ```bash
 sh <(curl -L https://nixos.org/nix/install) --daemon
 ```
-After installation, restart your terminal or run:
+
+Restart your terminal after installation.
+
+### 2. Install direnv
+
+direnv automatically activates the Nix shell when you `cd` into the repo.
+
+**macOS:**
 ```bash
-. ~/.nix-profile/etc/profile.d/nix.sh
-```
-
-**Install direnv**:
-```bash
-# For Ubuntu/Debian
-sudo apt-get update && sudo apt-get install direnv
-
-# For Fedora
-sudo dnf install direnv
-
-# For Arch Linux
-sudo pacman -S direnv
-```
-
-**Configure your shell**:
-- **For Bash:**
-  ```bash
-  echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
-  source ~/.bashrc
-  ```
-- **For Zsh:**
-  ```bash
-  echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc
-  source ~/.zshrc
-  ```
-</details>
-
-<details>
-<summary><b>Windows (WSL2)</b></summary>
-
-First, ensure WSL2 is installed and you have a Linux distribution like Ubuntu.
-
-**Install Nix**:
-```bash
-sh <(curl -L https://nixos.org/nix/install)
-```
-After installation, restart your terminal or run:
-```bash
-. ~/.nix-profile/etc/profile.d/nix.sh
-```
-
-**Install direnv**:
-```bash
-# For Ubuntu/Debian
-sudo apt-get update && sudo apt-get install direnv
-```
-
-**Configure your shell**:
-```bash
-# If using Bash
-echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
-source ~/.bashrc
-
-# If using Zsh
+brew install direnv
 echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc
 source ~/.zshrc
 ```
-</details>
 
-### 2. Set Up Your Project
-
-**Initialize direnv**:
+**Linux:**
 ```bash
-cd your-project-name
-direnv allow  # This may take a few minutes first time
+sudo apt-get install direnv
+echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-**Configure your project**:
+### 3. Install Tailscale
+
+All services are accessed via Tailscale hostnames — there is no localhost fallback.
+
+Install from [tailscale.com/download](https://tailscale.com/download), then join the tailnet.
+
+### 4. Install dnsmasq
+
+dnsmasq provides wildcard DNS resolution for service hostnames (e.g., `*.shawns-macbook-pro`).
+
 ```bash
-# First, create and configure your .env file
+brew install dnsmasq
+```
+
+`task up` configures dnsmasq automatically.
+
+## Setup
+
+```bash
+# 1. Enter the dev shell
+cd automated-coding-agent
+direnv allow    # First time — may take a few minutes to download
+
+# 2. Create your .env file
 cp .env.template .env
-# Edit .env file and fill in your AWS credentials and project settings
-
-# Then run setup to configure AWS profiles
-task setup-workspace  # Checks if AWS is working or provides setup instructions
 ```
 
-> **Note**: For SSO users, the setup script will provide specific commands to run for configuring your AWS SSO profile. For static credentials, it will configure everything automatically.
+### Required `.env` values
 
-**Deploy infrastructure**:
 ```bash
-# One-time setup: Initialize remote state infrastructure
-task terraform:aws:setup-remote-state
+# Tailscale
+DEV_HOSTNAME=shawns-macbook-pro      # task tailscale:hostname to find yours
+TAILSCALE_IP=100.64.158.57           # tailscale ip -4
+
+# Secrets
+DATABASE_PASSWORD=<something>
+KEYCLOAK_ADMIN_PASSWORD=<something>
+
+# THE Dev Team agent
+CLAUDE_CODE_OAUTH_TOKEN=...          # claude setup-token (requires Max plan)
+
+# GitHub App (for issue/PR automation)
+GITHUB_APP_ID=
+GITHUB_APP_CLIENT_ID=
+GITHUB_APP_INSTALLATION_ID=
+# Place your private key at .github-app-private-key.pem
 ```
 
-**Start the development stack**:
+## Start
+
 ```bash
-# Start all services in Docker (backend, frontend, keycloak, database)
-task start-local
-
-# View logs
-task logs-local
+task up
 ```
 
-## 📖 Learn More
+This single command:
+1. Starts Minikube (4 CPU, 8 GB RAM, 50 GB disk)
+2. Creates K8s secrets from `.env`
+3. Builds all Docker images into the cluster
+4. Deploys everything via Helmfile
+5. Configures dnsmasq for wildcard DNS (prompts for sudo once)
+6. Starts a Traefik tunnel in a tmux session
 
-**[→ Read the Complete Documentation](docs/README.md)**
+On completion:
+```
+============================================
+  THE Dev Team:
+    Chat UI:  http://devteam.{DEV_HOSTNAME}
+    API:      http://agent-api.{DEV_HOSTNAME}
+  Application:
+    Frontend: http://app.{DEV_HOSTNAME}
+    API:      http://api.{DEV_HOSTNAME}
+    Auth:     http://auth.{DEV_HOSTNAME}
+============================================
+```
+
+## Day-to-day
+
+```bash
+task tunnel       # restart tunnel after reboot or pod restart
+task close        # stop the tunnel
+task status       # check what's running
+task reset:up     # nuclear option: wipe K8s state + redeploy from scratch
+```
+
+## What Nix provides
+
+When the dev shell activates, these tools are available:
+
+| Tool | Purpose |
+|------|---------|
+| Node.js 20 | Runtime for backend and frontend |
+| Terraform | Production infrastructure provisioning |
+| kubectl | Kubernetes cluster management |
+| Helm + Helmfile | Kubernetes package management and orchestration |
+| Minikube | Local Kubernetes cluster |
+| go-task | Task automation (Taskfile runner) |
+| Docker CLI | Container interactions |
+| tmux | Terminal multiplexer (tunnel session) |
+
+## Documentation
+
+This repo uses documentation-driven development. See `.docs/overview.md` for the full picture and `.docs/standards/docs-driven-development.md` for the convention.

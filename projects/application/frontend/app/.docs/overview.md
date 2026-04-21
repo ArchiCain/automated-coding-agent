@@ -17,12 +17,12 @@ An Angular frontend for managing users and monitoring backend health, secured by
 
 | Feature | Page | Auth | Description |
 |---------|------|------|-------------|
-| [Auth](features/auth/requirements.md) | `/login` | Public | Cookie-based Keycloak auth, permission guards, interceptors, login page |
-| [Home](features/home/requirements.md) | `/home` | Authenticated | Welcome page with feature cards |
-| [Users](features/users/requirements.md) | `/users` | `users:read` | Full CRUD user management with server-side pagination |
-| [Smoke Tests](features/smoke-tests/requirements.md) | `/smoke-tests` | Authenticated | Backend health check with auto-refresh |
-| [Layout](features/layout/requirements.md) | — | — | App shell: sidenav, responsive nav, user info, logout |
-| [Theme](features/theme/requirements.md) | — | — | Dark/light toggle, server-persisted preference |
+| [Auth](features/auth/spec.md) | `/login` | Public | Cookie-based Keycloak auth, permission guards, interceptors, login page |
+| [Home](features/home/spec.md) | `/home` | Authenticated | Welcome page with feature cards |
+| [Users](features/users/spec.md) | `/users` | `users:read` | Full CRUD user management with server-side pagination |
+| [Smoke Tests](features/smoke-tests/spec.md) | `/smoke-tests` | Authenticated | Backend health check with auto-refresh |
+| [Layout](features/layout/spec.md) | — | — | App shell: sidenav, responsive nav, user info, logout |
+| [Theme](features/theme/spec.md) | — | — | Dark/light toggle, server-persisted preference |
 
 ## Standards
 
