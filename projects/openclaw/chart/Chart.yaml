@@ -1,0 +1,6 @@
+apiVersion: v2
+name: openclaw-gateway
+description: OpenClaw Gateway — autonomous agent with built-in Web UI
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

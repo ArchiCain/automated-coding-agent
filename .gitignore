@@ -2,6 +2,9 @@
 *.pem
 .github-app-private-key.pem
 
+# mkcert-generated dev certs (Traefik default TLS store)
+.certs/
+
 # Agent worktrees
 .worktrees/
 

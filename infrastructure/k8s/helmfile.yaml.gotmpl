@@ -287,6 +287,46 @@ releases:
             cpu: "200m"
 
   # ===================================================================
+  # OpenClaw (namespace: openclaw)
+  # ===================================================================
+  # Second autonomous agent running alongside THE Dev Team for side-by-side
+  # comparison. Authenticates via CLAUDE_CODE_OAUTH_TOKEN only — ANTHROPIC_API_KEY
+  # is intentionally NOT passed to this container.
+
+  - name: openclaw-gateway
+    namespace: {{ env "OPENCLAW_NAMESPACE" | default "openclaw" }}
+    chart: ../../projects/openclaw/chart
+    createNamespace: true
+    values:
+      - image:
+          repository: {{ env "OPENCLAW_IMAGE" | default (print (env "REGISTRY" | default "localhost:30500") "/openclaw-gateway") }}
+          tag: {{ env "IMAGE_TAG" | default "latest" }}
+        ingress:
+          enabled: true
+          host: {{ env "OPENCLAW_HOST" | default (print "openclaw." (requiredEnv "DEV_HOSTNAME")) }}
+          # OpenClaw's Control UI needs a secure context, so it runs HTTPS even in
+          # local dev. Relies on Traefik's default TLSStore — run `task certs:install`
+          # once to populate it with a mkcert-signed wildcard cert.
+          tls: true
+        appNamespace: {{ env "NAMESPACE" | default "app" }}
+        env:
+          OPENCLAW_SELF_NAMESPACE: {{ env "OPENCLAW_NAMESPACE" | default "openclaw" }}
+          OPENCLAW_ALLOWED_ORIGINS: "{{ env "OPENCLAW_ALLOWED_ORIGINS" | default (print "https://openclaw." (requiredEnv "DEV_HOSTNAME") ",http://openclaw." (requiredEnv "DEV_HOSTNAME") ",http://localhost:18789") }}"
+        secretEnv:
+          CLAUDE_CODE_OAUTH_TOKEN: {{ requiredEnv "CLAUDE_CODE_OAUTH_TOKEN" }}
+          OPENCLAW_AUTH_TOKEN: {{ requiredEnv "OPENCLAW_AUTH_TOKEN" }}
+        workspace:
+          enabled: true
+          size: {{ env "OPENCLAW_WORKSPACE_SIZE" | default "20Gi" }}
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+
+  # ===================================================================
   # Observability Stack (namespace: monitoring)
   # ===================================================================
 

@@ -9,6 +9,7 @@ includes:
   keycloak: ./projects/application/keycloak/Taskfile.yml
   devteam-backend: ./projects/the-dev-team/backend/Taskfile.yml
   devteam-frontend: ./projects/the-dev-team/frontend/Taskfile.yml
+  openclaw: ./projects/openclaw/Taskfile.yml
   infra:
     taskfile: ./infrastructure/Taskfile.yml
     dir: ./infrastructure
@@ -66,6 +67,7 @@ tasks:
         echo "Waiting for deployments to be ready..."
         kubectl rollout status deployment/the-dev-team-backend -n the-dev-team --timeout=120s 2>/dev/null || true
         kubectl rollout status deployment/the-dev-team-frontend -n the-dev-team --timeout=120s 2>/dev/null || true
+        kubectl rollout status deployment/openclaw-gateway -n openclaw --timeout=120s 2>/dev/null || true
 
         # --- dnsmasq: resolve *.DEV_HOSTNAME to 127.0.0.1 ---
         DNSMASQ_CONF_DIR="/opt/homebrew/etc/dnsmasq.d"
@@ -108,11 +110,16 @@ tasks:
           echo "Cleaned old /etc/hosts entries."
         fi
 
-        # Redirect port 80 → 8080 on loopback so URLs don't need :8080
-        echo "rdr pass on lo0 proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080" | sudo pfctl -ef - > /dev/null 2>&1 || echo "  (pfctl redirect failed — use :8080 in URLs)"
+        # Redirect privileged ports to userspace forwards so URLs don't need ports.
+        #   http  (80)  → 8080
+        #   https (443) → 8443
+        sudo pfctl -ef - > /dev/null 2>&1 <<'PFRULES' || echo "  (pfctl redirect failed — use explicit ports in URLs)"
+        rdr pass on lo0 proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080
+        rdr pass on lo0 proto tcp from any to 127.0.0.1 port 443 -> 127.0.0.1 port 8443
+        PFRULES
 
-        # Start the port-forward in a named tmux session
-        tmux new-session -d -s tunnel "kubectl port-forward -n traefik svc/traefik 8080:80 --address=0.0.0.0"
+        # Start the port-forward in a named tmux session (80 and 443 in one process)
+        tmux new-session -d -s tunnel "kubectl port-forward -n traefik svc/traefik 8080:80 8443:443 --address=0.0.0.0"
         sleep 2
 
         echo ""
@@ -120,6 +127,8 @@ tasks:
         echo "  THE Dev Team:"
         echo "    Chat UI:  http://devteam.${DEV_HOSTNAME}"
         echo "    API:      http://agent-api.${DEV_HOSTNAME}"
+        echo "  OpenClaw:"
+        echo "    Web UI:   https://openclaw.${DEV_HOSTNAME}"
         echo "  Application:"
         echo "    Frontend: http://app.${DEV_HOSTNAME}"
         echo "    API:      http://api.${DEV_HOSTNAME}"
@@ -173,7 +182,7 @@ tasks:
         echo ""
 
         echo "=== Building and pushing images ==="
-        for img in backend frontend keycloak the-dev-team-backend the-dev-team-frontend; do
+        for img in backend frontend keycloak the-dev-team-backend the-dev-team-frontend openclaw-gateway; do
           case $img in
             backend)
               docker build -t $REG/$img:$TAG -f projects/application/backend/dockerfiles/prod.Dockerfile projects/application/backend ;;
@@ -185,6 +194,8 @@ tasks:
               docker build --build-arg CACHEBUST=$(date +%s) -t $REG/$img:$TAG -f projects/the-dev-team/backend/dockerfiles/prod.Dockerfile projects/the-dev-team/backend ;;
             the-dev-team-frontend)
               docker build -t $REG/$img:$TAG -f projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile projects/the-dev-team/frontend ;;
+            openclaw-gateway)
+              docker build -t $REG/$img:$TAG -f projects/openclaw/dockerfiles/prod.Dockerfile projects/openclaw ;;
           esac
           docker push $REG/$img:$TAG || echo "Push failed for $img — images are still in Minikube Docker"
         done
@@ -281,6 +292,31 @@ tasks:
     cmds:
       - scripts/setup-k8s-secrets.sh
 
+  certs:install:
+    desc: "Generate mkcert wildcard cert for *.${DEV_HOSTNAME} and install as Traefik default TLS store"
+    cmds:
+      - scripts/generate-dev-certs.sh
+      - kubectl create namespace traefik --dry-run=client -o yaml | kubectl apply -f -
+      - |
+        kubectl create secret tls dev-wildcard-tls \
+          --cert=.certs/dev-wildcard.crt \
+          --key=.certs/dev-wildcard.key \
+          -n traefik \
+          --dry-run=client -o yaml | kubectl apply -f -
+      - |
+        cat <<'EOF' | kubectl apply -f -
+        apiVersion: traefik.io/v1alpha1
+        kind: TLSStore
+        metadata:
+          name: default
+          namespace: traefik
+        spec:
+          defaultCertificate:
+            secretName: dev-wildcard-tls
+        EOF
+      - echo ""
+      - echo "Default TLS store installed. Ingresses with tls=true now serve the wildcard cert."
+
   # ===================================================================
   # Testing
   # ===================================================================
@@ -368,6 +404,10 @@ tasks:
         vars:
           WORKTREE_PATH: '{{.WORKTREE_PATH}}'
           IMAGE_TAG: '{{.IMAGE_TAG}}'
+      - task: build:openclaw
+        vars:
+          WORKTREE_PATH: '{{.WORKTREE_PATH}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
 
   build:backend:
     desc: Build and push backend image
@@ -413,6 +453,15 @@ tasks:
     cmds:
       - docker build -t ${REGISTRY:-localhost:30500}/the-dev-team-frontend:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/the-dev-team/frontend
       - docker push ${REGISTRY:-localhost:30500}/the-dev-team-frontend:{{.IMAGE_TAG}}
+
+  build:openclaw:
+    desc: Build and push openclaw-gateway image
+    vars:
+      WORKTREE_PATH: '{{.WORKTREE_PATH | default "."}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
+    cmds:
+      - docker build -t ${REGISTRY:-localhost:30500}/openclaw-gateway:{{.IMAGE_TAG}} -f {{.WORKTREE_PATH}}/projects/openclaw/dockerfiles/prod.Dockerfile {{.WORKTREE_PATH}}/projects/openclaw
+      - docker push ${REGISTRY:-localhost:30500}/openclaw-gateway:{{.IMAGE_TAG}}
 
   # ===================================================================
   # Deployment — delegates to infra:k8s:*

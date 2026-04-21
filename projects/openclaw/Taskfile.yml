@@ -1,0 +1,86 @@
+version: '3'
+
+tasks:
+  k8s:status:
+    desc: Show OpenClaw pod and ingress status
+    cmds:
+      - kubectl get pods -n ${OPENCLAW_NAMESPACE:-openclaw}
+      - kubectl get ingress -n ${OPENCLAW_NAMESPACE:-openclaw}
+
+  k8s:logs:
+    desc: Follow OpenClaw pod logs
+    cmds:
+      - kubectl logs -f -l app=openclaw-gateway -n ${OPENCLAW_NAMESPACE:-openclaw}
+
+  k8s:shell:
+    desc: Open a shell in the OpenClaw pod
+    cmds:
+      - kubectl exec -it $(kubectl get pod -l app=openclaw-gateway -n ${OPENCLAW_NAMESPACE:-openclaw} -o jsonpath='{.items[0].metadata.name}') -n ${OPENCLAW_NAMESPACE:-openclaw} -- /bin/bash
+
+  k8s:restart:
+    desc: Rollout restart the OpenClaw deployment
+    cmds:
+      - kubectl rollout restart deployment/openclaw-gateway -n ${OPENCLAW_NAMESPACE:-openclaw}
+      - kubectl rollout status deployment/openclaw-gateway -n ${OPENCLAW_NAMESPACE:-openclaw} --timeout=180s
+
+  k8s:forward:
+    desc: Port-forward OpenClaw to http://localhost:18789 (required for the Web UI — secure context for device crypto)
+    cmds:
+      - |
+        NS="${OPENCLAW_NAMESPACE:-openclaw}"
+        echo ""
+        echo "OpenClaw's Control UI needs a browser secure context (HTTPS or localhost)."
+        echo "The ingress serves plain HTTP, so open the UI via this port-forward instead:"
+        echo ""
+        echo "  http://localhost:18789"
+        echo ""
+        echo "Press Ctrl-C to stop. Run 'task openclaw:k8s:pair' in another terminal to approve your browser."
+        echo ""
+        kubectl port-forward -n "$NS" svc/openclaw-gateway 18789:18789
+
+  k8s:pair:
+    desc: Approve the pending Web UI device (run after clicking Connect in the browser)
+    cmds:
+      - |
+        NS="${OPENCLAW_NAMESPACE:-openclaw}"
+        POD=$(kubectl get pod -l app=openclaw-gateway -n "$NS" -o jsonpath='{.items[0].metadata.name}')
+        if [ -z "$POD" ]; then
+          echo "ERROR: no openclaw-gateway pod found in namespace $NS"
+          exit 1
+        fi
+        echo ""
+        echo "=== OpenClaw Device Pairing ==="
+        echo ""
+        echo "1. Open https://openclaw.${DEV_HOSTNAME} in your browser"
+        echo "   (Requires 'task tunnel' running and 'task certs:install' done once.)"
+        echo "2. Enter your OPENCLAW_AUTH_TOKEN from .env as the Gateway Token"
+        echo "3. Click Connect — you'll see 'pairing required'"
+        echo "4. Come back here and press Enter to approve the pending device"
+        echo ""
+        echo "Press Enter when you've clicked Connect in the browser..."
+        read
+        # The openclaw CLI inside the pod talks to the gateway over ws://127.0.0.1:18789,
+        # which requires the gateway token. Read it from the pod's env (it's already in
+        # the Secret) and pass --token explicitly. --json keeps parsing stable.
+        DEVICES_JSON=$(kubectl exec -n "$NS" "$POD" -- sh -c 'openclaw devices list --json --token "$OPENCLAW_AUTH_TOKEN"' 2>/dev/null)
+        if [ -z "$DEVICES_JSON" ]; then
+          echo "Failed to list devices — is the gateway ready?"
+          kubectl exec -n "$NS" "$POD" -- sh -c 'openclaw devices list --json --token "$OPENCLAW_AUTH_TOKEN"' 2>&1 | tail -5
+          exit 1
+        fi
+        REQUEST_ID=$(echo "$DEVICES_JSON" | jq -r '.pending[0].requestId // empty')
+        if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+          echo "No pending pairing requests found. Click Connect in the browser first."
+          echo "Current devices:"
+          echo "$DEVICES_JSON" | jq .
+          exit 1
+        fi
+        echo "Approving device: $REQUEST_ID"
+        kubectl exec -n "$NS" "$POD" -- sh -c "openclaw devices approve '$REQUEST_ID' --token \"\$OPENCLAW_AUTH_TOKEN\""
+        echo ""
+        echo "Device approved. Go back to the browser and click Connect again."
+
+  k8s:health:
+    desc: Check OpenClaw health endpoint via ingress
+    cmds:
+      - curl -sf "http://openclaw.${DEV_HOSTNAME}/health" && echo "OK" || echo "Health check failed"
