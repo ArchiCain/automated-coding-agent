@@ -2,78 +2,77 @@
 
 ## Contract Tests
 
-- [ ] Keycloak starts and responds on port 8080 within 120s
-- [ ] Admin console accessible at `/admin/` with credentials `admin`/`admin`
-- [ ] Token endpoint (`/realms/application/protocol/openid-connect/token`) accepts client credentials for `backend-service` with secret `backend-service-secret`
-- [ ] Access tokens contain expected claims: `email`, `preferred_username`, `realm_access.roles`
-- [ ] Access token TTL is 5 minutes (300s `exp - iat`)
+- [ ] Keycloak responds on port 8080 inside the container within 120s of startup (`app/scripts/startup.sh:78-93`).
+- [ ] `/health` returns healthy — used by Helm liveness/readiness probes (`chart/templates/deployment.yaml:34-45`).
+- [ ] Admin console reachable at `http://localhost:8081/admin/` locally with `admin` / `admin` (README.md:54, `app/scripts/startup.sh:103-104`).
+- [ ] Token endpoint `POST /realms/application/protocol/openid-connect/token` accepts `grant_type=client_credentials` with `client_id=backend-service` + `client_secret=backend-service-secret` and returns an `access_token` (`app/realm-config/realm-export.json:46-51,65`).
+- [ ] Same endpoint accepts `grant_type=password` with the user's credentials for `testuser` / `password` and `admin` / `admin`.
+- [ ] Access tokens decode to include claims: `sub`, `email`, `preferred_username`, `roles` (realm roles), `aud` including `realm-management` (`app/realm-config/realm-export.json:83-149`).
+- [ ] `exp - iat` on an access token equals 300s (`app/realm-config/realm-export.json:17`).
 
 ## Behavior Tests
 
-### Realm Configuration
+### Realm configuration
 
-- [ ] Realm `application` exists after startup
-- [ ] SSL required for external connections (`sslRequired: external`)
-- [ ] Brute force protection active: 3 failed attempts trigger 15-minute lockout
-- [ ] Login with email is allowed
-- [ ] User registration is disabled
+- [ ] Realm `application` exists after startup (`app/realm-config/realm-export.json:3`).
+- [ ] `sslRequired=external`, `bruteForceProtected=true`, `verifyEmail=true`, `registrationAllowed=false`, `loginWithEmailAllowed=true` (`app/realm-config/realm-export.json:7-16`).
+- [ ] Token lifespans: access 300s, SSO idle 1800s, SSO max 36000s (`app/realm-config/realm-export.json:17-19`).
+- [ ] Default role `user` is applied to new users (`app/realm-config/realm-export.json:30`).
 
-### Client Configuration
+### Client configuration
 
-- [ ] Client `backend-service` exists with type confidential
-- [ ] Service account is enabled for `backend-service`
-- [ ] Standard flow and direct access grants are enabled
-- [ ] Redirect URIs include localhost:3000, localhost:8080, and `${FRONTEND_URL}` substitution
+- [ ] `backend-service` exists, `publicClient=false`, `serviceAccountsEnabled=true`, `standardFlowEnabled=true`, `directAccessGrantsEnabled=true`, `implicitFlowEnabled=false` (`app/realm-config/realm-export.json:46-66`).
+- [ ] Redirect URIs include `http://localhost:3000/*`, `http://localhost:8080/*`, and a resolved `${FRONTEND_URL}/*` (not the literal placeholder) — verifies `envsubst` ran (`app/scripts/startup.sh:62-67`, `app/realm-config/realm-export.json:52-56`).
+- [ ] Web origins similarly resolved (`app/realm-config/realm-export.json:57-61`).
 
 ### Roles
 
-- [ ] Realm role `user` exists and is a default role
-- [ ] Realm role `admin` exists
-- [ ] Service account for `backend-service` has client roles: `manage-users`, `view-users`, `query-users` on `realm-management`
+- [ ] Realm roles `user` and `admin` exist (`app/realm-config/realm-export.json:33-42`).
+- [ ] Service account for `backend-service` has client roles `manage-users`, `view-users`, `query-users` on `realm-management` (`app/scripts/startup.sh:136-143`).
+- [ ] Restarting the container does not re-run role assignment when `/tmp/.keycloak_roles_configured` exists (`app/scripts/startup.sh:107-109`).
 
-### Test Users
+### Seeded users
 
-- [ ] User `testuser` exists with email `test@example.com`, password `password`, role `user`
-- [ ] User `admin` exists with email `admin@example.com`, password `admin`, roles `user` + `admin`
+- [ ] `testuser` exists with email `test@example.com`, password `password`, `emailVerified=true`, role `user` (`app/realm-config/realm-export.json:154-168`).
+- [ ] `admin` exists with email `admin@example.com`, password `admin`, `emailVerified=true`, roles `user` + `admin` (`app/realm-config/realm-export.json:169-183`).
 
-### Token Mappers
+### Token mappers
 
-- [ ] Access token includes `email` claim from user profile
-- [ ] Access token includes `preferred_username` claim
-- [ ] Access token includes `realm_access.roles` array with user's realm roles
-- [ ] Service account token includes `resource_access.realm-management.roles`
+- [ ] Password-grant access token for `testuser` contains `email=test@example.com`, `preferred_username=testuser`, and `roles` including `user`.
+- [ ] Password-grant access token for `admin` contains `roles` with both `user` and `admin`.
+- [ ] Client-credentials token for `backend-service` contains `resource_access.realm-management.roles` with `manage-users`, `view-users`, `query-users` and `aud` includes `realm-management`.
 
 ## E2E Scenarios
 
-- [ ] Full startup sequence: wait for PostgreSQL (up to 30 retries at 2s intervals), create `keycloak` schema, substitute `FRONTEND_URL` in realm export, start Keycloak, health check passes, service account roles assigned
-- [ ] Auth flow: POST `/auth/login` to backend with valid credentials, receive HTTP-only cookies, GET `/auth/check` returns user profile with roles
-- [ ] Direct access grant: obtain token via `grant_type=password` for `testuser`, verify token contains `email` and `realm_access.roles: ["user"]`
-- [ ] Admin token: obtain token for `admin` user, verify `realm_access.roles` contains both `user` and `admin`
-- [ ] Service account flow: obtain token via `grant_type=client_credentials` for `backend-service`, verify `resource_access.realm-management.roles` contains `manage-users`, `view-users`, `query-users`
-- [ ] Brute force: attempt 3 failed logins for `testuser`, verify 4th attempt returns account-locked error
-- [ ] Frontend URL substitution: verify redirect URIs in client config contain the actual `FRONTEND_URL` value (not the literal `${FRONTEND_URL}` placeholder)
-- [ ] Idempotent role assignment: restart Keycloak container, verify startup script detects marker file and skips role re-assignment
+- [ ] Cold start: delete the `keycloak` schema, bring the container up, verify PG wait → schema create → realm import → health → service-account role assignment all complete, and token endpoints work.
+- [ ] Warm restart: restart the container; realm import is idempotent and service-account role assignment is skipped via marker file.
+- [ ] Backend login proxy: `POST /auth/login` on the backend with `testuser`/`password` returns 200 and sets `access_token` + `refresh_token` HTTP-only cookies (`projects/application/backend/app/src/features/keycloak-auth/controllers/keycloak-auth.controller.ts:43-51`).
+- [ ] Backend validation: `GET /auth/check` (authenticated) returns user profile with roles derived from the access token (`projects/application/backend/app/src/features/keycloak-auth/services/keycloak-auth.service.ts:124-143`).
+- [ ] Admin role: backend login as `admin`/`admin` yields roles including `admin`.
+- [ ] Service account: backend hits Keycloak Admin API using a `client_credentials` token and can list users (proves `manage-users`/`view-users` granted).
+- [ ] Brute force: 3 failed logins for `testuser` cause subsequent attempts to be rejected with an account-locked error (`failureFactor=3`, `app/realm-config/realm-export.json:29`).
+- [ ] `FRONTEND_URL` substitution: set `FRONTEND_URL=https://example.test`, start container, inspect client and confirm the redirect URI and web origin contain that value.
 
 ## Verification Commands
 
 ```bash
-# Get admin token
+# Admin-cli token (master realm)
 TOKEN=$(curl -s -X POST "http://localhost:8081/realms/master/protocol/openid-connect/token" \
   -d "grant_type=password&client_id=admin-cli&username=admin&password=admin" | jq -r '.access_token')
 
-# Check realm exists
+# Realm exists
 curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8081/admin/realms/application" | jq '.realm'
 
-# Check client exists
+# Client exists
 curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8081/admin/realms/application/clients?clientId=backend-service" | jq '.[0].clientId'
 
-# Check test users
-curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8081/admin/realms/application/users?username=testuser" | jq '.[0].email'
-
-# Get user token (direct access grant)
+# User password grant (inspect claims)
 curl -s -X POST "http://localhost:8081/realms/application/protocol/openid-connect/token" \
-  -d "grant_type=password&client_id=backend-service&client_secret=backend-service-secret&username=admin&password=admin" | jq -r '.access_token' | cut -d. -f2 | base64 -d 2>/dev/null | jq '.realm_access.roles'
+  -d "grant_type=password&client_id=backend-service&client_secret=backend-service-secret&username=admin&password=admin" \
+  | jq -r '.access_token' | awk -F. '{print $2}' | base64 -d 2>/dev/null | jq '{email, preferred_username, roles, aud}'
 
-# Check service account roles
-curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8081/admin/realms/application/users?username=service-account-backend-service" | jq '.[0].id'
+# Client-credentials grant (service account)
+curl -s -X POST "http://localhost:8081/realms/application/protocol/openid-connect/token" \
+  -d "grant_type=client_credentials&client_id=backend-service&client_secret=backend-service-secret" \
+  | jq -r '.access_token' | awk -F. '{print $2}' | base64 -d 2>/dev/null | jq '.resource_access'
 ```

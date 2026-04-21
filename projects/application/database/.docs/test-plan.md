@@ -1,47 +1,74 @@
 # Database — Test Plan
 
+Scope: verify the PostgreSQL server delivered by this chart. Schema-level tests for
+consumers (backend tables, Keycloak tables) live in those projects.
+
 ## Contract Tests
 
-- [ ] PostgreSQL 16 container starts and accepts connections on port 5432
-- [ ] `pg_isready` liveness probe returns success within `initialDelaySeconds` (10s)
-- [ ] `uuid-ossp` extension is installed and functional (`SELECT uuid_generate_v4()` returns a UUID)
-- [ ] `vector` extension (pgvector) is installed (`SELECT '[]'::vector` does not error)
-- [ ] Database accepts connections with configured credentials (`DATABASE_USERNAME`/`DATABASE_PASSWORD`)
+- [ ] Helm renders a StatefulSet, Service, and (when `.Values.env` set) Secret named
+      after the release, with no other resources unless pgweb is enabled
+      (`projects/application/database/chart/templates/`).
+- [ ] Pod image is `pgvector/pgvector:pg16` (or whatever `DATABASE_IMAGE[_TAG]`
+      overrides to) (`infrastructure/k8s/helmfile.yaml.gotmpl:100-102`).
+- [ ] Container exposes port `5432`, Service is `ClusterIP`, no Ingress
+      (`.../statefulset.yaml:22-23`, `.../service.yaml`).
+- [ ] Pod reaches `Ready` when `pg_isready -U $POSTGRES_USER -d $POSTGRES_DB`
+      succeeds (readiness probe, initial delay 5s, period 5s)
+      (`.../statefulset.yaml:37-44`).
+- [ ] `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` arrive via
+      `{release}-secret` → `envFrom` (`.../statefulset.yaml:24-28`,
+      `.../secret.yaml`).
+- [ ] PVC is created when `persistence.enabled=true` (default) with
+      `accessModes: [ReadWriteOnce]` and the configured size; no PVC when disabled
+      (`.../statefulset.yaml:47-65`).
 
 ## Behavior Tests
 
-- [ ] `example_schema` schema exists and contains `examples` table with columns: id (UUID PK), name (VARCHAR 255), description (TEXT), metadata (JSONB), created_at, updated_at, deleted_at
-- [ ] `example_schema` contains `user_theme` table with columns: id (UUID PK), user_id (VARCHAR, unique), theme (VARCHAR 10, default 'dark'), created_at, updated_at
-- [ ] `keycloak` schema exists (created by startup script or Keycloak Liquibase)
-- [ ] `mastra` schema exists (created by Mastra service)
-- [ ] GIN index exists on `examples.metadata` column
-- [ ] Index exists on `examples.name` column
-- [ ] Data persists across pod restart (write row, delete pod, verify row exists after restart)
-- [ ] No external ingress — service is ClusterIP only, not reachable outside cluster
+- [ ] Psql login with configured `POSTGRES_USER` / `POSTGRES_PASSWORD` succeeds
+      against the `{release}` Service from within the cluster.
+- [ ] `vector` extension is available (backend migration runs on first backend boot
+      and enables it); `SELECT '[1,2,3]'::vector` succeeds after backend startup.
+- [ ] `uuid-ossp` extension is available after backend migration;
+      `SELECT uuid_generate_v4()` returns a UUID.
+- [ ] Data written to any table persists across a pod delete/reschedule when
+      persistence is enabled.
+- [ ] When `persistence.enabled=false`, tables created in a previous pod do NOT
+      survive a pod replacement.
+- [ ] Database Service is not reachable via Ingress / external DNS — only via its
+      in-cluster DNS name (`{release}.{namespace}.svc.cluster.local`).
 
 ## E2E Scenarios
 
-- [ ] Full startup: deploy StatefulSet, wait for readiness probe, connect with psql, verify extensions and schemas
-- [ ] Migration verification: deploy backend service, verify TypeORM creates/updates `example_schema` tables
-- [ ] PVC persistence: insert test row into `examples`, delete the pod, wait for reschedule, query and verify test row still exists
-- [ ] PGWeb access (when enabled): navigate to pgweb ingress URL, verify web UI renders and can list tables
-- [ ] Resource limits: verify pod runs within 256Mi-512Mi memory and 100m-500m CPU bounds
+- [ ] Full deploy: `task k8s:deploy` or Helmfile apply provisions the `database`
+      release, backend release waits on it (`needs: database`,
+      `infrastructure/k8s/helmfile.yaml.gotmpl:127-128`), backend's TypeORM
+      migrations run and create `example_schema` + extensions.
+- [ ] Keycloak deploy: Keycloak (`needs: database`) starts, connects via
+      `jdbc:postgresql://database:5432/postgres`, Liquibase populates the `keycloak`
+      schema on first run (`infrastructure/k8s/helmfile.yaml.gotmpl:164-191`).
+- [ ] pgweb UI (when `pgweb.enabled=true`): Ingress host `db.${DEV_HOSTNAME}`
+      serves the pgweb UI over Traefik; pgweb can list `public`, `example_schema`,
+      and `keycloak`.
+- [ ] PVC persistence: write a test row, `kubectl delete pod {release}-0`, wait for
+      reschedule, row is still present.
+- [ ] Resource bounds: pod runs within its configured `requests`/`limits`
+      (256Mi/100m – 512Mi/500m by default).
 
 ## Verification Commands
 
 ```bash
-# Check PostgreSQL is ready
-pg_isready -h localhost -p 5432
+# From inside the cluster (kubectl exec into the pod)
+kubectl -n app exec -it database-0 -- pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 
-# Check extensions
-psql -U postgres -c "SELECT extname FROM pg_extension WHERE extname IN ('uuid-ossp', 'vector');"
+# Extensions (after backend migration has run)
+kubectl -n app exec -it database-0 -- psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT extname FROM pg_extension WHERE extname IN ('uuid-ossp','vector');"
 
-# Check schemas
-psql -U postgres -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('example_schema', 'keycloak', 'mastra');"
+# Schemas (expect: public, example_schema, keycloak once both services are up)
+kubectl -n app exec -it database-0 -- psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('example_schema','keycloak');"
 
-# Check tables
-psql -U postgres -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'example_schema';"
-
-# Verify pgvector works
-psql -U postgres -c "SELECT '[1,2,3]'::vector;"
+# Vector works
+kubectl -n app exec -it database-0 -- psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT '[1,2,3]'::vector;"
 ```

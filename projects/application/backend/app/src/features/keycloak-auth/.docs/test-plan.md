@@ -1,42 +1,73 @@
 # Keycloak Auth — Test Plan
 
-## Login (`POST /auth/login`)
+Tests map back to acceptance criteria in `spec.md` and flows in `flows.md`. Contract tests hit the HTTP boundary; behavior tests exercise the guard/service directly. Realm seed data (users, client secret) comes from `projects/application/keycloak/.docs/spec.md` — see `test-data.md`.
 
-- [ ] Returns 200 with user profile on valid credentials
-- [ ] Sets `access_token` HTTP-only cookie with correct maxAge
-- [ ] Sets `refresh_token` HTTP-only cookie with 30-day maxAge
-- [ ] Cookies have `secure: true` in production, `sameSite: strict` in production / `lax` in dev
-- [ ] Returns 401 with "Invalid credentials" on wrong password
-- [ ] Returns 401 with "Invalid credentials" on non-existent user
-- [ ] Response body never contains raw tokens
+## Contract Tests (HTTP)
 
-## Logout (`POST /auth/logout`)
+### `POST /auth/login`
+- [ ] Returns 200 with `{ message: "Login successful", user: { id, username, email, roles, firstName?, lastName? } }` on valid credentials.
+- [ ] Sets `access_token` cookie: `HttpOnly`, `Path=/`, `Max-Age ≈ tokens.expires_in`; `Secure` and `SameSite=Strict` when `NODE_ENV=production`, else `Secure=false`, `SameSite=Lax`.
+- [ ] Sets `refresh_token` cookie with the same attributes and `Max-Age = 2592000` (30 days).
+- [ ] Response body does NOT include raw tokens.
+- [ ] Returns 401 `{ statusCode: 401, message: "Invalid credentials", error: "Unauthorized" }` for wrong password, non-existent user, and Keycloak network failure. No cookies set on failure.
 
-- [ ] Calls Keycloak logout endpoint to revoke refresh token
-- [ ] Clears `access_token` cookie
-- [ ] Clears `refresh_token` cookie
-- [ ] Returns 200 even if Keycloak revocation fails (cookies still cleared)
-- [ ] Works even if no refresh_token cookie is present
+### `POST /auth/logout`
+- [ ] With valid `access_token` cookie: returns 200 `{ message: "Logout successful" }`, clears both `access_token` and `refresh_token` cookies (Set-Cookie with `Expires` in the past).
+- [ ] With valid `access_token` but no `refresh_token` cookie: returns 200, still clears `access_token`; does NOT call Keycloak logout endpoint.
+- [ ] When Keycloak logout endpoint returns non-2xx: controller still returns 200 and still clears cookies (a warning is logged but not surfaced).
+- [ ] With no `access_token` (or expired): returns 401 from the global JWT guard; cookies NOT cleared by this handler.
 
-## Token Refresh (`POST /auth/refresh`)
+### `POST /auth/refresh`
+- [ ] With valid `access_token` cookie AND valid `refresh_token` cookie: returns 200 `{ message: "Token refreshed successfully" }` and sets new `access_token` + `refresh_token` cookies.
+- [ ] With valid `access_token` but missing `refresh_token` cookie: returns 401 `{ message: "Refresh token not found" }`; cookies not touched by handler (global guard had already passed).
+- [ ] With valid `access_token` but an invalid/expired `refresh_token`: returns 401 `{ message: "Failed to refresh token" }` and clears BOTH cookies.
+- [ ] With no `access_token` cookie: returns 401 from the global guard `{ message: "No token provided" }`.
 
-- [ ] Returns 200 and sets new cookies with valid refresh token
-- [ ] Returns 401 "Refresh token not found" when no cookie present
-- [ ] Returns 401 "Failed to refresh token" when refresh token is expired/invalid
-- [ ] Clears both cookies on failed refresh
+### `GET /auth/check`
+- [ ] Returns 200 `{ authenticated: true, user: {...}, permissions: [...] }` when called with a valid `access_token` cookie or `Authorization: Bearer <token>` header.
+- [ ] `permissions` equals `getPermissionsForRoles(user.roles)` — resolved permissions, not raw roles. Admin user returns all 7; standard `user` returns `['conversations:read','conversations:create']`.
+- [ ] Returns 401 `{ message: "No token provided" }` when no token is present.
+- [ ] Returns 401 `{ message: "Invalid token" }` when token is malformed or `exp*1000 < Date.now()`.
 
-## Auth Check (`GET /auth/check`)
+## Behavior Tests (unit)
 
-- [ ] Returns authenticated user profile with resolved permissions
-- [ ] Permissions are resolved from roles (not raw roles returned as permissions)
-- [ ] Returns 401 when no valid token present
-- [ ] Returns 401 when token is expired
+### `KeycloakJwtGuard` (`guards/keycloak-jwt.guard.ts`)
+- [ ] Returns `true` immediately when `@Public()` metadata is present on handler or class (verify with Reflector mock).
+- [ ] Prefers `request.cookies.access_token` over `Authorization: Bearer` header.
+- [ ] Falls back to bearer header when no cookie is present.
+- [ ] Throws `UnauthorizedException("No token provided")` when neither source yields a token.
+- [ ] Throws `UnauthorizedException("Invalid token")` when `KeycloakAuthService.validateToken()` throws.
+- [ ] On success, `request.user` is set to the validated `KeycloakUserProfile`.
 
-## Guards
+### `KeycloakAuthService` (`services/keycloak-auth.service.ts`)
+- [ ] `login()` POSTs to `${KEYCLOAK_BASE_URL}/realms/${REALM}/protocol/openid-connect/token` with `grant_type=password` and the configured client credentials.
+- [ ] `login()` maps `{ access_token, refresh_token, expires_in }` to `JwtTokens`.
+- [ ] `login()` throws `UnauthorizedException("Invalid credentials")` on non-2xx Keycloak response.
+- [ ] `refreshToken()` uses `grant_type=refresh_token`; non-2xx → `UnauthorizedException("Failed to refresh token")`.
+- [ ] `logout()` POSTs to `.../openid-connect/logout`; a non-2xx response only logs a warning (does not throw).
+- [ ] `validateToken()` returns a profile where `roles = realm_access.roles ∪ resource_access[clientId].roles`, handling missing `resource_access` / `realm_access` gracefully.
+- [ ] `validateToken()` throws `UnauthorizedException("Invalid token")` when `exp * 1000 < Date.now()`.
+- [ ] `validateToken()` does NOT verify JWT signature — swapping the signature still succeeds as long as claims are parseable and `exp` is in the future (documents the current behavior).
 
-- [ ] `KeycloakJwtGuard` extracts token from cookie first, then Authorization header
-- [ ] `KeycloakJwtGuard` skips validation for `@Public()` routes
-- [ ] `KeycloakJwtGuard` returns 401 "No token provided" when no token found
-- [ ] `PermissionGuard` returns 403 "Insufficient permissions" when user lacks required permission
-- [ ] `PermissionGuard` passes when no `@RequirePermission()` metadata set
-- [ ] `PermissionGuard` supports `requireAll` option for multiple permissions
+### `PermissionGuard` (`guards/permission.guard.ts`) — unit-testable in isolation even though not currently wired
+- [ ] Returns `true` when `@Public()` metadata is set.
+- [ ] Returns `true` when no `@RequirePermission()` metadata exists.
+- [ ] Throws `ForbiddenException("User not authenticated")` when `request.user` is missing.
+- [ ] With `{ requireAll: false }` (default), passes when user has ANY of the required permissions.
+- [ ] With `{ requireAll: true }`, passes only when user has ALL required permissions; throws `ForbiddenException("Insufficient permissions")` otherwise.
+- [ ] Admin role resolves to all 7 permissions via `getPermissionsForRoles`.
+
+### Permissions helpers (`permissions/permissions.constants.ts`)
+- [ ] `getPermissionsForRole('admin')` returns all 7; `'user'` returns 2; unknown role returns `[]`.
+- [ ] `getPermissionsForRoles(['admin','user'])` returns a deduplicated union (7 items).
+- [ ] `hasAllPermissions` and `hasAnyPermission` behave as documented on edge cases (empty required, empty user).
+
+## E2E Scenarios
+
+- [ ] Login → authenticated browser session: `POST /auth/login` as `testuser`/`password` from the seeded realm. A subsequent `GET /auth/check` from the same cookie jar returns 200 with `roles: ['user']` and `permissions: ['conversations:read','conversations:create']`.
+- [ ] Login → logout → protected request: after `POST /auth/logout`, `GET /auth/check` returns 401.
+- [ ] Login → refresh → check: after `POST /auth/refresh`, the new `access_token` cookie authorizes `GET /auth/check`.
+- [ ] Invalid refresh cookie clears session: tamper with `refresh_token` cookie, `POST /auth/refresh` returns 401 and both cookies are cleared; subsequent `GET /auth/check` is 401.
+- [ ] Admin login: `POST /auth/login` as `admin`/`admin` returns `roles` including `admin`, and `GET /auth/check` returns `permissions` containing all 7 strings.
+- [ ] Bearer header path: `GET /auth/check` with no cookie but `Authorization: Bearer <token>` from a fresh login succeeds.
+- [ ] Permission metadata currently non-enforcing: `GET /users` (decorated with `@RequirePermission('users:read')`) succeeds for a standard `user` login today because `PermissionGuard` is not attached. This test should FAIL (and be updated) once the guard is wired.
