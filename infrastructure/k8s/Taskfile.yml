@@ -1,5 +1,13 @@
 version: '3'
 
+includes:
+  minikube:
+    taskfile: ./minikube/Taskfile.yml
+    dir: ./minikube
+  agent-envs:
+    taskfile: ./agent-envs/Taskfile.yml
+    dir: ./agent-envs
+
 tasks:
   diff:
     desc: Show what would change in the cluster

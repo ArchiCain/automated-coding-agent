@@ -21,7 +21,7 @@ This monorepo uses consistent project organization patterns that work across any
 | **Applications** | User-facing interfaces | Angular frontend, React frontend | Docker image → Helm → K8s |
 | **Services** | Backend logic and APIs | NestJS backend, Mastra agents | Docker image → Helm → K8s |
 | **Infrastructure** | Supporting services | PostgreSQL, Keycloak | Docker image → Helm → K8s |
-| **E2E Tests** | End-to-end testing | Playwright test suites | Run locally or in CI |
+| **Infrastructure** | Platform services | K8s charts, Terraform, sandboxes | Helmfile → K8s |
 
 ## Directory Structure
 
@@ -35,7 +35,7 @@ projects/
 │   │   ├── chart/                 # Helm chart for K8s deployment
 │   │   ├── dockerfiles/           # Container definitions
 │   │   └── Taskfile.yml           # Project automation
-│   ├── frontend/                  # Angular frontend
+│   ├── frontend/                  # React frontend
 │   │   ├── app/
 │   │   │   ├── .docs/             # Project-level docs
 │   │   │   └── src/app/features/  # Feature-based code organization
@@ -51,11 +51,6 @@ projects/
 │   │   ├── app/                   # Realm config + startup scripts
 │   │   ├── chart/
 │   │   └── dockerfiles/
-│   └── e2e/                       # Playwright E2E tests
-│       ├── .docs/
-│       └── app/
-│           ├── fixtures/          # Test data
-│           └── tests/             # Test suites (each with .docs/)
 │
 └── the-dev-team/                  # The agent orchestration system
     ├── backend/                   # NestJS + Mastra agents

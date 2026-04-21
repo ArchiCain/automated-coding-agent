@@ -7,17 +7,16 @@ includes:
   frontend: ./projects/application/frontend/Taskfile.yml
   database: ./projects/application/database/Taskfile.yml
   keycloak: ./projects/application/keycloak/Taskfile.yml
-  e2e: ./projects/application/e2e/Taskfile.yml
   devteam-backend: ./projects/the-dev-team/backend/Taskfile.yml
   devteam-frontend: ./projects/the-dev-team/frontend/Taskfile.yml
   infra:
     taskfile: ./infrastructure/Taskfile.yml
     dir: ./infrastructure
   env:
-    taskfile: infrastructure/agent-envs/Taskfile.yml
+    taskfile: infrastructure/k8s/agent-envs/Taskfile.yml
     dir: .
   minikube:
-    taskfile: infrastructure/minikube/Taskfile.yml
+    taskfile: infrastructure/k8s/minikube/Taskfile.yml
     dir: .
 
 tasks:
@@ -287,7 +286,7 @@ tasks:
   # ===================================================================
 
   run-all-tests:
-    desc: Run complete test suite (unit + integration + e2e)
+    desc: Run complete test suite (unit + integration)
     cmds:
       - echo "Running complete test suite..."
       - echo ""
@@ -302,9 +301,6 @@ tasks:
       - echo ""
       - echo "Running frontend integration tests..."
       - task: frontend:local:test:integration
-      - echo ""
-      - echo "Running e2e tests..."
-      - task: e2e:test
       - echo ""
       - echo "All tests passed!"
 

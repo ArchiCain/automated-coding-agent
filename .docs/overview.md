@@ -8,9 +8,10 @@ A monorepo containing an autonomous software development system and the applicat
 
 | Directory | Purpose |
 |-----------|---------|
-| `projects/application/` | The benchmark application — Angular frontend, NestJS backend, Keycloak auth, PostgreSQL, Playwright E2E tests |
+| `projects/application/` | The benchmark application — React frontend, NestJS backend, Keycloak auth, PostgreSQL |
 | `projects/the-dev-team/` | The agent orchestration system — Mastra agents, WebSocket streaming, docs page UI, sandbox management |
-| `infrastructure/` | Kubernetes deployment — Helm charts, Helmfile, Terraform, Minikube setup, agent sandbox environments |
+| `infrastructure/` | Kubernetes deployment — Helm charts, Helmfile, Terraform, Minikube, agent sandbox environments |
+| `.github/` | CI/CD workflows — PR checks, branch-based deployment |
 | `ideas/` | Vision docs, brainstorming, build plan — input that becomes `.docs/` when ready to build |
 | `scripts/` | Shell scripts for K8s secrets, Minikube setup, Tailscale detection |
 | `.claude/commands/` | Claude Code slash commands — `/review-feature`, `/sync-feature`, `/write-tests`, `/review-spec` |
@@ -24,16 +25,18 @@ See `.docs/standards/docs-driven-development.md` for the full standard.
 ### Documentation Hierarchy
 
 ```
-repo/.docs/                     ← Repo-level: standards, conventions
-infrastructure/.docs/           ← Infrastructure: K8s, networking, CI/CD, Terraform
+repo/.docs/                         ← Repo-level: standards, conventions
+.github/.docs/                      ← CI/CD: workflows, deployment targets
+infrastructure/.docs/               ← Infrastructure overview
+infrastructure/k8s/.docs/           ← Kubernetes: helmfile, networking, tailscale
+infrastructure/terraform/.docs/     ← Terraform: provisioning
 projects/application/
-  ├── backend/.docs/            ← Project-level: overview, coding standards
-  │   └── features/*/.docs/     ← Feature-level: spec, flows, contracts, test-plan
-  ├── frontend/app/.docs/       ← Project-level: overview, coding + design standards
-  │   └── features/*/.docs/     ← Feature-level: spec, flows, contracts, test-plan
-  ├── database/.docs/           ← Database setup spec
-  ├── keycloak/.docs/           ← Auth server config spec
-  └── e2e/.docs/                ← E2E test overview + per-suite specs
+  ├── backend/.docs/                ← Project-level: overview, coding standards
+  │   └── features/*/.docs/         ← Feature-level: spec, flows, contracts, test-plan
+  ├── frontend/app/.docs/           ← Project-level: overview, coding + design standards
+  │   └── features/*/.docs/         ← Feature-level: spec, flows, contracts, test-plan
+  ├── database/.docs/               ← Database setup spec
+  ├── keycloak/.docs/               ← Auth server config spec
 ```
 
 ## Deployment Model

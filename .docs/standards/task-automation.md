@@ -110,7 +110,6 @@ task reset:up              # Wipe and redeploy from scratch
 # Per-project tasks (included from project Taskfiles)
 task backend:local:start:dev    # Start backend dev server
 task frontend:local:run         # Start frontend dev server
-task e2e:test                   # Run Playwright tests
 
 # Infrastructure tasks
 task minikube:start             # Start local K8s cluster

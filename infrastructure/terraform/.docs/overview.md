@@ -1,4 +1,4 @@
-# Terraform
+# Terraform — Overview
 
 Terraform is intentionally minimal. It provisions a single EC2 instance with K3s — everything else is managed by Helmfile.
 
@@ -13,16 +13,16 @@ K3s is installed with `--disable=traefik` so Traefik is managed via Helm alongsi
 
 ## When Terraform isn't used
 
-For the Mac Mini and Pi cluster, Terraform isn't used — K3s is installed directly on the hardware.
+For the Mac Mini, Terraform isn't used — K3s is installed directly on the hardware.
 
 ## Commands
 
 ```bash
-task infra:init      # Initialize Terraform
-task infra:plan      # Plan changes
-task infra:apply     # Provision EC2 + K3s
-task infra:destroy   # Tear down
-task infra:output    # Show IP, SSH command, kubeconfig instructions
+task infra:terraform:init      # Initialize Terraform
+task infra:terraform:plan      # Plan changes
+task infra:terraform:apply     # Provision EC2 + K3s
+task infra:terraform:destroy   # Tear down
+task infra:terraform:output    # Show IP, SSH command, kubeconfig instructions
 ```
 
 ## Directory structure
