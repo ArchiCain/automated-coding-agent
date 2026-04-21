@@ -94,9 +94,10 @@ body {
   font-weight: 600;
 }
 
-// Form fields
+// Form fields — round the outlined container using the M3 shape token.
+// Do NOT border-radius the three notched-outline children individually:
+// leading/notch/trailing are separate border segments that abut each other,
+// so setting radius per-child produces three rounded pieces with visible seams.
 .mat-mdc-form-field {
-  .mdc-text-field--outlined .mdc-notched-outline > * {
-    border-radius: 10px;
-  }
+  --mdc-outlined-text-field-container-shape: 10px;
 }
