@@ -17,9 +17,6 @@ includes:
   env:
     taskfile: ./infrastructure/compose/sandbox/Taskfile.yml
     dir: .
-  infra:
-    taskfile: ./infrastructure/Taskfile.yml
-    dir: ./infrastructure
 
 tasks:
   default:

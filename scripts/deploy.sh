@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Deploy the compose stack to an EC2 host over Tailscale SSH.
+# Deploy the compose stack to a host over Tailscale SSH.
 #
 # Usage:
 #   scripts/deploy.sh --host <tailscale-hostname> [--image-tag <tag>] \
 #                     [--services <csv>] [--dry-run]
 #
-# --host        Tailscale hostname of the target EC2 host (required)
+# --host        Tailscale hostname of the target host (required)
 # --image-tag   Image tag to pull (default: latest)
 # --services    Which compose projects to deploy: dev, openclaw, or dev,openclaw
 #               (default: dev,openclaw)
 # --dry-run     Print every rsync/ssh command that WOULD run, exit 0
 #
-# The dev + openclaw .prod.yml overrides point at ghcr.io/rtslabs/... images,
+# The dev + openclaw .prod.yml overrides point at ghcr.io images,
 # so IMAGE_TAG propagates through compose var substitution.
 
 set -euo pipefail
@@ -94,10 +94,8 @@ fi
 # -----------------------------------------------------------------------------
 # 1. Ship config to the host.
 # -----------------------------------------------------------------------------
-echo "==> Syncing compose config + Caddyfile to ${HOST}"
+echo "==> Syncing compose config to ${HOST}"
 run "rsync -a --delete ${REPO_ROOT}/infrastructure/compose/ ubuntu@${HOST}:/srv/aca/infrastructure/compose/"
-run "rsync -a ${REPO_ROOT}/infrastructure/caddy/Caddyfile ubuntu@${HOST}:/tmp/Caddyfile.new"
-run "ssh ubuntu@${HOST} 'sudo install -m 0644 -o caddy -g caddy /tmp/Caddyfile.new /etc/caddy/Caddyfile && rm /tmp/Caddyfile.new'"
 
 # -----------------------------------------------------------------------------
 # 2. For each requested compose project: pull + up -d.
@@ -121,12 +119,6 @@ for project in "${PROJECTS[@]}"; do
   echo "==> Bringing ${project} up on ${HOST}"
   run "ssh ubuntu@${HOST} '${compose_cmd} up -d'"
 done
-
-# -----------------------------------------------------------------------------
-# 3. Reload Caddy to pick up any Caddyfile changes.
-# -----------------------------------------------------------------------------
-echo "==> Reloading Caddy on ${HOST}"
-run "ssh ubuntu@${HOST} 'sudo systemctl reload caddy'"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "==> Dry run complete. No commands were executed."

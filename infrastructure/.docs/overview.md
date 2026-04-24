@@ -1,66 +1,39 @@
 # Infrastructure Overview
 
-## Deployment stack
+> Note: mid-restructure. A full ecosystem map (host roles, tailnet topology,
+> deploy flow, diagrams) is coming in the next pass. This doc covers only the
+> current state of what's in `infrastructure/`.
 
-Two targets:
+## Deploy target
 
-- **Local development** — docker-compose on the developer's laptop, driven by `task up`. Dev + openclaw projects side-by-side; sandboxes launched on-demand as `env-{id}` compose projects.
-- **Production (EC2)** — the same compose projects running on a single Ubuntu host behind Caddy on `:443`. Provisioned by Terraform; deployed over Tailscale SSH or via the `deploy-dev.yml` GitHub Actions workflow.
+Bare-metal Ubuntu host on the Tailscale tailnet. The same compose projects
+that make up the stack are shipped to the host and brought up with
+`docker compose up -d`. No cloud infra, no public DNS, no local-dev support.
 
-No Kubernetes. The k8s/Minikube setup was removed in the compose migration (see `.docs/migrations/compose/`).
-
-```
-Terraform --> Ubuntu EC2 + Docker Engine (production)
-                    |
-                    |  Docker Desktop (local development)
-                    |
-  docker-compose --> dev / openclaw / env-* compose projects
-                    |
-                    +---- Caddy (on EC2 only) terminates TLS, routes by Host header
-                    +---- Tailscale (both) provides secure remote access
-```
+Remote generation for agent LLM calls is handled by a separate tailnet node
+(GPU box) running its own Ollama — not a concern for this directory.
 
 ## Directory structure
 
 ```
 infrastructure/
-├── .docs/
-│   ├── overview.md               # This file
-│   └── ec2-reverse-proxy.md      # Caddy cert strategy + sandbox-hook contract
-├── compose/
-│   ├── .docs/                    # Compose-stack DDD spec
-│   ├── dev/                      # Long-lived dev stack
-│   ├── openclaw/                 # Gateway + git-sync
-│   └── sandbox/                  # Template for env-{id} sandboxes
-├── terraform/
-│   ├── .docs/                    # Terraform spec
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── k3s-install.sh            # EC2 bootstrap (slated to be replaced with docker + caddy)
-│   └── terraform.tfvars.example
-└── Taskfile.yml
+└── compose/
+    ├── .docs/overview.md   # Compose-stack layout, ports, env files, sandboxes
+    ├── dev/                # Long-lived application stack (frontend, backend, keycloak, postgres)
+    ├── openclaw/           # OpenClaw gateway + git-sync sidecar
+    └── sandbox/            # Template for per-task env-{id} compose projects
 ```
-
-## Where the DDD docs live
-
-- **Compose stack (layout, ports, env files, sandboxes)** — `infrastructure/compose/.docs/overview.md`
-- **EC2 reverse proxy (Caddy, certs, sandbox hooks)** — `infrastructure/.docs/ec2-reverse-proxy.md`
-- **Terraform provisioning** — `infrastructure/terraform/.docs/`
-- **CI/CD workflows** — `.github/.docs/` (if present)
 
 ## Secrets model
 
 | Context | How secrets land |
 |---------|------------------|
-| Local dev | `.env` files in each compose project directory (`infrastructure/compose/dev/.env`, `infrastructure/compose/openclaw/.env`). Gitignored. Template files carry placeholders. |
-| EC2 | Secrets rsync'd onto the host as part of the deploy flow. No AWS Secrets Manager integration yet — that's a post-migration improvement. |
+| Deploy host | Per-compose-project `.env` files (`infrastructure/compose/{dev,openclaw}/.env`). Gitignored. Templates carry placeholders. |
 | CI (GH Actions) | Standard GitHub Actions secrets. `deploy-dev.yml` references `TAILSCALE_OAUTH_*` and `GITHUB_TOKEN`. |
 
-## Adding a new service
+## Deploy flow
 
-1. Write its Dockerfile under `projects/{project}/{service}/dockerfiles/`.
-2. Add a service stanza to `infrastructure/compose/dev/compose.yml` (and the prod overlay if it needs a GHCR tag for EC2).
-3. Add a matching entry to the `deploy-dev.yml` build matrix.
-4. Update the Caddy config if it needs an HTTPS subdomain on EC2 (see `ec2-reverse-proxy.md`).
-5. Document in the project's local `.docs/`.
+1. CI builds images on `workflow_dispatch`, pushes to GHCR.
+2. CI joins the tailnet via `tailscale/github-action` OAuth.
+3. `scripts/deploy.sh` rsyncs `infrastructure/compose/` to the host and runs
+   `docker compose pull && up -d` for each requested project.

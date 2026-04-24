@@ -1,6 +1,7 @@
-name: Deploy to dev (EC2)
+name: Deploy to dev
 
-# Gated — runs only on explicit workflow_dispatch. No push trigger in phase 5.
+# Gated — runs only on explicit workflow_dispatch.
+# Deploys the compose stack to a bare-metal host on the tailnet.
 on:
   workflow_dispatch:
     inputs:
