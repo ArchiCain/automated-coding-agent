@@ -12,7 +12,7 @@ This repo has **two autonomous coding agents** plus a **frozen reference project
 
 **Rule of thumb when deciding where work lands:**
 
-- Is it a bug in the benchmark app (backend/frontend/keycloak/database)? → OpenClaw's queue. Open an issue or talk to the orchestrator at `http://localhost:3001`. Do not edit `projects/application/` directly from Claude Code unless it's a cross-cutting infra concern.
+- Is it a bug in the benchmark app (backend/frontend/keycloak/database)? → OpenClaw's queue. Open an issue or talk to the orchestrator at `http://<host-machine>:3001` (tailnet). Do not edit `projects/application/` directly from Claude Code unless it's a cross-cutting infra concern.
 - Is it a change to how OpenClaw itself thinks or acts (skills, agent instructions, docker image, task wiring)? → Claude Code. Edit `projects/openclaw/` directly in this session.
 - Is it infrastructure, CI/CD, or the deployment story? → Claude Code. Edit the relevant `infrastructure/`, `scripts/`, or `.github/` file.
 - Is it anywhere under `projects/the-dev-team/`? → Don't.
@@ -45,12 +45,10 @@ Documentation is colocated with the code it describes. Look for `.docs/` at the 
 
 ```
 infrastructure/.docs/
-├── overview.md                         # Deployment targets (local compose, EC2 compose)
-└── ec2-reverse-proxy.md                # Caddy cert strategy + sandbox-hook contract
+├── overview.md                         # Index for this directory
+└── ecosystem.md                        # Host roles, deploy flow, diagrams — the north star
 infrastructure/compose/.docs/
 └── overview.md                         # Compose stack layout, ports, env files, sandboxes
-infrastructure/terraform/.docs/
-└── overview.md                         # EC2 provisioning + user-data bootstrap
 ```
 
 ### CI/CD

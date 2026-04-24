@@ -35,9 +35,9 @@ The gateway container also bind-mounts the host's Docker socket (`/var/run/docke
 
 See `projects/openclaw/Taskfile.yml` for the full list.
 
-### EC2 deploy
+### Deploy to host-machine
 
-Same compose project, image references overridden by `infrastructure/compose/openclaw/compose.prod.yml` to point at GHCR. Behind Caddy at `https://openclaw.{DOMAIN}`.
+Same compose project; `compose.prod.yml` swaps the `build:` blocks for `ghcr.io/archicain/automated-coding-agent-openclaw-*` image references. CI runs `scripts/deploy.sh` to rsync compose files onto host-machine and `docker compose pull && up -d`. Reached over the tailnet at `http://<host-machine>:3001`.
 
 ## Agents
 
@@ -126,7 +126,7 @@ No OAuth token, no Claude Code CLI. The API key is the primary reasoning credent
 
 ## Pairing Flow
 
-The Web UI requires a browser secure context (HTTPS or `localhost`) for device crypto. Locally the gateway is reachable at `http://localhost:3001` (localhost qualifies as secure). On EC2 it sits behind Caddy at `https://openclaw.{DOMAIN}` with ACME certs.
+The Web UI requires a browser secure context (HTTPS or `localhost`) for device crypto. On the tailnet, Tailscale serves HTTPS for the gateway hostname (`tailscale serve`), which qualifies as a secure context. When connecting from host-machine itself, `http://localhost:3001` also works.
 
 1. Browser: open the gateway URL
 2. Enter `OPENCLAW_AUTH_TOKEN` as the Gateway Token → "pairing required"

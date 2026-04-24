@@ -23,8 +23,8 @@ repo/
 │
 ├── infrastructure/
 │   └── .docs/                              # Infrastructure-level docs
-│       ├── overview.md                     # Deployment targets (local compose, EC2 compose)
-│       └── ec2-reverse-proxy.md            # Caddy cert strategy + sandbox-hook contract
+│       ├── overview.md                     # Index for this directory
+│       └── ecosystem.md                    # Host roles, deploy flow, diagrams
 │
 ├── projects/
 │   └── {project}/

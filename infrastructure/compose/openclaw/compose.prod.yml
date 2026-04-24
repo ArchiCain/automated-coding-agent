@@ -1,4 +1,4 @@
-# Production override for the openclaw stack on EC2.
+# Production override for the openclaw stack on the deploy host.
 #
 # Layer on top of compose.yml:
 #   docker compose \
@@ -7,7 +7,7 @@
 #     up -d
 #
 # Each service switches to a GHCR image and drops the local `build:` block
-# (the EC2 host doesn't have the build context). Ports, environment,
+# (the deploy host doesn't have the build context). Ports, environment,
 # depends_on, and volumes come from compose.yml unchanged.
 #
 # IMAGE_TAG is injected by scripts/deploy.sh / the deploy workflow.

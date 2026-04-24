@@ -75,4 +75,9 @@ jobs:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
           tags: tag:ci
-      - run: bash scripts/deploy.sh --host "${{ inputs.host || vars.DEPLOY_HOST }}" --image-tag "${{ inputs.image_tag || github.sha }}"
+      - env:
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          bash scripts/deploy.sh \
+            --host "${{ inputs.host || vars.DEPLOY_HOST }}" \
+            --image-tag "${{ inputs.image_tag || github.sha }}"

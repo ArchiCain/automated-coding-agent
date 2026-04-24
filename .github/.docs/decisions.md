@@ -1,25 +1,40 @@
 # CI/CD Decisions
 
-## Branch-based deploys
+## Dispatch-only deploys
 
-Push to a named branch triggers deploy to that target. This is simpler than tag-based or release-based models: no tag management, no release promotion pipelines, and the git log on each branch is a complete audit trail of what was deployed and when.
+Deploys are triggered manually via `workflow_dispatch`, not by pushes to
+`dev`. The `dev` branch is OpenClaw's daily-driver working branch — it
+churns. Deploying on every push would stomp on the running host stack
+during active work. A human decides when the current `dev` is worth
+landing on host-machine.
 
-## Self-hosted runner for CI
+## Tailscale for connectivity, not ingress
 
-The CI workflow runs on a self-hosted runner. This provides access to local services needed during tests and avoids the latency and cost of GitHub-hosted runners for frequent PR checks.
+Host-machine has no public ingress. The CI runner joins the tailnet as
+an ephemeral `tag:ci` node to reach the host over `ssh`. The tailnet is
+the whole network boundary — no VPN, no static IPs, no publicly
+exposed API surface.
 
-## ubuntu-latest for deploy
+## GHCR for the image registry
 
-The deploy workflow runs on ubuntu-latest because it needs full control of the Docker daemon (to configure insecure registries) and the Tailscale GitHub Action works most reliably on Linux. Self-hosted is not needed here since the runner connects to the cluster over Tailscale.
+Images push to GHCR (`ghcr.io/archicain/automated-coding-agent-*`) because
+the Actions runner already has a `GITHUB_TOKEN` with packages:write
+permission — no extra cloud provider account, no registry secrets to
+rotate. host-machine pulls via `docker login ghcr.io` (one-time, during
+bootstrap).
 
-## Insecure in-cluster registry
+## Self-hosted runner for CI, GitHub-hosted for deploy
 
-The cluster runs a single-node registry exposed on NodePort 30500. Using an insecure (HTTP) registry avoids TLS certificate management overhead. There is no benefit from a managed registry (ECR, GHCR) since images are built and consumed within the same cluster. Tailscale provides the network security boundary.
-
-## Tailscale for connectivity
-
-The private cluster has no ports exposed to the public internet. The deploy runner joins the tailnet as an ephemeral node with `tag:ci`, gets access to the cluster via Tailscale DNS, and the node is automatically cleaned up after the workflow completes. This removes the need for VPNs, static IPs, or publicly exposed API servers.
+`ci.yml` runs on a self-hosted runner on the tailnet so tests can reach
+local services without egress. `deploy-dev.yml` runs on
+`ubuntu-latest` because it needs a clean environment with full Docker
+control for building images, and the Tailscale GitHub Action is
+well-supported there. Deploy reaches host-machine the same way CI does —
+over the tailnet.
 
 ## Separate CI and deploy workflows
 
-CI and deploy are in separate workflow files because they differ in every dimension: trigger (PR vs push), runner (self-hosted vs ubuntu-latest), purpose (validation vs deployment), and required tooling. Keeping them separate makes each workflow easier to reason about and modify independently.
+CI and deploy differ in every dimension: trigger (PR vs dispatch),
+runner (self-hosted vs GitHub-hosted), purpose (validation vs
+deployment), and required tooling. Keeping them separate makes each
+workflow easier to reason about and modify independently.

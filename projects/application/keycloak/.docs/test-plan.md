@@ -3,7 +3,7 @@
 ## Contract Tests
 
 - [ ] Keycloak responds on port 8080 inside the container within 120s of startup (`app/scripts/startup.sh:78-93`).
-- [ ] `/health` returns healthy — used by Helm liveness/readiness probes (`chart/templates/deployment.yaml:34-45`).
+- [ ] `/health` returns healthy — available for liveness/readiness probing by any orchestrator.
 - [ ] Admin console reachable at `http://localhost:8081/admin/` locally with `admin` / `admin` (README.md:54, `app/scripts/startup.sh:103-104`).
 - [ ] Token endpoint `POST /realms/application/protocol/openid-connect/token` accepts `grant_type=client_credentials` with `client_id=backend-service` + `client_secret=backend-service-secret` and returns an `access_token` (`app/realm-config/realm-export.json:46-51,65`).
 - [ ] Same endpoint accepts `grant_type=password` with the user's credentials for `testuser` / `password` and `admin` / `admin`.

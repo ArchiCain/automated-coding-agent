@@ -78,11 +78,11 @@ Role-to-permission mapping lives in `ROLE_PERMISSIONS` (`permissions.constants.t
 | `KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET` | `keycloak-auth.service.ts:15-18`, `user-management.service.ts:53-59` | Keycloak OIDC + Admin API |
 | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `DATABASE_NAME` | `typeorm-database-client.module.ts:23-37` | PostgreSQL connection (all required — throws if missing) |
 | `DATABASE_SSL`, `DATABASE_LOGGING` | same | Optional flags; `DATABASE_SYNC` is ignored — hardcoded to `false` (`typeorm-database-client.module.ts:29`) |
-| `ANTHROPIC_API_KEY` | `@ai-sdk/anthropic` (read automatically) | Required by `chat-agent` — injected via `secretEnv` in the Helm chart |
+| `ANTHROPIC_API_KEY` | `@ai-sdk/anthropic` (read automatically) | Required by `chat-agent` — set in the dev compose project's `.env` |
 | `CHAT_MEMORY_DB_URL` | `chat-agent/agents/chat.agent.ts:17` | LibSQL URL for Mastra memory; defaults to `file:./chat-memory.db` |
 
 ## Deployment
 
-- **Local dev:** `task backend:local:start` runs `docker compose` against `infrastructure/docker/compose.yml` service `backend` (`Taskfile.yml:17`). Dockerfile `dockerfiles/local.Dockerfile` installs deps at container start via `scripts/start-dev.sh`.
+- **Local dev:** `task backend:local:start` runs `docker compose` against `infrastructure/compose/dev/compose.yml` service `backend` (`Taskfile.yml:17`). Dockerfile `dockerfiles/local.Dockerfile` installs deps at container start via `scripts/start-dev.sh`.
 - **Production:** Multi-stage build in `dockerfiles/prod.Dockerfile` — `deps` → `builder` (`npm run build`) → runtime `node dist/main` via `scripts/start-prod.sh`. Exposes port 8080.
 - **Migrations:** Run automatically on boot (`migrationsRun: true`, `typeorm-database-client.module.ts:53`). Managed via `npm run migration:*` scripts / `task backend:local:migration:*`.

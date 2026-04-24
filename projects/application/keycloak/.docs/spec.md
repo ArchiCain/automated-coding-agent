@@ -2,7 +2,7 @@
 
 ## What it is
 
-A Keycloak instance deployed via a Helm chart that serves as the identity provider for the `application` stack. It owns a single realm named `application` and a single confidential OIDC client named `backend-service`. The frontend never talks to Keycloak directly; only the backend exchanges credentials, validates JWTs, and manages users through it.
+A Keycloak instance deployed as a service in the dev compose stack that serves as the identity provider for the `application` stack. It owns a single realm named `application` and a single confidential OIDC client named `backend-service`. The frontend never talks to Keycloak directly; only the backend exchanges credentials, validates JWTs, and manages users through it.
 
 ## How it behaves
 
@@ -37,13 +37,13 @@ The backend is the only direct consumer. It logs users in via the direct-access-
 - [ ] Access tokens for the backend service account include `resource_access.realm-management.roles` with the three admin roles.
 - [ ] Deployment-time frontend URL placeholders in the realm's `redirectUris` and `webOrigins` are replaced with the actual value before import.
 - [ ] Brute-force protection triggers after 3 failed logins with a 15-minute lockout.
-- [ ] The `/health` endpoint reports healthy, so the Helm chart's liveness and readiness probes pass.
+- [ ] The `/health` endpoint reports healthy, so any orchestrator's liveness/readiness probe passes.
 
 ## Known gaps
 
 - The Taskfile still references an `export-realm` path that no longer matches the current layout; running that task will fail or export to the wrong place.
 - The `backend-service` client secret is a hard-coded dev default baked into both the realm JSON and the backend's config; there is no mechanism to rotate it or inject a real secret at deploy time.
-- The Helm values set `image.tag: latest` and do not pin a registry, so every deployer is implicitly expected to override both; nothing in this project enforces that.
+- `compose.prod.yml` sets the GHCR image tag to `${IMAGE_TAG:-latest}`; deploys without an explicit tag pull `:latest`. CI always passes the commit SHA, so this only matters for manual `docker compose pull` on the host.
 
 ## Code map
 

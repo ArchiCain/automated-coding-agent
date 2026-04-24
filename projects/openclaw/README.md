@@ -48,6 +48,6 @@ Prerequisites: the rest of the compose stack comes up with `task up` from the re
 | `task openclaw:down`     | Stop everything, preserve the workspace volume |
 | `task openclaw:down:clean` | Stop and wipe the workspace volume (forces fresh clone) |
 
-## EC2 deploy
+## Deploy to host-machine
 
-On EC2, the same compose project runs with `infrastructure/compose/openclaw/compose.prod.yml` overlaid — image refs flip to GHCR and Caddy terminates TLS at `https://openclaw.{DOMAIN}`.
+Same compose project; `compose.prod.yml` overlays GHCR image references built by CI. The `.github/workflows/deploy-dev.yml` workflow builds images, joins the tailnet, rsyncs compose files onto host-machine, and runs `docker compose pull && up -d`. Reached over the tailnet at `http://<host-machine>:3001`. Full flow: `infrastructure/.docs/ecosystem.md`.

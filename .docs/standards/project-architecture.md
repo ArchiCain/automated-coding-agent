@@ -10,18 +10,18 @@ This monorepo uses consistent project organization patterns that work across any
 
 - **Project Independence**: Each project owns its functionality and configuration
 - **Consistent Patterns**: Same structure across all technologies and project types
-- **Compose-First**: All projects deploy via docker-compose — locally on Docker Desktop, on EC2 behind Caddy in production
+- **Compose-First**: All projects deploy via docker-compose — shipped to a bare-metal host on the tailnet (see `infrastructure/.docs/ecosystem.md`)
 - **Task Automation**: Standardized build, test, and deployment workflows via Taskfile
 - **Docs-Driven**: Every project and feature has `.docs/` specifications
 
 ### Project Types
 
-| Type | Purpose | Examples | Deployment |
-|------|---------|----------|------------|
-| **Applications** | User-facing interfaces | Angular frontend, React frontend | Docker image → compose service |
-| **Services** | Backend logic and APIs | NestJS backend, Mastra agents | Docker image → compose service |
-| **Infrastructure** | Supporting services | PostgreSQL, Keycloak | Docker image → compose service |
-| **Platform** | Stack config | compose files, Caddy, Terraform, sandbox templates | docker-compose + Terraform |
+| Type | Purpose | Examples |
+|------|---------|----------|
+| **Applications** | User-facing interfaces | Angular frontend |
+| **Services** | Backend logic and APIs | NestJS backend, OpenClaw gateway |
+| **Infrastructure services** | Supporting containers | PostgreSQL, Keycloak |
+| **Stack config** | Compose files, sandbox templates | `infrastructure/compose/` |
 
 ## Directory Structure
 
@@ -79,15 +79,16 @@ project-name/
 All projects deploy via docker-compose:
 
 ```
-Source code → Docker image → compose service (local Docker daemon or EC2 host)
+Source code → Docker image (GHCR) → compose service on host-machine (tailnet)
 ```
 
-- **Local**: Docker Desktop, `task up` brings up `dev` + `openclaw` compose projects
-- **Production**: Single Ubuntu EC2 host, images pulled from GHCR via the prod compose overlay, fronted by Caddy
-- **Sandboxes**: Per-feature compose projects (`env-{feature}`) cloned from the sandbox template
+- **Primary deploy target**: host-machine (always-on Ubuntu on the tailnet). CI builds images, pushes to GHCR, and runs `docker compose pull && up -d` on the host via `scripts/deploy.sh`.
+- **Sandboxes**: Per-feature compose projects (`env-{feature}`) cloned from the sandbox template and launched on host-machine by OpenClaw's devops agent.
+
+Full deploy sequence + host-role breakdown: `infrastructure/.docs/ecosystem.md`.
 
 The root `Taskfile.yml` includes all project Taskfiles and provides orchestration:
-- `task up` — bring up the full compose stack
+- `task up` — bring up the full compose stack (on host-machine)
 - `task down` — stop everything (preserves volumes)
 - `task build` — build all compose images
 
@@ -97,7 +98,7 @@ The root `Taskfile.yml` includes all project Taskfiles and provides orchestratio
 - **Standard Layout**: All projects follow `app/` + `dockerfiles/` + `Taskfile.yml`
 - **Feature Architecture**: All source code lives in `features/` — see [Feature Architecture](feature-architecture.md)
 - **Compose Services**: Every deployable project has a service stanza in `infrastructure/compose/dev/compose.yml`
-- **Environment Parity**: Same compose files run locally and on EC2 (prod-specific overrides in a layered overlay)
+- **Build/Deploy Split**: Same compose files are used to build locally and to pull pre-built GHCR images on host-machine (prod-specific overrides layered via `compose.prod.yml`)
 
 ### 2. Configuration
 - **Per-stack `.env`**: Each compose project carries its own `.env` in `infrastructure/compose/{stack}/` — see [Environment Configuration](environment-configuration.md)

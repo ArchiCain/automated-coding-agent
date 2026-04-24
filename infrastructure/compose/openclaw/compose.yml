@@ -32,12 +32,10 @@ services:
       OPENCLAW_GIT_APP_SLUG: ${OPENCLAW_GIT_APP_SLUG:-scain-openclaw}
       GITHUB_APP_ID: ${GITHUB_APP_ID}
     # The gateway runs as `node` (uid 1000); it needs to open the host's
-    # docker socket. Socket ownership differs by runtime:
-    #   Docker Desktop (mac): often root:root 660 → DOCKER_SOCKET_GID=0
-    #   Colima (mac):         root:root 660       → DOCKER_SOCKET_GID=0
-    #   Ubuntu (EC2):         root:docker 660     → DOCKER_SOCKET_GID=<docker gid>
-    #                                                (getent group docker | cut -d: -f3)
-    # Set DOCKER_SOCKET_GID in compose/openclaw/.env to match your host.
+    # docker socket. On host-machine (Ubuntu) the socket is root:docker 660,
+    # so DOCKER_SOCKET_GID should be the docker group gid:
+    #   DOCKER_SOCKET_GID=$(getent group docker | cut -d: -f3)
+    # Set it in /srv/aca/infrastructure/compose/openclaw/.env.
     group_add:
       - "${DOCKER_SOCKET_GID:-0}"
     volumes:

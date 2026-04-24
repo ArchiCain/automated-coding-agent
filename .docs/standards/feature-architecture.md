@@ -8,8 +8,6 @@ Application projects follow a **feature-based architecture** to create consisten
 
 **Key Principle**: All application code lives inside `features/`. There are no separate `pages/` or `endpoints/` directories at the project root.
 
-> **Note**: Infrastructure code (Terraform) is documented in `infrastructure/.docs/terraform.md`.
-
 ## Core Structure
 
 ```

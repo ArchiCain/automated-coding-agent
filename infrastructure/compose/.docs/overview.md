@@ -1,17 +1,16 @@
-# Docker Compose deployment stack
+# Docker Compose stacks
 
-All production and local deployment config lives here. Three compose projects
-cover everything:
+Three compose projects make up the deploy:
 
-- **`dev/`** — the long-lived application stack a developer runs against.
-  Ports: frontend 3000, backend 8080, Keycloak 8081, postgres internal only.
-- **`openclaw/`** — the OpenClaw gateway + git-sync sidecar. Port 3001.
-  Drives agent-led sandbox work through the host docker socket.
-- **`sandbox/`** — a template project launched per-task as `env-{id}`.
-  Full dev-stack clone per sandbox, port triple allocated from
-  `20000-29990` by a deterministic hash.
+- **`dev/`** — the long-lived application stack. Ports on the host:
+  frontend `3000`, backend `8080`, keycloak `8081`, postgres internal only.
+- **`openclaw/`** — the OpenClaw gateway + git-sync sidecar. Port `3001`.
+  The gateway drives agent-led sandbox work through the host docker socket.
+- **`sandbox/`** — a template project launched per-task as `env-{id}` by
+  the devops agent. Full dev-stack clone per sandbox, port triple
+  allocated from `20000-29990` by a deterministic hash.
 
-The Taskfile surface wrapping these lives at:
+The Taskfile surface wrapping these:
 
 - `infrastructure/compose/dev/Taskfile.yml`       → `task dev:*`
 - `infrastructure/compose/sandbox/Taskfile.yml`   → `task env:*`
@@ -19,44 +18,61 @@ The Taskfile surface wrapping these lives at:
 
 The root Taskfile chains them so `task up` = `dev:up && openclaw:up`.
 
+## Compose layering
+
+Each stack ships two files:
+
+- `compose.yml` — base services, local `build:` blocks.
+- `compose.prod.yml` — overlay that swaps `build:` for
+  `image: ghcr.io/archicain/automated-coding-agent-{service}:${IMAGE_TAG}`.
+  `scripts/deploy.sh` combines both on the host.
+
+Host-side invocation:
+
+```
+IMAGE_TAG=<sha> docker compose \
+  -f /srv/aca/infrastructure/compose/dev/compose.yml \
+  -f /srv/aca/infrastructure/compose/dev/compose.prod.yml \
+  pull && up -d
+```
+
 ## Port model
 
-Locally (macOS + Docker Desktop, or any OS running Docker Engine):
+On host-machine, services listen on these ports for traffic arriving
+over the tailnet:
 
-| Service | Local URL |
-|---------|-----------|
-| Dev frontend | `http://localhost:3000` |
-| Dev backend | `http://localhost:8080` |
-| Dev Keycloak | `http://localhost:8081` |
-| OpenClaw UI | `http://localhost:3001` |
-| Sandbox `env-{id}` frontend | `http://localhost:{base}` |
-| Sandbox `env-{id}` backend | `http://localhost:{base+1}` |
-| Sandbox `env-{id}` Keycloak | `http://localhost:{base+2}` |
+| Service | Port |
+|---------|------|
+| Dev frontend | `3000` |
+| Dev backend | `8080` |
+| Dev Keycloak | `8081` |
+| OpenClaw UI | `3001` |
+| Sandbox `env-{id}` frontend | `{base}` |
+| Sandbox `env-{id}` backend | `{base+1}` |
+| Sandbox `env-{id}` Keycloak | `{base+2}` |
 
-Where `{base}` is `20000 + (cksum(SANDBOX_ID) % 1000) * 10`, bumped by 10 on
-collision. `scripts/sandbox-deploy.sh` prints the allocated triple on create.
-
-On EC2 (future), a host-level reverse proxy (tentative: Caddy) terminates TLS
-and routes subdomains → these same local ports. Decision record in
-`infrastructure/.docs/ec2-reverse-proxy.md`.
+Where `{base}` = `20000 + (cksum(SANDBOX_ID) % 1000) * 10`, bumped by 10 on
+collision. `scripts/sandbox-deploy.sh` prints the allocated triple on
+create. Reach services via the tailnet hostname — e.g.
+`http://<host-machine>:3000`.
 
 ## Bringing a stack up
 
-Each project has an `.env.template` documenting its variables. Before first
-boot:
+Each compose project has an `.env.template` documenting its variables.
+Before first boot (on host-machine):
 
 ```
-cp infrastructure/compose/dev/.env.template       infrastructure/compose/dev/.env
-cp infrastructure/compose/openclaw/.env.template  infrastructure/compose/openclaw/.env
+cp infrastructure/compose/dev/.env.template       /srv/aca/infrastructure/compose/dev/.env
+cp infrastructure/compose/openclaw/.env.template  /srv/aca/infrastructure/compose/openclaw/.env
 ```
 
-Fill in secrets (API keys, GitHub App credentials) in each `.env`. Then:
+Fill in secrets (API keys, GitHub App credentials). After that, deploys
+are one-shot through the GH Actions workflow; for manual operation:
 
 ```
-task up            # dev + openclaw, both detached
+task up            # dev + openclaw
 task dev:logs      # or openclaw:logs — stream container logs
 task down          # stop both, preserve volumes
-task up:clean      # (future) — stop + wipe volumes
 ```
 
 Individual projects are controllable directly:
@@ -76,8 +92,8 @@ task env:cleanup-stale -- 24      # destroy env-* older than 24h
 ```
 
 The OpenClaw devops-agent skill
-(`projects/openclaw/app/skills/devops.md`) calls `task env:*` directly. No
-compose-level knowledge leaks into the skill.
+(`projects/openclaw/app/skills/devops.md`) calls `task env:*` directly.
+No compose-level knowledge leaks into the skill.
 
 ## Networking
 
@@ -85,57 +101,53 @@ Each compose project uses its own default bridge network. Service-to-service
 traffic within a project is DNS-resolved by compose (e.g. backend talks to
 `postgres:5432`, frontend nginx proxies `/api/` to `backend:8080`).
 
-**Cross-project traffic is not enabled.** OpenClaw reaches the host docker
+Cross-project traffic is not enabled. OpenClaw reaches the host docker
 socket to orchestrate sandboxes via `docker compose` commands; it doesn't
 open a TCP connection into the dev stack or into a sandbox.
 
 ## The docker socket and `DOCKER_SOCKET_GID`
 
-OpenClaw's gateway runs as uid 1000 and needs to open `/var/run/docker.sock`.
-Socket ownership differs by host:
+OpenClaw's gateway runs as uid 1000 and needs to open
+`/var/run/docker.sock`. On host-machine (Ubuntu), the socket is
+`root:docker 660`, so set:
 
-| Host | Ownership | `DOCKER_SOCKET_GID` |
-|------|-----------|---------------------|
-| Docker Desktop (mac) | root:root 660 | `0` (default) |
-| Colima (mac) | root:root 660 | `0` (default) |
-| Ubuntu on EC2 | root:docker 660 | `getent group docker \| cut -d: -f3` |
+```
+DOCKER_SOCKET_GID=$(getent group docker | cut -d: -f3)
+```
 
-Set it in `infrastructure/compose/openclaw/.env` per host. `group_add` in
-`infrastructure/compose/openclaw/compose.yml` pulls it in as a supplemental
-group.
+in `/srv/aca/infrastructure/compose/openclaw/.env`. The compose file's
+`group_add` stanza uses this as a supplemental group on the gateway
+container.
 
 ## Images
 
-Every service has its Dockerfile checked in under
+Every service has its Dockerfile under
 `projects/application/{backend,frontend,keycloak}/dockerfiles/` or
-`projects/openclaw/dockerfiles/`. Compose build contexts point at those
-directories; `task *:build` invokes the builds with the right tags.
+`projects/openclaw/dockerfiles/`. The CI deploy workflow builds with
+those contexts and pushes to GHCR:
 
-- **Dev stack** — images tagged `{service}:latest` (compose default).
-- **Sandboxes** — images tagged `{service}:{SANDBOX_ID}`. `scripts/sandbox-deploy.sh`
-  builds before calling `docker compose up -d`, so compose finds the image
-  pre-built. Sandbox `compose.yml` carries both `image:` and `build:` blocks
-  as a safety net.
-- **OpenClaw** — gateway + git-sync-sidecar, each built from their respective
-  Dockerfiles. No registry push in phase 5; registry arrives with the EC2
-  deploy workflow in phase 5.
+```
+ghcr.io/archicain/automated-coding-agent-{backend,frontend,keycloak,openclaw-gateway,openclaw-git-sync}:${SHA}
+```
+
+`compose.prod.yml` references those images; the host pulls them on each
+deploy.
+
+Sandbox images are an exception — they're built locally on
+host-machine per-sandbox and tagged `{service}:{SANDBOX_ID}`. No registry
+push.
 
 ## Env-file management
 
-`.env.template` files are tracked (gitignore whitelists `.env.template`).
-`.env` files are ignored. Copy the template, populate, never commit.
+`.env.template` files are tracked (`.gitignore` whitelists them).
+`.env` files are not. Copy the template, populate on the host, never commit.
 
-The OpenClaw `.env` includes secrets (Anthropic API key, OpenAI key,
-GitHub App installation ID, host path to the App private key PEM). Loss or
+The OpenClaw `.env` includes the Anthropic + OpenAI API keys, GitHub App
+installation ID, and the host path to the App private-key PEM. Loss or
 exposure requires regenerating those credentials.
 
 ## Related docs
 
-- `infrastructure/.docs/ec2-reverse-proxy.md` — deferred ADR for HTTPS +
-  subdomain URLs on EC2 (phase 5 finalizes).
-- `infrastructure/terraform/.docs/` — EC2 provisioning (phase 5 updates to
-  install docker + tailscale + reverse proxy instead of K3s).
-- `projects/application/*/dockerfiles/` — service Dockerfiles that compose
-  builds.
-- `projects/openclaw/app/skills/devops.md` — how the OpenClaw devops agent
-  uses the `task env:*` surface.
+- `infrastructure/.docs/ecosystem.md` — deploy flow, host roles, diagrams
+- `projects/openclaw/app/skills/devops.md` — how the devops agent uses `task env:*`
+- `projects/{project}/dockerfiles/` — service Dockerfiles that compose builds

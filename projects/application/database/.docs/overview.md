@@ -30,17 +30,16 @@ schemas (`infrastructure/compose/dev/compose.yml`, service `postgres`).
 | Keycloak | `KC_DB_URL_HOST=postgres`, `KC_DB_URL_PORT=5432` (`infrastructure/compose/dev/compose.yml`, service `keycloak` environment) | `keycloak` (`KC_DB_SCHEMA`) | Liquibase (bundled in Keycloak) |
 
 All connections use the compose service name `postgres` on the project's default network.
-Port 5432 is **not** published to the host in dev — access from the laptop is via
+Port 5432 is **not** published to the host — access is via
 `docker compose -f infrastructure/compose/dev/compose.yml exec postgres psql`.
 
 ## Deploy Model
 
-- **Dev laptop:** `task dev:up` (or `task up`) brings the stack up via
-  `docker compose -f infrastructure/compose/dev/compose.yml up -d`. `POSTGRES_USER`,
-  `POSTGRES_PASSWORD`, and `POSTGRES_DB` come from `.env` (defaults in `.env.template`:
-  `postgres` / `postgres` / `app`).
-- **EC2 / prod:** same compose files with the `compose.prod.yml` overlay (GHCR image
-  refs) behind Caddy.
+- **host-machine:** `task dev:up` (or `task up`) brings the stack up via
+  `docker compose -f infrastructure/compose/dev/compose.yml up -d`. For CI-driven deploys,
+  `compose.prod.yml` layers pre-built GHCR images over the base file. `POSTGRES_USER`,
+  `POSTGRES_PASSWORD`, and `POSTGRES_DB` come from the host's `.env`
+  (defaults in `.env.template`: `postgres` / `postgres` / `app`).
 - **Credentials:** `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` are set directly
   on the `postgres` service `environment` block via `${...}` interpolation from `.env`
   (`infrastructure/compose/dev/compose.yml`, service `postgres`).

@@ -4,7 +4,7 @@
 
 Two endpoints under `/health`:
 
-- `GET /health` — a public, dependency-free liveness check. Always returns `200` with `{ status, timestamp, service }`. Used by local smoke checks, the EC2 reverse proxy's upstream checks, and any external monitor.
+- `GET /health` — a public, dependency-free liveness check. Always returns `200` with `{ status, timestamp, service }`. Used by local smoke checks and any external monitor.
 - `GET /health/database` — an authenticated diagnostic that reports whether the backend's TypeORM `DataSource` can talk to Postgres right now, and lists the tables in the current schema. Used by the frontend's Testing Tools page.
 
 ## How it behaves
@@ -31,8 +31,8 @@ The endpoint **does not** cache. Each call runs the query against Postgres.
 
 ### How the endpoints are used
 
-- **Local smoke:** `task backend:local:health` curls `/health`. A developer hitting the Testing Tools page at `/smoke-tests` or the home page at `/home` triggers a `/health/database` request from the frontend (`TypeormDatabaseClientComponent`).
-- **Production (EC2, behind Caddy):** Caddy reverse-proxies the same paths. Operators can curl `/health` without auth. `/health/database` is only reachable after a Keycloak login.
+- **Developer / operator smoke:** `task backend:local:health` curls `/health`. A signed-in user hitting the Testing Tools page at `/smoke-tests` or the home page at `/home` triggers a `/health/database` request from the frontend (`TypeormDatabaseClientComponent`).
+- **On host-machine:** `/health` is reachable over the tailnet without auth; `/health/database` is only reachable after a Keycloak login.
 
 ## Acceptance criteria
 
@@ -85,4 +85,3 @@ Paths are relative to `projects/application/backend/app/`.
 | Backend local smoke (`/health`) | `projects/application/backend/Taskfile.yml` | `curl -f http://localhost:${BACKEND_PORT}/health`. |
 | Frontend Testing Tools database card (`/health/database`) | `projects/application/frontend/app/src/app/features/testing-tools/services/testing-tools.api.ts:40-45` | Sent with `withCredentials: true`. |
 | Home-page database status card (`/health/database`) | `projects/application/frontend/app/src/app/features/home/...` | Same `TestingToolsApiService.checkDatabase` call. |
-| Future EC2 reverse proxy upstream probe | `infrastructure/caddy/Caddyfile` | Not wired today; Caddy uses transport-level checks, not HTTP probes, unless explicitly configured. |

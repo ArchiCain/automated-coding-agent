@@ -25,7 +25,6 @@ projects/application/backend/
 ├── dockerfiles/
 │   ├── local.Dockerfile                 # Dev image with hot reload
 │   └── prod.Dockerfile                  # Multi-stage production build
-├── chart/                               # Helm chart for K8s
 └── Taskfile.yml
 ```
 

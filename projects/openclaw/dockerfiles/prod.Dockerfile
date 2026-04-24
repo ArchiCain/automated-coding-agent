@@ -31,9 +31,8 @@ RUN set -eux; \
     esac; \
     # docker CLI (talks to the host daemon via mounted socket at runtime).
     # 27.x is the first stable series whose client speaks API >= 1.44, which
-    # modern daemons (Colima's bundled Docker, current Docker Desktop) require
-    # as a minimum. 24.0.7 was fine against Minikube's older daemon but is
-    # rejected now. Pin to a concrete point release for reproducibility.
+    # modern Docker daemons require. Pin to a concrete point release for
+    # reproducibility.
     curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-27.3.1.tgz" -o /tmp/docker.tgz && \
     tar -xzf /tmp/docker.tgz -C /tmp && \
     mv /tmp/docker/docker /usr/local/bin/docker && \

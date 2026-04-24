@@ -8,11 +8,6 @@
 # Agent worktrees
 .worktrees/
 
-# AWS specific
-.aws/
-aws.json
-aws-credentials.json
-
 # Node.js dependencies and package managers
 node_modules/
 npm-debug.log*
@@ -266,15 +261,6 @@ cython_debug/
 /nbbuild/
 /nbdist/
 /.nb-gradle/
-
-# Terraform / OpenTofu (infrastructure/ and subdirs)
-**/.terraform/
-**/.terraform.lock.hcl
-infrastructure/**/*.tfstate
-infrastructure/**/*.tfstate.backup
-infrastructure/**/*.tfplan
-infrastructure/**/terraform.tfvars
-infrastructure/crash.log
 
 example-files/.worktrees/
 

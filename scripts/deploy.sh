@@ -2,10 +2,11 @@
 # Deploy the compose stack to a host over Tailscale SSH.
 #
 # Usage:
-#   scripts/deploy.sh --host <tailscale-hostname> [--image-tag <tag>] \
-#                     [--services <csv>] [--dry-run]
+#   scripts/deploy.sh --host <tailscale-hostname> [--user <ssh-user>] \
+#                     [--image-tag <tag>] [--services <csv>] [--dry-run]
 #
 # --host        Tailscale hostname of the target host (required)
+# --user        SSH user on the target host (default: $DEPLOY_USER or "ubuntu")
 # --image-tag   Image tag to pull (default: latest)
 # --services    Which compose projects to deploy: dev, openclaw, or dev,openclaw
 #               (default: dev,openclaw)
@@ -20,12 +21,13 @@ set -euo pipefail
 # Parse args
 # -----------------------------------------------------------------------------
 HOST=""
+USER_NAME="${DEPLOY_USER:-ubuntu}"
 IMAGE_TAG="latest"
 SERVICES="dev,openclaw"
 DRY_RUN=0
 
 usage() {
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -36,6 +38,10 @@ while [ $# -gt 0 ]; do
       ;;
     --host)
       HOST="${2:-}"
+      shift 2
+      ;;
+    --user)
+      USER_NAME="${2:-}"
       shift 2
       ;;
     --image-tag)
@@ -95,7 +101,7 @@ fi
 # 1. Ship config to the host.
 # -----------------------------------------------------------------------------
 echo "==> Syncing compose config to ${HOST}"
-run "rsync -a --delete ${REPO_ROOT}/infrastructure/compose/ ubuntu@${HOST}:/srv/aca/infrastructure/compose/"
+run "rsync -a --delete ${REPO_ROOT}/infrastructure/compose/ ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/"
 
 # -----------------------------------------------------------------------------
 # 2. For each requested compose project: pull + up -d.
@@ -114,10 +120,10 @@ for project in "${PROJECTS[@]}"; do
   compose_cmd="IMAGE_TAG=${IMAGE_TAG} docker compose -f ${base}/compose.yml -f ${base}/compose.prod.yml"
 
   echo "==> Pulling ${project} images on ${HOST} (tag=${IMAGE_TAG})"
-  run "ssh ubuntu@${HOST} '${compose_cmd} pull'"
+  run "ssh ${USER_NAME}@${HOST} '${compose_cmd} pull'"
 
   echo "==> Bringing ${project} up on ${HOST}"
-  run "ssh ubuntu@${HOST} '${compose_cmd} up -d'"
+  run "ssh ${USER_NAME}@${HOST} '${compose_cmd} up -d'"
 done
 
 if [ "$DRY_RUN" -eq 1 ]; then

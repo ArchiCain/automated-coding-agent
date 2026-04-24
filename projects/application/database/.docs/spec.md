@@ -44,6 +44,6 @@ Paths are relative to the repo root.
 | Backend `DATABASE_*` environment wiring | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` |
 | Keycloak `KC_DB_*` environment wiring | `infrastructure/compose/dev/compose.yml` · `services.keycloak.environment` |
 | Sandbox overlay of the same stack (parameterized by `${SANDBOX_ID}`) | `infrastructure/compose/sandbox/compose.yml` |
-| Prod overlay (GHCR image refs behind Caddy) | `infrastructure/compose/dev/compose.prod.yml` |
+| Prod overlay (GHCR image refs on the deploy host) | `infrastructure/compose/dev/compose.prod.yml` |
 | Credential defaults | `.env.template` |
 | Backend initial migration (creates extensions + app schema) | `projects/application/backend/app/src/features/typeorm-database-client/migrations/1734056400000-InitialSchema.ts:19-21` |

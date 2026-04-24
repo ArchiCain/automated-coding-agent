@@ -16,7 +16,6 @@
 
         nodeVersion = pkgs.nodejs_22;
         pythonVersion = pkgs.python311;
-        terraform = pkgs.terraform;
       in
       {
         devShells.default = pkgs.mkShell {
@@ -26,9 +25,6 @@
             pkgs.direnv
             pkgs.go-task
             pkgs.git
-
-            terraform
-            pkgs.awscli2
 
             pkgs.tmux
 
@@ -45,8 +41,6 @@
             echo "  Node.js $(node --version)"
             echo "  npm $(npm --version)"
             echo "  Python $(python3 --version)"
-            echo "  Terraform $(terraform --version | head -n1)"
-            echo "  AWS CLI $(aws --version)"
             echo "  Task $(task --version)"
             echo ""
 

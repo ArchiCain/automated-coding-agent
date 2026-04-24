@@ -1,96 +1,83 @@
 # Automated Coding Agent
 
-An autonomous software development system where agents read `.docs/` specifications and sync code to match. Deploy, test, PR, iterate — humans guide the specs, agents write the code.
+An autonomous software development system where agents read `.docs/`
+specifications and sync code to match. Deploy, test, PR, iterate —
+humans guide the specs, agents write the code.
 
-**Who edits what** (see top of `CLAUDE.md` for the full rationale):
+**Who edits what** (full rationale in `CLAUDE.md`):
 
-- **OpenClaw** — the active agent runtime. Owns `projects/application/` (the benchmark app). Reached at `http://localhost:3001` after `task up`.
-- **Claude Code** — owns OpenClaw itself (`projects/openclaw/`) plus infrastructure, CI/CD, and this repo's top-level docs. Humans iterate here.
-- **THE Dev Team** (`projects/the-dev-team/`) — frozen reference. Not actively used.
+- **OpenClaw** — the active agent runtime. Owns `projects/application/`
+  (the benchmark app). Reachable on the deploy host at
+  `http://<host-machine>:3001` over the tailnet.
+- **Claude Code** — owns OpenClaw itself (`projects/openclaw/`) plus
+  infrastructure, CI/CD, and top-level docs. Humans iterate here.
+- **The Dev Team** (`projects/the-dev-team/`) — frozen reference.
 
-## Prerequisites
+## Deployment target
+
+The stack deploys to a bare-metal Ubuntu host on a Tailscale tailnet
+(role name: **host-machine**). A second GPU host
+(**graphics-machine**) serves the primary coding LLM via Ollama and is
+configured out-of-band. There is no local-dev flow and no cloud infra.
+
+See `infrastructure/.docs/ecosystem.md` for the full map — diagrams,
+host roles, deploy sequence, bootstrap steps.
+
+## Tooling
+
+The dev shell is managed by Nix + direnv. After cloning:
 
 ### 1. Install Nix
 
-All tooling (Node.js, Terraform, Task, etc.) is managed through a Nix flake. No manual tool installation needed.
-
-**macOS:**
 ```bash
 sh <(curl -L https://nixos.org/nix/install)
 ```
 
-**Linux:**
-```bash
-sh <(curl -L https://nixos.org/nix/install) --daemon
-```
-
-Restart your terminal after installation.
+(Linux: append `--daemon`.) Restart your terminal afterwards.
 
 ### 2. Install direnv
 
-direnv automatically activates the Nix shell when you `cd` into the repo.
-
-**macOS:**
 ```bash
+# macOS
 brew install direnv
 echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc
-source ~/.zshrc
-```
 
-**Linux:**
-```bash
+# Linux
 sudo apt-get install direnv
 echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
-source ~/.bashrc
 ```
 
-### 3. Install Docker Desktop
-
-The local stack runs on plain docker-compose. Install from [docker.com](https://www.docker.com/products/docker-desktop/) and make sure the Docker daemon is running before `task up`.
-
-### 4. Install Tailscale (optional)
-
-Tailscale is used for secure remote access to the production EC2 host. Local development does not require it. Install from [tailscale.com/download](https://tailscale.com/download) if you need to SSH into the deploy target.
-
-## Setup
+### 3. Activate the dev shell
 
 ```bash
-# 1. Enter the dev shell
 cd automated-coding-agent
-direnv allow    # First time — may take a few minutes to download
-
-# 2. Create the per-project .env files
-cp infrastructure/compose/dev/.env.template       infrastructure/compose/dev/.env
-cp infrastructure/compose/openclaw/.env.template  infrastructure/compose/openclaw/.env
+direnv allow    # first time — downloads deps
 ```
 
-### What to fill in
+That's it. Nix provides Node.js 22, Python 3.11, `go-task`, Docker CLI,
+git, and tmux.
 
-- **`infrastructure/compose/dev/.env`** — postgres credentials and the Keycloak client secret. Defaults in the template are fine for local development.
-- **`infrastructure/compose/openclaw/.env`** — Anthropic + OpenAI API keys, an `OPENCLAW_AUTH_TOKEN` (`openssl rand -hex 32`), GitHub App ID + installation ID, and the absolute host path to your GitHub App private-key PEM.
+### 4. Install Tailscale
 
-The root `.env` (from `.env.template`) is only consumed by legacy and per-project local-dev tasks (e.g. `task backend:local:run`). The compose stack reads directly from the per-project `.env` files above.
+Required to reach the deploy host. Install from
+[tailscale.com/download](https://tailscale.com/download) and join your
+tailnet.
 
-## Start
+## First-time host bootstrap
 
-```bash
-task up
-```
+See `infrastructure/.docs/ecosystem.md` → "Bootstrapping a host" for the
+one-off setup on host-machine (install Docker, join tailnet, place `.env`
+files and GitHub App PEM, set `vars.DEPLOY_HOST` on GitHub).
 
-This brings up the full compose stack: the dev application (postgres, backend, frontend, keycloak) and OpenClaw (gateway + git-sync sidecar).
+## Deploying
 
-On completion:
-```
-Application:
-  Frontend: http://localhost:3000
-  API:      http://localhost:3333
-  Auth:     http://localhost:8080
+Deploys are triggered manually through the GitHub Actions
+"Deploy to dev" workflow (`.github/workflows/deploy-dev.yml`). The
+workflow builds images, pushes to GHCR, joins the tailnet, and runs
+`scripts/deploy.sh` against the host. Full sequence diagram in
+`ecosystem.md`.
 
-OpenClaw:
-  Web UI:   http://localhost:3001
-```
-
-## Day-to-day
+## Day-to-day (on host-machine, typically via `ssh`)
 
 ```bash
 task up                 # bring up dev + openclaw
@@ -103,19 +90,9 @@ task env:destroy -- X   # tear it down
 
 See `task --list` for the full surface.
 
-## What Nix provides
-
-When the dev shell activates, these tools are available:
-
-| Tool | Purpose |
-|------|---------|
-| Node.js 22 | Runtime for backend and frontend |
-| Terraform | Production infrastructure provisioning |
-| go-task | Task automation (Taskfile runner) |
-| Docker CLI | Container interactions |
-| AWS CLI | EC2 interaction for the production host |
-| tmux | Terminal multiplexer |
-
 ## Documentation
 
-This repo uses documentation-driven development. See `.docs/overview.md` for the full picture and `.docs/standards/docs-driven-development.md` for the convention.
+This repo uses documentation-driven development. See `.docs/overview.md`
+for the repo map and `.docs/standards/docs-driven-development.md` for
+the convention. `infrastructure/.docs/ecosystem.md` is the
+architecture north star.

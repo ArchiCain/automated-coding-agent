@@ -6,7 +6,7 @@ Centralized OIDC identity provider for the `application` stack. Runs Keycloak `2
 
 ## Tech Stack
 
-- **Keycloak** 23.0.3 (`dockerfiles/Dockerfile:6`, `chart/Chart.yaml:6`)
+- **Keycloak** 23.0.3 (`dockerfiles/Dockerfile:6`)
 - **Database:** PostgreSQL 16 client (`dockerfiles/Dockerfile:3`), `KC_DB=postgres` (`dockerfiles/Dockerfile:45`)
 - **Tooling in image:** `psql` (schema bootstrap), `envsubst` (realm-config templating) — both copied from `alpine:3.19` in stage 1 (`dockerfiles/Dockerfile:2-24`)
 - **Image startup:** `start-dev --import-realm` via wrapper script (`dockerfiles/Dockerfile:52`)
@@ -19,8 +19,7 @@ projects/application/keycloak/
 │   ├── realm-config/realm-export.json   # Single realm: clients, roles, users, mappers
 │   └── scripts/startup.sh               # PG wait → schema → envsubst → start → kcadm role assignment
 ├── dockerfiles/Dockerfile               # Multi-stage image (Keycloak + psql + envsubst)
-├── chart/                               # Helm chart (deployment, service, ingress, config, secret)
-└── Taskfile.yml                         # Local docker-compose lifecycle tasks
+└── Taskfile.yml                         # docker-compose lifecycle tasks
 ```
 
 ## Realm Structure (`application`)
@@ -49,8 +48,7 @@ projects/application/keycloak/
 
 ## Deploy Model
 
-- **Local:** `docker compose -f infrastructure/docker/compose.yml up -d keycloak` via `Taskfile.yml`. Exposed on host port `8081` (README.md:54).
-- **Kubernetes:** Helm chart in `chart/` — `Deployment` (1 replica, 512Mi–1Gi, `/health` liveness+readiness), `Service` (ClusterIP:8080), optional Traefik `Ingress`, env/secret wired via `envFrom` (`chart/templates/deployment.yaml`, `chart/templates/service.yaml`, `chart/templates/ingress.yaml`).
+- **Compose:** runs as the `keycloak` service in `infrastructure/compose/dev/compose.yml`. Exposed on host port `8081`. On the deploy host, `compose.prod.yml` swaps the `build:` block for the GHCR image built by CI.
 - **Realm export:** `task keycloak:local:export-realm` dumps the live realm back to `app/realm-config/realm-export.json` (note: `Taskfile.yml:35` writes to `./projects/keycloak/app/realm-config/` — see Discrepancies in the command report).
 
 ## How Apps Consume It

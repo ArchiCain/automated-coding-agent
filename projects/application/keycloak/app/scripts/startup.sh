@@ -12,9 +12,8 @@ DB_USER="${KC_DB_USERNAME:-postgres}"
 DB_PASSWORD="${KC_DB_PASSWORD:-postgres}"
 SCHEMA_NAME="${KC_DB_SCHEMA:-keycloak}"
 
-# Check if SSL is required from DATABASE_SSL environment variable or KC_DB_URL
-# For local development, DATABASE_SSL=false means no SSL
-# For production (AWS RDS), SSL is required
+# SSL mode derived from DATABASE_SSL (explicit opt-out) or a sslmode=disable
+# hint embedded in KC_DB_URL; otherwise require SSL.
 if [ "${DATABASE_SSL}" = "false" ]; then
   export PGSSLMODE="disable"
 elif echo "${KC_DB_URL}" | grep -q "sslmode=disable"; then

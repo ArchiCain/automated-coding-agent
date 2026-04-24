@@ -5,11 +5,5 @@
 # Protect GitHub config-as-code files
 /.github/CODEOWNERS    @scain
 
-# Protect infrastructure provisioning
-/infrastructure/terraform/  @scain
-
-# Protect the orchestrator's own config
-/infrastructure/k8s/charts/the-dev-team/  @scain
-
-# Protect security configuration
-/.github/CODEOWNERS    @scain
+# Protect the deploy script — it runs against the tailnet host
+/scripts/deploy.sh     @scain
