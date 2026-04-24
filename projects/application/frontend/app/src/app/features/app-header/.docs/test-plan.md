@@ -6,7 +6,7 @@
 - [ ] Toolbar has `background-color: var(--app-bg-paper)` and a `1px` bottom border of `var(--app-divider)`.
 - [ ] Renders exactly one menu `mat-icon-button` as the first child, containing a `mat-icon` with text `menu` and `aria-label="Toggle navigation"`.
 - [ ] Clicking the menu button emits `menuToggle` (assert via `component.menuToggle.subscribe` or a harness parent).
-- [ ] Renders a `span.app-title` with text `RTS AI Platform`.
+- [ ] Renders a `span.app-title` with text `AI Platform`.
 - [ ] Renders `<app-theme-toggle>` before `<app-avatar-menu>` on the right side, with a `.spacer` element (`flex: 1`) between them and the title.
 - [ ] Component declares `ChangeDetectionStrategy.OnPush`.
 

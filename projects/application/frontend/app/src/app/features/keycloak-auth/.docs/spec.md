@@ -8,7 +8,7 @@ Sign-in, session, and permission surface for the frontend. Provides the `/login`
 
 ### Signing in
 
-A user who is not signed in lands on `/login`, which renders a centered card titled "Sign In" with subtitle "RTS AI Platform" and a form asking for a username and password. The form validates locally: username is required and must be at least three characters; password is required. The submit button stays disabled while the form is invalid. On submit, the frontend posts the credentials to the backend with cookies enabled. If the backend accepts them, the returned user is stored in memory and the user is sent to `/`. If the backend rejects them, the server's error message is shown above the form (falling back to "Login failed" when the server gives nothing); the values the user typed are preserved. There is no loading spinner or input-disabling while the request is in flight, and the page does not redirect a user who is already signed in — the login card renders regardless.
+A user who is not signed in lands on `/login`, which renders a centered card titled "Sign In" with subtitle "AI Platform" and a form asking for a username and password. The form validates locally: username is required and must be at least three characters; password is required. The submit button stays disabled while the form is invalid. On submit, the frontend posts the credentials to the backend with cookies enabled. If the backend accepts them, the returned user is stored in memory and the user is sent to `/`. If the backend rejects them, the server's error message is shown above the form (falling back to "Login failed" when the server gives nothing); the values the user typed are preserved. There is no loading spinner or input-disabling while the request is in flight, and the page does not redirect a user who is already signed in — the login card renders regardless.
 
 ### Staying signed in across a page refresh
 
@@ -28,7 +28,7 @@ Templates can wrap any element in a structural directive that takes a permission
 
 ## Acceptance criteria
 
-- `/login` renders a centered card with header "Sign In" and subtitle "RTS AI Platform" and is publicly reachable outside the protected route tree.
+- `/login` renders a centered card with header "Sign In" and subtitle "AI Platform" and is publicly reachable outside the protected route tree.
 - The login form submits username and password (never email) and its submit button is disabled while the form is invalid.
 - Username enforces required + min-length 3; password enforces required; field errors appear only after the field is touched.
 - On a successful login, the current user becomes the user object returned by the backend and the router navigates to `/`.

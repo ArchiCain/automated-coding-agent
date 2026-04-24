@@ -2,7 +2,7 @@
 
 ## What it is
 
-The sticky top toolbar that sits above every page of the authenticated app shell. It shows the app's brand title ("RTS AI Platform") and gives the user three controls: a menu button to toggle the side navigation on narrow screens, a theme toggle, and an avatar button that opens a small menu with the current username and a Sign Out action.
+The sticky top toolbar that sits above every page of the authenticated app shell. It shows the app's brand title ("AI Platform") and gives the user three controls: a menu button to toggle the side navigation on narrow screens, a theme toggle, and an avatar button that opens a small menu with the current username and a Sign Out action.
 
 ## How it behaves
 
@@ -26,7 +26,7 @@ Clicking Sign Out asks the backend to end the session. Regardless of whether the
 
 - [ ] The toolbar is pinned to the top of the viewport and stays visible as the page scrolls.
 - [ ] The toolbar shows a bottom divider and no drop shadow.
-- [ ] The brand title reads exactly `RTS AI Platform`.
+- [ ] The brand title reads exactly `AI Platform`.
 - [ ] The menu button on the left is labeled "Toggle navigation"; clicking it toggles the app layout's drawer.
 - [ ] On desktop widths, clicking the menu button has no visible effect (the sidenav is permanent).
 - [ ] The theme toggle and the avatar button both appear on the right, in that order, pushed to the far edge.

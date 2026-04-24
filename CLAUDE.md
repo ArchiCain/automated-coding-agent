@@ -37,7 +37,8 @@ Documentation is colocated with the code it describes. Look for `.docs/` at the 
     ├── feature-architecture.md         # Code lives in features/, not pages/endpoints
     ├── project-architecture.md         # Project structure patterns
     ├── environment-configuration.md    # .env and config patterns
-    └── task-automation.md              # Taskfile patterns
+    ├── task-automation.md              # Taskfile patterns
+    └── diagrams.md                     # Mermaid (primary) + ASCII (quick sketches)
 ```
 
 ### Infrastructure

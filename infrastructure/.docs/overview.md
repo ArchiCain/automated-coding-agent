@@ -6,12 +6,23 @@
 
 ## Deploy target
 
-Bare-metal Ubuntu host on the Tailscale tailnet. The same compose projects
-that make up the stack are shipped to the host and brought up with
+Bare-metal Ubuntu on the Tailscale tailnet. The same compose projects that
+make up the stack are shipped to the target host and brought up with
 `docker compose up -d`. No cloud infra, no public DNS, no local-dev support.
 
-Remote generation for agent LLM calls is handled by a separate tailnet node
-(GPU box) running its own Ollama — not a concern for this directory.
+## Host roles
+
+Two bare-metal hosts on the tailnet, split by role. Tailscale assigns the
+actual hostnames; docs refer to them by role.
+
+| Role | Runs |
+|---|---|
+| **host-machine** | Always-on. Compose stack (frontend, backend, keycloak, postgres), OpenClaw gateway + git-sync, sandboxes, memory embedding + fallback LLM (Ollama). |
+| **graphics-machine** | Intermittent. Primary coding LLM (Ollama with GPU). OpenClaw talks to it when it's up and falls back to host-machine when it isn't. |
+
+The graphics-machine runs outside this repo's compose stack — it's just an
+Ollama endpoint the gateway is configured to call. Nothing here deploys
+to it.
 
 ## Directory structure
 

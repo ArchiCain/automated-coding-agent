@@ -14,13 +14,13 @@
 
 services:
   backend:
-    image: ghcr.io/rtslabs/scain-coding-agent-backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/archicain/automated-coding-agent-backend:${IMAGE_TAG:-latest}
     build: !reset null
 
   frontend:
-    image: ghcr.io/rtslabs/scain-coding-agent-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/archicain/automated-coding-agent-frontend:${IMAGE_TAG:-latest}
     build: !reset null
 
   keycloak:
-    image: ghcr.io/rtslabs/scain-coding-agent-keycloak:${IMAGE_TAG:-latest}
+    image: ghcr.io/archicain/automated-coding-agent-keycloak:${IMAGE_TAG:-latest}
     build: !reset null

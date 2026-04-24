@@ -13,7 +13,7 @@ import { LoginCredentials } from '../types';
       <mat-card class="login-card animated-card">
         <mat-card-header>
           <mat-card-title>Sign In</mat-card-title>
-          <mat-card-subtitle>RTS AI Platform</mat-card-subtitle>
+          <mat-card-subtitle>AI Platform</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           @if (auth.error()) {

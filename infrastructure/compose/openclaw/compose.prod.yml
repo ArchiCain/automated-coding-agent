@@ -14,9 +14,9 @@
 
 services:
   gateway:
-    image: ghcr.io/rtslabs/scain-coding-agent-openclaw-gateway:${IMAGE_TAG:-latest}
+    image: ghcr.io/archicain/automated-coding-agent-openclaw-gateway:${IMAGE_TAG:-latest}
     build: !reset null
 
   git-sync:
-    image: ghcr.io/rtslabs/scain-coding-agent-openclaw-git-sync:${IMAGE_TAG:-latest}
+    image: ghcr.io/archicain/automated-coding-agent-openclaw-git-sync:${IMAGE_TAG:-latest}
     build: !reset null

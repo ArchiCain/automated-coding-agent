@@ -84,3 +84,4 @@ Agent prompts live under `projects/openclaw/app/skills/`. OpenClaw reads them fr
 | Project Architecture | `.docs/standards/project-architecture.md` | Project types, directory structure, container-first development |
 | Environment Configuration | `.docs/standards/environment-configuration.md` | Single `.env`, no-defaults policy, fail-fast validation |
 | Task Automation | `.docs/standards/task-automation.md` | Taskfile patterns, namespace hierarchy |
+| Diagrams | `.docs/standards/diagrams.md` | Mermaid for anything non-trivial, ASCII for quick sketches |

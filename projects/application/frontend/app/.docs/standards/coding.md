@@ -7,7 +7,7 @@ Conventions derived from the actual code under `src/`. Cite `src/app/...` files 
 ```
 src/
 ├── main.ts                        # bootstrapApplication(App, appConfig)
-├── index.html                     # <title>RTS AI Platform</title>, Roboto + Material Icons
+├── index.html                     # <title>AI Platform</title>, Roboto + Material Icons
 ├── styles.scss                    # global theme wiring + Material overrides
 └── app/
     ├── app.ts                     # Root standalone component: <router-outlet />

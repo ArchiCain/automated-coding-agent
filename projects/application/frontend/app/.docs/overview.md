@@ -1,10 +1,10 @@
-# RTS AI Platform Frontend — Overview
+# AI Platform Frontend — Overview
 
 ## What This Is
 
-An Angular single-page app that serves as the end-user surface of the RTS AI Platform. It provides a Keycloak-authenticated chat experience with an AI agent (Socket.IO), user administration, and backend health/database smoke tests. It is also the benchmark workload the autonomous agent pipeline iterates on end-to-end.
+An Angular single-page app that serves as the end-user surface of the AI Platform. It provides a Keycloak-authenticated chat experience with an AI agent (Socket.IO), user administration, and backend health/database smoke tests. It is also the benchmark workload the autonomous agent pipeline iterates on end-to-end.
 
-The `<title>` is `RTS AI Platform` (`src/index.html:5`) and the same brand string is rendered in the top toolbar (`src/app/features/app-header/components/app-header/app-header.component.ts:17`).
+The `<title>` is `AI Platform` (`src/index.html:5`) and the same brand string is rendered in the top toolbar (`src/app/features/app-header/components/app-header/app-header.component.ts:17`).
 
 ## Tech Stack
 

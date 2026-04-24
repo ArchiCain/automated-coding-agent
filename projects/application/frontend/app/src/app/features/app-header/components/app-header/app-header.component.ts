@@ -14,7 +14,7 @@ import { AvatarMenuComponent } from '../avatar-menu/avatar-menu.component';
       <button mat-icon-button (click)="menuToggle.emit()" aria-label="Toggle navigation">
         <mat-icon>menu</mat-icon>
       </button>
-      <span class="app-title">RTS AI Platform</span>
+      <span class="app-title">AI Platform</span>
       <span class="spacer"></span>
       <app-theme-toggle />
       <app-avatar-menu />

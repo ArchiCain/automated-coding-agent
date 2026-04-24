@@ -5,6 +5,9 @@ name: Deploy to dev
 on:
   workflow_dispatch:
     inputs:
+      host:
+        description: Tailscale hostname of the target host (defaults to vars.DEPLOY_HOST).
+        required: false
       image_tag:
         description: Image tag to push and deploy (default = SHA).
         required: false
@@ -59,8 +62,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/scain-coding-agent-${{ matrix.service }}:${{ inputs.image_tag || github.sha }}
-            ghcr.io/${{ github.repository_owner }}/scain-coding-agent-${{ matrix.service }}:latest
+            ghcr.io/archicain/automated-coding-agent-${{ matrix.service }}:${{ inputs.image_tag || github.sha }}
+            ghcr.io/archicain/automated-coding-agent-${{ matrix.service }}:latest
 
   deploy:
     runs-on: ubuntu-latest
@@ -72,4 +75,4 @@ jobs:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
           tags: tag:ci
-      - run: bash scripts/deploy.sh --host scain-coding-agent --image-tag "${{ inputs.image_tag || github.sha }}"
+      - run: bash scripts/deploy.sh --host "${{ inputs.host || vars.DEPLOY_HOST }}" --image-tag "${{ inputs.image_tag || github.sha }}"
