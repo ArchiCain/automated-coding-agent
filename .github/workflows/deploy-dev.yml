@@ -1,8 +1,20 @@
 name: Deploy to dev
 
-# Gated — runs only on explicit workflow_dispatch.
-# Deploys the compose stack to a bare-metal host on the tailnet.
+# Auto-deploys the compose stack to the tailnet host on every push/merge
+# to dev. workflow_dispatch is kept for manual redeploys.
+#
+# paths-ignore: OpenClaw itself pushes doc + skill changes directly to
+# dev (Stream A in the branching model). Those are picked up by the
+# git-sync sidecar on the host within ~60s without a rebuild — so we
+# skip deploys for changes that don't live in any of the baked images.
 on:
+  push:
+    branches: [dev]
+    paths-ignore:
+      - '**/*.md'
+      - '**/.docs/**'
+      - 'ideas/**'
+      - '.github/CODEOWNERS'
   workflow_dispatch:
     inputs:
       host:
@@ -11,6 +23,12 @@ on:
       image_tag:
         description: Image tag to push and deploy (default = SHA).
         required: false
+
+# Only one deploy runs at a time. A newer push supersedes an older,
+# still-running deploy rather than queueing behind it.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
 
 permissions:
   contents: read

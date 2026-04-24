@@ -90,22 +90,28 @@ no PR, just chat review. Stream B (feature work) is the flow above.
 
 ## Deploy flow
 
-Deployment is explicit, not automatic — the dev branch is OpenClaw's
-working branch and gets deployed to host-machine only when a human dispatches
-the workflow.
+Deployment is automatic on every push/merge to `dev`.
+`workflow_dispatch` is also available as a manual override (redeploy
+a SHA, target a different host).
+
+Pushes that only touch docs / skills / ideas / CODEOWNERS are skipped
+via `paths-ignore` — the git-sync sidecar refreshes those on the
+running host within 60s without a rebuild. And `concurrency` on the
+workflow guarantees only one deploy runs at a time — a newer push
+cancels an older in-flight deploy.
 
 ```mermaid
 sequenceDiagram
   autonumber
-  actor Human
-  participant GH as GitHub
+  actor Human as Human / OpenClaw
+  participant GH as GitHub<br/>(dev branch)
   participant CI as CI runner<br/>(ubuntu-latest)
   participant GHCR as GHCR<br/>(image registry)
   participant Host as host-machine
 
-  Human->>GH: workflow_dispatch "Deploy to dev"
-  GH->>CI: start run (matrix: backend, frontend, keycloak, openclaw-gateway, openclaw-git-sync)
-  CI->>CI: build each image (linux/amd64)
+  Human->>GH: push / merge → dev
+  GH->>CI: push event (unless paths-ignored)
+  CI->>CI: build each image (linux/amd64, matrix of 5)
   CI->>GHCR: push {sha} + latest tags (auth: GITHUB_TOKEN)
   CI->>CI: tailscale up (ephemeral tag:ci node)
   CI->>Host: rsync infrastructure/compose/ + scripts/ghcr-login.sh → /srv/aca/

@@ -1,12 +1,22 @@
 # CI/CD Decisions
 
-## Dispatch-only deploys
+## Auto-deploy on push to `dev`
 
-Deploys are triggered manually via `workflow_dispatch`, not by pushes to
-`dev`. The `dev` branch is OpenClaw's daily-driver working branch — it
-churns. Deploying on every push would stomp on the running host stack
-during active work. A human decides when the current `dev` is worth
-landing on host-machine.
+Deploys fire automatically on every push/merge to `dev`. The feedback
+loop from "PR merged" to "running on the host" is the whole point —
+gating it behind a manual dispatch turned every deploy into a separate
+chore. `workflow_dispatch` is kept only as a manual override (redeploy
+a specific SHA, target a different host for a one-off test).
+
+The stomping concern (OpenClaw commits doc/skill edits directly to
+`dev` as part of Stream A, each push triggering a full rebuild) is
+addressed by:
+
+- **`paths-ignore`** on the push trigger: `**/*.md`, `**/.docs/**`,
+  `ideas/**`, `.github/CODEOWNERS`. These are the paths the git-sync
+  sidecar already refreshes on the host within 60s without a rebuild.
+- **`concurrency: cancel-in-progress: true`**: two pushes in quick
+  succession collapse to one deploy — the newer one cancels the older.
 
 ## Tailscale for connectivity, not ingress
 

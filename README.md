@@ -71,11 +71,16 @@ files and GitHub App PEM, set `vars.DEPLOY_HOST` on GitHub).
 
 ## Deploying
 
-Deploys are triggered manually through the GitHub Actions
+Auto-deploys on every push/merge to `dev` via the GitHub Actions
 "Deploy to dev" workflow (`.github/workflows/deploy-dev.yml`). The
 workflow builds images, pushes to GHCR, joins the tailnet, and runs
-`scripts/deploy.sh` against the host. Full sequence diagram in
-`ecosystem.md`.
+`scripts/deploy.sh` against the host.
+
+Docs-only pushes are skipped via `paths-ignore` (the git-sync sidecar
+picks those up on the host within 60s). A newer push cancels an older
+deploy in flight via `concurrency: cancel-in-progress`.
+`workflow_dispatch` stays available for manual redeploys. Full
+sequence diagram in `infrastructure/.docs/ecosystem.md`.
 
 ## Day-to-day (on host-machine, typically via `ssh`)
 

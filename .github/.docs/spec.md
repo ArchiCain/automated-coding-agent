@@ -5,7 +5,14 @@
 | Workflow file | Trigger | Runner | Purpose |
 |---|---|---|---|
 | `.github/workflows/ci.yml` | PR to `main` | self-hosted | Build + test + lint backend and frontend |
-| `.github/workflows/deploy-dev.yml` | `workflow_dispatch` | ubuntu-latest | Build + push images, rsync compose, `docker compose up -d` on host-machine |
+| `.github/workflows/deploy-dev.yml` | push to `dev` (paths-ignored for docs) + manual `workflow_dispatch` | ubuntu-latest | Build + push images, rsync compose, `docker compose up -d` on host-machine |
+
+Deploy trigger details:
+- `paths-ignore`: `**/*.md`, `**/.docs/**`, `ideas/**`, `.github/CODEOWNERS`.
+  OpenClaw's git-sync sidecar picks up doc/skill changes to the running
+  host within 60s; no rebuild is needed for those paths.
+- `concurrency: { group: deploy-dev, cancel-in-progress: true }`. A
+  newer push supersedes an older deploy in flight.
 
 ## Configuration
 
