@@ -55,24 +55,3 @@ tasks:
     desc: Test health endpoint
     cmds:
       - curl -f http://localhost:${PORT:-8080}/health || echo "Health check failed"
-
-  remote:build:
-    desc: Build and push image on the remote K8s node
-    cmds:
-      - echo "Syncing project to ${K8S_NODE}..."
-      - rsync -av --exclude='node_modules' --exclude='dist' {{.TASKFILE_DIR}}/ ${K8S_NODE}:/tmp/the-dev-team-backend-build/
-      - echo "Building on ${K8S_NODE}..."
-      - ssh ${K8S_NODE} "sudo docker build -t localhost:30500/the-dev-team-backend:${IMAGE_TAG:-latest} -f /tmp/the-dev-team-backend-build/dockerfiles/prod.Dockerfile /tmp/the-dev-team-backend-build/"
-      - echo "Pushing to registry..."
-      - ssh ${K8S_NODE} "sudo docker push localhost:30500/the-dev-team-backend:${IMAGE_TAG:-latest}"
-      - echo "Done. Image pushed to localhost:30500/the-dev-team-backend:${IMAGE_TAG:-latest}"
-
-  remote:deploy:
-    desc: Build, push, and deploy to K8s
-    cmds:
-      - task: remote:build
-      - echo "Deploying with helmfile..."
-      - cd {{.TASKFILE_DIR}}/../../.. && set -a && source .env && source .env.mac-mini && set +a && cd infrastructure/k8s && helmfile -e mac-mini -l name=the-dev-team-backend apply
-      - kubectl rollout restart deployment/the-dev-team-backend -n ${NAMESPACE:-app}
-      - kubectl rollout status deployment/the-dev-team-backend -n ${NAMESPACE:-app} --timeout=120s
-      - echo "Deploy complete."

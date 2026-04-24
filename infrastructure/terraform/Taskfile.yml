@@ -2,27 +2,27 @@ version: '3'
 
 tasks:
   init:
-    desc: Initialize Terraform for K3s infrastructure
+    desc: Initialize Terraform for EC2 compose host
     cmds:
       - terraform init
 
   plan:
-    desc: Plan K3s infrastructure changes
+    desc: Plan EC2 compose host changes
     cmds:
       - terraform plan
 
   apply:
-    desc: Apply K3s infrastructure (creates EC2 + K3s)
+    desc: Apply EC2 compose host (creates EC2 with docker + tailscale + caddy)
     cmds:
       - terraform apply
 
   destroy:
-    desc: Destroy K3s infrastructure
+    desc: Destroy the EC2 compose host
     cmds:
-      - echo "WARNING - This will destroy the K3s server and all deployed services!"
+      - echo "WARNING - This will destroy the host and all data not on the /mnt/data EBS volume!"
       - terraform destroy
 
   output:
-    desc: Show K3s infrastructure outputs (IP, URLs)
+    desc: Show infrastructure outputs (IP, tailscale hostname, SSH command)
     cmds:
       - terraform output

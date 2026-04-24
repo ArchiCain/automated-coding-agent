@@ -2,38 +2,64 @@
 
 ## What it is
 
-A lightweight, unauthenticated health endpoint at `/health` that confirms the backend process is up and serving HTTP. It is used by Kubernetes liveness and readiness probes, by local smoke checks during development, and by any external monitor that wants to know the service is alive.
+Two endpoints under `/health`:
+
+- `GET /health` — a public, dependency-free liveness check. Always returns `200` with `{ status, timestamp, service }`. Used by local smoke checks, the EC2 reverse proxy's upstream checks, and any external monitor.
+- `GET /health/database` — an authenticated diagnostic that reports whether the backend's TypeORM `DataSource` can talk to Postgres right now, and lists the tables in the current schema. Used by the frontend's Testing Tools page.
 
 ## How it behaves
 
-### Answering a health check
+### Answering a health check — `GET /health`
 
 Anyone can call `GET /health` without signing in, without a cookie, and without an authorization header. The endpoint always responds immediately with HTTP 200 and a small JSON body containing a status of `"ok"`, the current time as an ISO 8601 timestamp, and the service name `"backend"`. There is no failure branch — if the process is running well enough to answer the request, it answers with 200.
 
-### What the check does and does not cover
+### Checking the database — `GET /health/database`
 
-The endpoint only confirms that the backend's HTTP listener is accepting and handling requests. It does not probe the database, the auth provider, or any other dependency. An outage in a downstream system will not cause `/health` to fail.
+An authenticated caller (access-token cookie, same as every other `/api/*` route other than `/health` and the login endpoints) gets back a JSON body:
 
-### How it is used
+- `{ connected: true, tables: string[] }` when the TypeORM `DataSource` is initialized and a simple `SELECT tablename FROM pg_tables WHERE schemaname = current_schema()` returns. `tables` is sorted alphabetically.
+- `{ connected: false, error: string }` when the `DataSource` isn't initialized, or when the query throws (connection reset, auth error, etc.). The `error` string is the `Error.message` from the failure, verbatim.
 
-Kubernetes calls `/health` on a schedule as both a liveness probe (restart the pod if it stops answering) and a readiness probe (don't send traffic to a pod that isn't answering yet). The backend's Taskfile uses the same endpoint for a local smoke check after start.
+An unauthenticated caller gets HTTP `401` from the global `KeycloakJwtGuard` before the handler runs.
+
+The endpoint **does not** cache. Each call runs the query against Postgres.
+
+### What the checks do and do not cover
+
+- `/health` only confirms that the HTTP listener is accepting and handling requests. No downstream probing.
+- `/health/database` probes the TypeORM connection. It does not probe Keycloak, the agent runtime, or anything else. An outage in those systems will not cause `/health/database` to fail.
+
+### How the endpoints are used
+
+- **Local smoke:** `task backend:local:health` curls `/health`. A developer hitting the Testing Tools page at `/smoke-tests` or the home page at `/home` triggers a `/health/database` request from the frontend (`TypeormDatabaseClientComponent`).
+- **Production (EC2, behind Caddy):** Caddy reverse-proxies the same paths. Operators can curl `/health` without auth. `/health/database` is only reachable after a Keycloak login.
 
 ## Acceptance criteria
 
-- [ ] `GET /health` returns HTTP 200 with no credentials supplied.
-- [ ] The response body is a JSON object with exactly the keys `status`, `timestamp`, and `service`.
+### `GET /health`
+
+- [ ] Returns HTTP 200 with no credentials supplied.
+- [ ] Response body is a JSON object with exactly the keys `status`, `timestamp`, and `service`.
 - [ ] `status` equals the literal string `"ok"`.
 - [ ] `service` equals the literal string `"backend"`.
 - [ ] `timestamp` is a valid ISO 8601 string parseable into a valid date.
 - [ ] `timestamp` reflects the time of the current request (non-decreasing across sequential calls).
-- [ ] The response `Content-Type` header is `application/json`.
-- [ ] The endpoint works without an `access_token` cookie or `Authorization` header.
-- [ ] The endpoint path `/health` matches the path configured for the Kubernetes probes — a rename must update both.
+- [ ] Response `Content-Type` header is `application/json`.
 - [ ] A dependency outage (database, auth provider, etc.) does not cause `/health` to fail.
+
+### `GET /health/database`
+
+- [ ] Returns HTTP 401 when called without an `access_token` cookie (global `KeycloakJwtGuard` rejects).
+- [ ] Returns HTTP 200 with `{ connected: true, tables: string[] }` when authenticated and the `DataSource` is initialized.
+- [ ] `tables` is the list of tablenames from `pg_tables` filtered to `current_schema()`, sorted ascending.
+- [ ] Returns HTTP 200 with `{ connected: false, error: string }` when the `DataSource` is not initialized, or when the probe query throws.
+- [ ] The `error` string, when present, is the underlying `Error.message`.
+- [ ] Response `Content-Type` header is `application/json` in all success / soft-error cases.
 
 ## Known gaps
 
-None known. The endpoint has no failure branch and no dependency probing by design; if deeper checks are ever required, that would be a new scope rather than a gap against this spec.
+- The endpoint uses `current_schema()` — it only lists tables in whatever schema the TypeORM connection is using (typically `public`). Keycloak's own `keycloak` schema is not listed. That's by design — consumers want to see the application's own tables.
+- The database probe does not currently surface row counts, table sizes, or migration status. If a caller needs those, extend the handler.
 
 ## Code map
 
@@ -41,24 +67,22 @@ Paths are relative to `projects/application/backend/app/`.
 
 | Concern | File · lines |
 |---|---|
-| Route `GET /health` on the main HTTP listener | `src/features/health/controllers/health.controller.ts:5-8` |
-| Public opt-out from `KeycloakJwtGuard` via `@Public()` at class level | `src/features/health/controllers/health.controller.ts:1-5` |
+| Route `GET /health` | `src/features/health/controllers/health.controller.ts:12-20` |
+| Route `GET /health/database` | `src/features/health/controllers/health.controller.ts:22-43` |
+| Public opt-out from `KeycloakJwtGuard` on `/health` only (not class-level) | `src/features/health/controllers/health.controller.ts:11-12` |
 | Guard that honors `@Public()` via the `"isPublic"` metadata key | `src/features/keycloak-auth/guards/keycloak-jwt.guard.ts` |
-| Synchronous 200 response with `{ status, timestamp, service }` | `src/features/health/controllers/health.controller.ts:7-14` |
-| `timestamp` generated per request via `new Date().toISOString()` | `src/features/health/controllers/health.controller.ts:11` |
-| `service` hardcoded to the literal `"backend"` | `src/features/health/controllers/health.controller.ts:12` |
-| `Content-Type: application/json` (default Nest behavior for returned objects) | asserted in `test/integration/health.integration.spec.ts:73-81` |
-| `HealthModule` registers `HealthController`; no providers, no imports | `src/features/health/health.module.ts:4-7` |
-| `HealthModule` wired into `AppModule` | `src/app.module.ts:9` |
-| Barrel exports `HealthModule` only | `src/features/health/index.ts:1` |
-| Unit test (pure controller invocation, no Nest `TestingModule`) | `src/features/health/controllers/health.controller.spec.ts` |
-| Integration test (`supertest` against running stack) | `test/integration/health.integration.spec.ts` |
+| `DataSource` injection via `@InjectDataSource()` | `src/features/health/controllers/health.controller.ts:8` |
+| Query against `pg_tables` filtered to `current_schema()` | `src/features/health/controllers/health.controller.ts:32-34` |
+| `HealthModule` registers `HealthController`; no providers, no imports | `src/features/health/health.module.ts` |
+| `HealthModule` wired into `AppModule` | `src/app.module.ts` |
+| Unit test (pure controller invocation with mocked `DataSource`) | `src/features/health/controllers/health.controller.spec.ts` |
+| Integration test (`supertest` against running stack, incl. authenticated `/health/database`) | `test/integration/health.integration.spec.ts` |
 
 ### Consumers
 
 | Consumer | File · lines | Notes |
 |---|---|---|
-| Kubernetes liveness probe | `projects/application/backend/chart/templates/deployment.yaml:34-39` | `httpGet` path from `values.yaml` `healthCheck.path` (`/health`), `service.port`. `initialDelaySeconds: 30`, `periodSeconds: 10`. |
-| Kubernetes readiness probe | `projects/application/backend/chart/templates/deployment.yaml:40-45` | Same path/port. `initialDelaySeconds: 5`, `periodSeconds: 5`. |
-| Helm probe path value | `projects/application/backend/chart/values.yaml:28` | `healthCheck.path` — must match the route above. |
-| Local smoke check | `projects/application/backend/Taskfile.yml:45` | `curl -f http://localhost:${BACKEND_PORT}/health`. |
+| Backend local smoke (`/health`) | `projects/application/backend/Taskfile.yml` | `curl -f http://localhost:${BACKEND_PORT}/health`. |
+| Frontend Testing Tools database card (`/health/database`) | `projects/application/frontend/app/src/app/features/testing-tools/services/testing-tools.api.ts:40-45` | Sent with `withCredentials: true`. |
+| Home-page database status card (`/health/database`) | `projects/application/frontend/app/src/app/features/home/...` | Same `TestingToolsApiService.checkDatabase` call. |
+| Future EC2 reverse proxy upstream probe | `infrastructure/caddy/Caddyfile` | Not wired today; Caddy uses transport-level checks, not HTTP probes, unless explicitly configured. |

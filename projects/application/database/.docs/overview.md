@@ -2,72 +2,55 @@
 
 ## What This Is
 
-The shared PostgreSQL instance for the `application` stack. Packaged as a Helm chart
-plus a Dockerfile, deployed as a single-replica StatefulSet under the `app` namespace.
+The shared PostgreSQL instance for the `application` stack. Runs as the `postgres`
+compose service, a single container shared by every other service in the project.
 Backend (NestJS/TypeORM), Keycloak, and the optional pgweb UI all connect to this one
 database. Each consumer owns its own schema — this project provides the server, not the
-schemas (`projects/application/database/chart/templates/statefulset.yaml`).
+schemas (`infrastructure/compose/dev/compose.yml`, service `postgres`).
 
 ## Tech Stack
 
-- **Image:** `pgvector/pgvector:pg16` — Postgres 16 with the `vector` extension available
-  (`projects/application/database/chart/values.yaml:1-4`, `projects/application/database/dockerfiles/postgres.Dockerfile:1`).
-- **Chart:** Local Helm chart v0.1.0, `appVersion "16"`
-  (`projects/application/database/chart/Chart.yaml`).
-- **Orchestration:** Helmfile release `database` in namespace `app`, declared at
-  `infrastructure/k8s/helmfile.yaml.gotmpl:95-123`.
-- **Storage:** PVC via `volumeClaimTemplates`, `ReadWriteOnce`, default size `10Gi`,
-  mounted at `/var/lib/postgresql/data` with `subPath: pgdata`
-  (`projects/application/database/chart/templates/statefulset.yaml:47-65`,
-  `projects/application/database/chart/values.yaml:11-14`).
-- **UI (optional):** `sosedoff/pgweb:latest` Deployment + Service + Traefik Ingress,
-  gated by `pgweb.enabled`
-  (`projects/application/database/chart/templates/pgweb-deployment.yaml`,
-  `projects/application/database/chart/templates/pgweb-ingress.yaml`). Helmfile enables
-  it by default with host `db.${DEV_HOSTNAME}`.
+- **Image:** `pgvector/pgvector:pg16` — Postgres 16 with the `vector` extension available,
+  used directly with no local build (`infrastructure/compose/dev/compose.yml`, service
+  `postgres`).
+- **Orchestration:** compose service `postgres` in the `dev` compose project (and the
+  `env-{id}` compose project for sandboxes, `infrastructure/compose/sandbox/compose.yml`).
+- **Storage:** named volume `postgres-data` mounted at `/var/lib/postgresql/data`. Compose
+  auto-namespaces the volume per project (`dev_postgres-data` for the long-lived dev
+  stack, `env-{id}_postgres-data` for sandboxes). Persists across `task dev:down`; wiped
+  by `task dev:down:clean`.
+- **UI (optional):** `sosedoff/pgweb:latest` — not currently wired into the compose
+  stack; use `docker compose exec postgres psql` for ad hoc access.
 
 ## Consumers
 
 | Consumer | Connects Via | Schema | Migration Tool |
 |----------|-------------|--------|----------------|
-| Backend (NestJS) | `DATABASE_HOST=database` on port `5432` (`infrastructure/k8s/helmfile.yaml.gotmpl:142-146`) | `example_schema` | TypeORM migrations (`projects/application/backend/app/src/features/typeorm-database-client/migrations/`) |
-| Keycloak | `KC_DB_URL=jdbc:postgresql://database:5432/postgres` (`infrastructure/k8s/helmfile.yaml.gotmpl:179-181`) | `keycloak` (`KC_DB_SCHEMA`) | Liquibase (bundled in Keycloak) |
-| pgweb | `postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@{release}:5432/$POSTGRES_DB` (`projects/application/database/chart/templates/pgweb-deployment.yaml:25-26`) | — (read-only UI) | — |
+| Backend (NestJS) | `DATABASE_HOST=postgres` on port `5432` (`infrastructure/compose/dev/compose.yml`, service `backend` environment) | `example_schema` | TypeORM migrations (`projects/application/backend/app/src/features/typeorm-database-client/migrations/`) |
+| Keycloak | `KC_DB_URL_HOST=postgres`, `KC_DB_URL_PORT=5432` (`infrastructure/compose/dev/compose.yml`, service `keycloak` environment) | `keycloak` (`KC_DB_SCHEMA`) | Liquibase (bundled in Keycloak) |
 
-All connections use the cluster-internal Service name `database` (ClusterIP, not
-exposed via Ingress) (`projects/application/database/chart/templates/service.yaml`).
+All connections use the compose service name `postgres` on the project's default network.
+Port 5432 is **not** published to the host in dev — access from the laptop is via
+`docker compose -f infrastructure/compose/dev/compose.yml exec postgres psql`.
 
 ## Deploy Model
 
-- **Local/dev/prod K8s:** `task k8s:deploy` runs Helmfile which renders this chart with
-  values from `infrastructure/k8s/helmfile.yaml.gotmpl:95-123`. `DATABASE_PASSWORD` is a
-  required env var; `DATABASE_NAME`, `DATABASE_USERNAME`, image repo/tag, volume size,
-  and resource requests/limits are all overridable via env.
-- **Secret material:** `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` are passed
-  through `values.env` and rendered into a Kubernetes `Secret` named
-  `{release}-secret`, wired into the pod via `envFrom.secretRef`
-  (`projects/application/database/chart/templates/secret.yaml`,
-  `projects/application/database/chart/templates/statefulset.yaml:24-28`).
-- **Health:** `pg_isready -U $POSTGRES_USER -d $POSTGRES_DB` drives both liveness
-  (initialDelay 10s, period 5s) and readiness (initialDelay 5s, period 5s)
-  (`projects/application/database/chart/templates/statefulset.yaml:29-44`).
-- **Resources (defaults):** requests 256Mi / 100m, limits 512Mi / 500m
-  (`projects/application/database/chart/values.yaml:16-22`).
-- **Extensions:** `uuid-ossp` and `vector` are created by the backend's initial
-  TypeORM migration, not by this chart
+- **Dev laptop:** `task dev:up` (or `task up`) brings the stack up via
+  `docker compose -f infrastructure/compose/dev/compose.yml up -d`. `POSTGRES_USER`,
+  `POSTGRES_PASSWORD`, and `POSTGRES_DB` come from `.env` (defaults in `.env.template`:
+  `postgres` / `postgres` / `app`).
+- **EC2 / prod:** same compose files with the `compose.prod.yml` overlay (GHCR image
+  refs) behind Caddy.
+- **Credentials:** `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` are set directly
+  on the `postgres` service `environment` block via `${...}` interpolation from `.env`
+  (`infrastructure/compose/dev/compose.yml`, service `postgres`).
+- **Health:** `pg_isready -U postgres` drives the healthcheck (5s interval, 10 retries).
+  Other services use `depends_on: postgres: condition: service_healthy` to wait for it.
+- **Extensions:** `uuid-ossp` and `vector` are created by the backend's initial TypeORM
+  migration, not by the compose config
   (`projects/application/backend/app/src/features/typeorm-database-client/migrations/1734056400000-InitialSchema.ts:19-21`).
 
 ## Standards
 
-Chart + image only; there is no project-level `standards/coding.md` — conventions are
-inherited from the repo-level `.docs/standards/`.
-
-## Notes / Drift
-
-- `Taskfile.yml` targets (`local:start`, `local:shell`, etc.) invoke
-  `infrastructure/docker/compose.yml`, but that file does not exist in the repo.
-  The local dev path is K8s via `task k8s:deploy`, not docker-compose.
-- `dockerfiles/postgres.Dockerfile` uses `{{DATABASE_NAME}}` / `{{MASTER_USERNAME}}`
-  placeholders (not valid Dockerfile syntax and not referenced by anything that
-  substitutes them). The Helm chart pulls `pgvector/pgvector:pg16` directly, so the
-  Dockerfile is unused.
+Service definition only; there is no project-level `standards/coding.md` — conventions
+are inherited from the repo-level `.docs/standards/`.

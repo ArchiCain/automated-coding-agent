@@ -1,0 +1,116 @@
+version: '3'
+
+# Sandbox lifecycle tasks — wrappers around `scripts/sandbox-*.sh`.
+#
+# Included into the root Taskfile as the `env:` namespace (`task env:create`,
+# `task env:destroy`, etc.). All tasks run with the repo root as cwd (the
+# root include sets `dir: .`), so relative script and compose-file paths
+# resolve from there.
+
+tasks:
+  deploy:
+    desc: "Build from a worktree and deploy a sandbox (usage: task env:deploy NAME=my-feature [WORKTREE=path] [SERVICES='backend frontend'])"
+    vars:
+      NAME: '{{.NAME}}'
+      WORKTREE: '{{.WORKTREE | default ""}}'
+      SERVICES: '{{.SERVICES | default "backend frontend keycloak"}}'
+    preconditions:
+      - sh: '[ -n "{{.NAME}}" ]'
+        msg: "Usage: task env:deploy NAME=<name> [WORKTREE=<path>] [SERVICES='backend frontend keycloak']"
+    cmds:
+      - |
+        if [ -n "{{.WORKTREE}}" ]; then
+          bash scripts/sandbox-deploy.sh "{{.NAME}}" "{{.WORKTREE}}" {{.SERVICES}}
+        else
+          bash scripts/sandbox-deploy.sh "{{.NAME}}" "" {{.SERVICES}}
+        fi
+
+  create:
+    desc: "Create a sandbox (usage: task env:create -- TASK_ID)"
+    vars:
+      TASK_ID: '{{.CLI_ARGS}}'
+    preconditions:
+      - sh: '[ -n "{{.CLI_ARGS}}" ]'
+        msg: "Usage: task env:create -- <task-id>"
+    cmds:
+      - bash scripts/sandbox-deploy.sh "{{.TASK_ID}}"
+
+  destroy:
+    desc: "Destroy a sandbox (usage: task env:destroy -- TASK_ID)"
+    vars:
+      TASK_ID: '{{.CLI_ARGS}}'
+    preconditions:
+      - sh: '[ -n "{{.CLI_ARGS}}" ]'
+        msg: "Usage: task env:destroy -- <task-id>"
+    cmds:
+      - bash scripts/sandbox-destroy.sh "{{.TASK_ID}}"
+
+  list:
+    desc: List all active sandbox compose projects (env-*).
+    cmds:
+      - bash scripts/sandbox-list.sh
+
+  status:
+    desc: "Show container and port status for a sandbox (usage: task env:status -- TASK_ID)"
+    vars:
+      TASK_ID: '{{.CLI_ARGS}}'
+    preconditions:
+      - sh: '[ -n "{{.CLI_ARGS}}" ]'
+        msg: "Usage: task env:status -- <task-id>"
+    cmds:
+      # No -f flag — compose tracks the project by name once it's running.
+      # Passing -f would re-parse the compose file and warn about the
+      # unset SANDBOX_* env vars (which only the deploy script sets).
+      - docker compose -p env-{{.TASK_ID}} ps
+
+  health:
+    desc: "Curl each service's host port and report pass/fail (usage: task env:health -- TASK_ID)"
+    vars:
+      TASK_ID: '{{.CLI_ARGS}}'
+    preconditions:
+      - sh: '[ -n "{{.CLI_ARGS}}" ]'
+        msg: "Usage: task env:health -- <task-id>"
+    cmds:
+      - |
+        NAME="env-{{.TASK_ID}}"
+        for svc in frontend backend keycloak; do
+          mapping=$(docker compose -p "$NAME" port "$svc" 8080 2>/dev/null || true)
+          if [ -z "$mapping" ]; then
+            printf '%-9s NO-PORT\n' "$svc"
+            continue
+          fi
+          port=$(echo "$mapping" | cut -d: -f2)
+          case "$svc" in
+            backend) path="/health" ;;
+            frontend) path="/health" ;;
+            # Keycloak's /realms/*/.well-known requires HTTPS when the
+            # request looks non-loopback (sslRequired=external), which the
+            # docker port-forward surface triggers. /health/ready bypasses
+            # that and reports the same readiness signal.
+            keycloak) path="/health/ready" ;;
+          esac
+          if curl -sf "http://localhost:${port}${path}" >/dev/null 2>&1; then
+            printf '%-9s OK      http://localhost:%s%s\n' "$svc" "$port" "$path"
+          else
+            printf '%-9s FAIL    http://localhost:%s%s\n' "$svc" "$port" "$path"
+          fi
+        done
+
+  logs:
+    desc: "Tail logs from a sandbox (usage: task env:logs -- TASK_ID)"
+    vars:
+      TASK_ID: '{{.CLI_ARGS}}'
+    preconditions:
+      - sh: '[ -n "{{.CLI_ARGS}}" ]'
+        msg: "Usage: task env:logs -- <task-id>"
+    cmds:
+      # No -f flag — see the note on `status`. Compose resolves the project
+      # by name once it's running; re-parsing the template would warn.
+      - docker compose -p env-{{.TASK_ID}} logs -f
+
+  cleanup-stale:
+    desc: "Destroy sandboxes older than N hours (usage: task env:cleanup-stale -- HOURS)"
+    vars:
+      HOURS: '{{.CLI_ARGS | default "24"}}'
+    cmds:
+      - bash scripts/sandbox-cleanup-stale.sh {{.HOURS}}

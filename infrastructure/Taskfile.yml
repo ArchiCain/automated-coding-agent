@@ -4,6 +4,3 @@ includes:
   terraform:
     taskfile: ./terraform/Taskfile.yml
     dir: ./terraform
-  k8s:
-    taskfile: ./k8s/Taskfile.yml
-    dir: ./k8s

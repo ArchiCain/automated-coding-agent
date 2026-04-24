@@ -1,9 +1,0 @@
-apiVersion: v2
-name: tailscale-gateway
-description: >
-  Tailscale node that gives minikube its own tailnet IP.
-  Forwards HTTP/HTTPS traffic to the in-cluster Traefik ingress
-  so all tailnet devices can reach services by hostname.
-type: application
-version: 0.1.0
-appVersion: "1.0"

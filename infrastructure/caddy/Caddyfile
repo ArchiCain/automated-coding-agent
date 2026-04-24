@@ -1,0 +1,30 @@
+# Caddy config for the compose stack on EC2.
+#
+# {$DOMAIN} is read from /etc/caddy/caddy.env (written by user-data from
+# the terraform `domain` var). On each host, Caddy resolves this to the
+# actual domain before applying rules.
+#
+# Certificates: Let's Encrypt HTTP-01 per hostname. Requires A records
+# for each subdomain pointed at the EIP before first hit.
+
+app.{$DOMAIN} {
+	reverse_proxy localhost:3000
+}
+
+api.{$DOMAIN} {
+	reverse_proxy localhost:8080
+}
+
+auth.{$DOMAIN} {
+	reverse_proxy localhost:8081
+}
+
+openclaw.{$DOMAIN} {
+	reverse_proxy localhost:3001
+}
+
+# Per-sandbox Caddy blocks get dropped into /etc/caddy/sandbox.d/{id}.caddy
+# by the sandbox-on-EC2 scripts (not shipped in phase 5; see the ADR for the
+# contract). Each file follows the same three-host block shape as the
+# long-lived services but uses the sandbox's port triple.
+import /etc/caddy/sandbox.d/*.caddy

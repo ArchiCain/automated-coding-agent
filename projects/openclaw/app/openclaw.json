@@ -5,16 +5,101 @@
     "bind": "lan",
     "controlUi": {
       "allowedOrigins": []
+    },
+    "trustedProxies": [
+      "10.244.0.0/16",
+      "10.96.0.0/12",
+      "127.0.0.1/32"
+    ]
+  },
+  "browser": {
+    "enabled": true,
+    "headless": true,
+    "noSandbox": true,
+    "executablePath": "/usr/bin/chromium",
+    "evaluateEnabled": true,
+    "ssrfPolicy": {
+      "dangerouslyAllowPrivateNetwork": true,
+      "allowedHostnames": [
+        "localhost",
+        "127.0.0.1"
+      ]
     }
   },
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-opus-4-6",
+      "models": {
+        "anthropic/claude-opus-4-6": {
+          "params": {
+            "context1m": true
+          }
+        }
+      },
       "subagents": {
+        "allowAgents": ["orchestrator", "devops", "worker", "tester"],
         "maxSpawnDepth": 3,
         "maxChildrenPerAgent": 20,
         "maxConcurrent": 20,
         "runTimeoutSeconds": 1800
+      },
+      "compaction": {
+        "model": "anthropic/claude-sonnet-4-6",
+        "identifierPolicy": "strict",
+        "notifyUser": true
+      },
+      "memorySearch": {
+        "provider": "openai",
+        "model": "text-embedding-3-small"
+      }
+    },
+    "list": [
+      {
+        "id": "orchestrator",
+        "default": true,
+        "model": "anthropic/claude-opus-4-6",
+        "workspace": "/workspace/repo",
+        "agentDir": "/workspace/.openclaw/agents/orchestrator/agent"
+      },
+      {
+        "id": "devops",
+        "model": "anthropic/claude-opus-4-6",
+        "workspace": "/workspace/repo",
+        "agentDir": "/workspace/.openclaw/agents/devops/agent"
+      },
+      {
+        "id": "worker",
+        "model": "anthropic/claude-opus-4-6",
+        "workspace": "/workspace/repo",
+        "agentDir": "/workspace/.openclaw/agents/worker/agent"
+      },
+      {
+        "id": "tester",
+        "model": "anthropic/claude-opus-4-6",
+        "workspace": "/workspace/repo",
+        "agentDir": "/workspace/.openclaw/agents/tester/agent"
+      }
+    ]
+  },
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": ["orchestrator", "devops", "worker", "tester"]
+    }
+  },
+  "memory": {
+    "backend": "qmd",
+    "qmd": {
+      "paths": [
+        { "name": "repo-docs",          "path": "/workspace/repo/.docs",                                   "pattern": "**/*.md" },
+        { "name": "openclaw-docs",      "path": "/workspace/repo/projects/openclaw/.docs",                 "pattern": "**/*.md" },
+        { "name": "app-backend-docs",   "path": "/workspace/repo/projects/application/backend/src/features",   "pattern": "**/.docs/**/*.md" },
+        { "name": "app-frontend-docs",  "path": "/workspace/repo/projects/application/frontend/src/features",  "pattern": "**/.docs/**/*.md" },
+        { "name": "tdt-backend-docs",   "path": "/workspace/repo/projects/the-dev-team/backend/src/features",  "pattern": "**/.docs/**/*.md" },
+        { "name": "tdt-frontend-docs",  "path": "/workspace/repo/projects/the-dev-team/frontend/src/features", "pattern": "**/.docs/**/*.md" },
+        { "name": "infra-docs",         "path": "/workspace/repo/infrastructure",                          "pattern": "**/.docs/**/*.md" }
+      ],
+      "sessions": {
+        "enabled": true
       }
     }
   },
@@ -22,7 +107,7 @@
     "enabled": false
   },
   "cron": {
-    "enabled": false
+    "enabled": true
   },
   "skills": {
     "load": {
@@ -31,20 +116,26 @@
   },
   "plugins": {
     "entries": {
-      "acpx": {
+      "memory-core": {
         "enabled": true,
         "config": {
-          "permissionMode": "approve-all",
-          "nonInteractivePermissions": "deny"
+          "dreaming": {
+            "enabled": true
+          }
+        }
+      },
+      "active-memory": {
+        "enabled": true,
+        "config": {
+          "agents": ["orchestrator", "devops", "worker", "tester"],
+          "allowedChatTypes": ["direct"],
+          "queryMode": "recent",
+          "promptStyle": "balanced",
+          "timeoutMs": 15000,
+          "maxSummaryChars": 220,
+          "logging": true
         }
       }
     }
-  },
-  "acp": {
-    "enabled": true,
-    "backend": "acpx",
-    "defaultAgent": "claude",
-    "allowedAgents": ["claude"],
-    "maxConcurrentSessions": 20
   }
 }

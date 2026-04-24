@@ -46,8 +46,9 @@ Tests map back to acceptance criteria in `spec.md` and flows in `flows.md`. Cont
 - [ ] `refreshToken()` uses `grant_type=refresh_token`; non-2xx → `UnauthorizedException("Failed to refresh token")`.
 - [ ] `logout()` POSTs to `.../openid-connect/logout`; a non-2xx response only logs a warning (does not throw).
 - [ ] `validateToken()` returns a profile where `roles = realm_access.roles ∪ resource_access[clientId].roles`, handling missing `resource_access` / `realm_access` gracefully.
-- [ ] `validateToken()` throws `UnauthorizedException("Invalid token")` when `exp * 1000 < Date.now()`.
-- [ ] `validateToken()` does NOT verify JWT signature — swapping the signature still succeeds as long as claims are parseable and `exp` is in the future (documents the current behavior).
+- [ ] `validateToken()` throws `UnauthorizedException("Invalid token")` when the token is expired. (Enforced by `jose.jwtVerify`, which checks `exp` internally.)
+- [ ] `validateToken()` verifies the JWT signature against Keycloak's JWKS — tampering with the payload or signature causes `jose.jwtVerify` to throw and the service wraps it as `UnauthorizedException("Invalid token")`. Verified by `keycloak-auth.service.ts:162-171` using `jose.jwtVerify(token, this.jwks, { issuer: this.issuer })`.
+- [ ] `validateToken()` rejects tokens whose `iss` claim does not match `${KEYCLOAK_BASE_URL}/realms/${REALM}` — `jose.jwtVerify` enforces the `issuer` option.
 
 ### `PermissionGuard` (`guards/permission.guard.ts`) — unit-testable in isolation even though not currently wired
 - [ ] Returns `true` when `@Public()` metadata is set.
@@ -70,4 +71,4 @@ Tests map back to acceptance criteria in `spec.md` and flows in `flows.md`. Cont
 - [ ] Invalid refresh cookie clears session: tamper with `refresh_token` cookie, `POST /auth/refresh` returns 401 and both cookies are cleared; subsequent `GET /auth/check` is 401.
 - [ ] Admin login: `POST /auth/login` as `admin`/`admin` returns `roles` including `admin`, and `GET /auth/check` returns `permissions` containing all 7 strings.
 - [ ] Bearer header path: `GET /auth/check` with no cookie but `Authorization: Bearer <token>` from a fresh login succeeds.
-- [ ] Permission metadata currently non-enforcing: `GET /users` (decorated with `@RequirePermission('users:read')`) succeeds for a standard `user` login today because `PermissionGuard` is not attached. This test should FAIL (and be updated) once the guard is wired.
+- [ ] **Known failing (tracks Known Gap: PermissionGuard).** `GET /users` decorated with `@RequirePermission('users:read')` is expected to return **403** for a standard `user`-role login and **200** for an `admin`-role login. Today it returns 200 for both because `PermissionGuard` isn't registered globally. See `spec.md` → Known gaps for the fix.

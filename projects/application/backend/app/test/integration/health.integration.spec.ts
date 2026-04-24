@@ -96,4 +96,47 @@ describe('Health Endpoint (Integration)', () => {
       });
     });
   });
+
+  describe('GET /health/database', () => {
+    it('should 401 without an access_token cookie', async () => {
+      await request(BACKEND_URL)
+        .get('/health/database')
+        .expect(401);
+    });
+
+    it('should return connected:true with the list of tables when authenticated', async () => {
+      const agent = request.agent(BACKEND_URL);
+      await agent
+        .post('/auth/login')
+        .send({ username: 'admin', password: 'admin' })
+        .expect(200);
+
+      const response = await agent
+        .get('/health/database')
+        .expect(200);
+
+      expect(response.body.connected).toBe(true);
+      expect(Array.isArray(response.body.tables)).toBe(true);
+      // The backend runs TypeORM migrations on boot, so the migrations
+      // ledger is always present — if the query ran, at least this table
+      // should come back.
+      expect(response.body.tables).toEqual(
+        expect.arrayContaining(['typeorm_migrations']),
+      );
+      expect(response.body.error).toBeUndefined();
+    });
+
+    it('should return content-type application/json', async () => {
+      const agent = request.agent(BACKEND_URL);
+      await agent
+        .post('/auth/login')
+        .send({ username: 'admin', password: 'admin' })
+        .expect(200);
+
+      await agent
+        .get('/health/database')
+        .expect(200)
+        .expect('Content-Type', /json/);
+    });
+  });
 });

@@ -23,8 +23,12 @@ COPY --from=postgres-tools /lib/ld-musl-*.so.1 /lib/
 COPY --from=postgres-tools /usr/bin/envsubst /usr/bin/envsubst
 COPY --from=postgres-tools /usr/lib/libintl.so.8 /usr/lib/
 
-# Copy startup script that creates schema before starting Keycloak
-COPY --chmod=755 ./app/scripts/startup.sh /opt/keycloak/bin/startup.sh
+# Copy startup script that creates schema before starting Keycloak.
+# Use a separate RUN chmod instead of `COPY --chmod=755` so the build works
+# without BuildKit (the docker daemon mounted into the openclaw gateway pod
+# may not have BuildKit enabled).
+COPY ./app/scripts/startup.sh /opt/keycloak/bin/startup.sh
+RUN chmod 755 /opt/keycloak/bin/startup.sh
 
 # Import realm on startup - copy template first
 WORKDIR /opt/keycloak

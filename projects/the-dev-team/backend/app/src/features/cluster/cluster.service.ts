@@ -335,7 +335,7 @@ export class ClusterService {
       const branch = stdout.trim();
       // Map known branch patterns to environment names
       if (branch === 'main' || branch === 'master') return 'main';
-      if (branch.startsWith('env/')) return branch.slice(4); // env/mac-mini → mac-mini
+      if (branch.startsWith('env/')) return branch.slice(4); // env/{name} → {name}
       // For feature branches, still show "main" since the app namespace deploys from main
       return 'main';
     } catch {

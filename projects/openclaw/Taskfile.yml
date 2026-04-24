@@ -1,86 +1,84 @@
 version: '3'
 
 tasks:
-  k8s:status:
-    desc: Show OpenClaw pod and ingress status
+  up:
+    desc: Start OpenClaw stack (gateway + git-sync sidecar)
     cmds:
-      - kubectl get pods -n ${OPENCLAW_NAMESPACE:-openclaw}
-      - kubectl get ingress -n ${OPENCLAW_NAMESPACE:-openclaw}
+      - docker compose -f infrastructure/compose/openclaw/compose.yml --env-file infrastructure/compose/openclaw/.env up -d
 
-  k8s:logs:
-    desc: Follow OpenClaw pod logs
+  down:
+    desc: Stop OpenClaw stack (preserves workspace volume)
     cmds:
-      - kubectl logs -f -l app=openclaw-gateway -n ${OPENCLAW_NAMESPACE:-openclaw}
+      - docker compose -f infrastructure/compose/openclaw/compose.yml down
 
-  k8s:shell:
-    desc: Open a shell in the OpenClaw pod
+  down:clean:
+    desc: Stop OpenClaw stack AND wipe the workspace volume (forces fresh git clone)
     cmds:
-      - kubectl exec -it $(kubectl get pod -l app=openclaw-gateway -n ${OPENCLAW_NAMESPACE:-openclaw} -o jsonpath='{.items[0].metadata.name}') -n ${OPENCLAW_NAMESPACE:-openclaw} -- /bin/bash
+      - docker compose -f infrastructure/compose/openclaw/compose.yml down -v
 
-  k8s:restart:
-    desc: Rollout restart the OpenClaw deployment
+  build:
+    desc: Build OpenClaw images (gateway + git-sync)
     cmds:
-      - kubectl rollout restart deployment/openclaw-gateway -n ${OPENCLAW_NAMESPACE:-openclaw}
-      - kubectl rollout status deployment/openclaw-gateway -n ${OPENCLAW_NAMESPACE:-openclaw} --timeout=180s
+      - docker compose -f infrastructure/compose/openclaw/compose.yml build
 
-  k8s:forward:
-    desc: Port-forward OpenClaw to http://localhost:18789 (required for the Web UI — secure context for device crypto)
+  logs:
+    desc: Tail logs from all OpenClaw services
     cmds:
-      - |
-        NS="${OPENCLAW_NAMESPACE:-openclaw}"
-        echo ""
-        echo "OpenClaw's Control UI needs a browser secure context (HTTPS or localhost)."
-        echo "The ingress serves plain HTTP, so open the UI via this port-forward instead:"
-        echo ""
-        echo "  http://localhost:18789"
-        echo ""
-        echo "Press Ctrl-C to stop. Run 'task openclaw:k8s:pair' in another terminal to approve your browser."
-        echo ""
-        kubectl port-forward -n "$NS" svc/openclaw-gateway 18789:18789
+      - docker compose -f infrastructure/compose/openclaw/compose.yml logs -f
 
-  k8s:pair:
+  ps:
+    desc: Show OpenClaw stack service status
+    cmds:
+      - docker compose -f infrastructure/compose/openclaw/compose.yml ps
+
+  restart:
+    desc: Restart the gateway container (leaves git-sync running)
+    cmds:
+      - docker compose -f infrastructure/compose/openclaw/compose.yml restart gateway
+
+  shell:
+    desc: Open a bash shell in the gateway container
+    cmds:
+      - docker compose -f infrastructure/compose/openclaw/compose.yml exec gateway bash
+
+  health:
+    desc: Check the gateway's /health endpoint
+    cmds:
+      - curl -sf http://localhost:3001/health && echo OK || echo "Health check failed"
+
+  pair:
     desc: Approve the pending Web UI device (run after clicking Connect in the browser)
     cmds:
       - |
-        NS="${OPENCLAW_NAMESPACE:-openclaw}"
-        POD=$(kubectl get pod -l app=openclaw-gateway -n "$NS" -o jsonpath='{.items[0].metadata.name}')
-        if [ -z "$POD" ]; then
-          echo "ERROR: no openclaw-gateway pod found in namespace $NS"
-          exit 1
-        fi
         echo ""
         echo "=== OpenClaw Device Pairing ==="
         echo ""
-        echo "1. Open https://openclaw.${DEV_HOSTNAME} in your browser"
-        echo "   (Requires 'task tunnel' running and 'task certs:install' done once.)"
-        echo "2. Enter your OPENCLAW_AUTH_TOKEN from .env as the Gateway Token"
+        echo "1. Open http://localhost:3001 in your browser"
+        echo "2. Enter your OPENCLAW_AUTH_TOKEN from infrastructure/compose/openclaw/.env as the Gateway Token"
         echo "3. Click Connect — you'll see 'pairing required'"
-        echo "4. Come back here and press Enter to approve the pending device"
+        echo "4. Keep the tab open so the browser keeps retrying — this task polls"
+        echo "   for the ephemeral pending request and approves it when it appears."
         echo ""
-        echo "Press Enter when you've clicked Connect in the browser..."
-        read
-        # The openclaw CLI inside the pod talks to the gateway over ws://127.0.0.1:18789,
-        # which requires the gateway token. Read it from the pod's env (it's already in
-        # the Secret) and pass --token explicitly. --json keeps parsing stable.
-        DEVICES_JSON=$(kubectl exec -n "$NS" "$POD" -- sh -c 'openclaw devices list --json --token "$OPENCLAW_AUTH_TOKEN"' 2>/dev/null)
-        if [ -z "$DEVICES_JSON" ]; then
-          echo "Failed to list devices — is the gateway ready?"
-          kubectl exec -n "$NS" "$POD" -- sh -c 'openclaw devices list --json --token "$OPENCLAW_AUTH_TOKEN"' 2>&1 | tail -5
+        # Pending pairing requests are short-lived — the browser cycles through
+        # new requestIds on every reconnect. A single snapshot usually misses them.
+        # Poll for up to 30 seconds (0.5s intervals) and grab the first one we see.
+        docker compose -f infrastructure/compose/openclaw/compose.yml exec -T gateway sh -c '
+          TIMEOUT=60
+          i=0
+          while [ $i -lt $TIMEOUT ]; do
+            RESP=$(openclaw devices list --json --token "$OPENCLAW_AUTH_TOKEN" 2>/dev/null)
+            REQ=$(echo "$RESP" | grep -oE "\"requestId\":[[:space:]]*\"[^\"]+\"" | head -1 | cut -d"\"" -f4)
+            if [ -n "$REQ" ] && [ "$REQ" != "null" ]; then
+              echo "Found pending request: $REQ"
+              openclaw devices approve "$REQ" --token "$OPENCLAW_AUTH_TOKEN"
+              echo ""
+              echo "Device approved. Browser should connect on its next retry."
+              exit 0
+            fi
+            i=$((i + 1))
+            sleep 0.5
+          done
+          echo "No pending pairing requests caught in 30s."
+          echo "Make sure the browser tab is open with the Gateway Token entered."
           exit 1
-        fi
-        REQUEST_ID=$(echo "$DEVICES_JSON" | jq -r '.pending[0].requestId // empty')
-        if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
-          echo "No pending pairing requests found. Click Connect in the browser first."
-          echo "Current devices:"
-          echo "$DEVICES_JSON" | jq .
-          exit 1
-        fi
-        echo "Approving device: $REQUEST_ID"
-        kubectl exec -n "$NS" "$POD" -- sh -c "openclaw devices approve '$REQUEST_ID' --token \"\$OPENCLAW_AUTH_TOKEN\""
-        echo ""
-        echo "Device approved. Go back to the browser and click Connect again."
-
-  k8s:health:
-    desc: Check OpenClaw health endpoint via ingress
-    cmds:
-      - curl -sf "http://openclaw.${DEV_HOSTNAME}/health" && echo "OK" || echo "Health check failed"
+        '

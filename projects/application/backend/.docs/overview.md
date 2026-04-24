@@ -8,7 +8,7 @@ A NestJS REST API that fronts Keycloak for authentication and user administratio
 
 From `app/package.json`:
 
-- **Framework:** NestJS 11 (`@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`) on Node 20 Alpine (`dockerfiles/prod.Dockerfile:2`)
+- **Framework:** NestJS 11 (`@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`) on Node 22 Alpine (`dockerfiles/prod.Dockerfile:2`)
 - **Auth:** Keycloak via direct `fetch` calls to `realms/{realm}/protocol/openid-connect/*` (`src/features/keycloak-auth/services/keycloak-auth.service.ts`); JWT decoded with `jose` (`jose.decodeJwt`, `keycloak-auth.service.ts:158`) — **signature is NOT verified against JWKS** (see Discrepancies)
 - **Database:** PostgreSQL via `@nestjs/typeorm` + `typeorm` + `pg`; schema `example_schema`; migrations auto-run on startup (`typeorm-database-client.module.ts:53`)
 - **Validation:** `class-validator`, `class-transformer` (used in theme DTOs only — no global `ValidationPipe` registered)

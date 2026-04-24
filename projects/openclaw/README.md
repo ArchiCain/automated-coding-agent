@@ -1,56 +1,53 @@
 # OpenClaw
 
-Second autonomous coding agent in this monorepo, deployed alongside THE Dev Team for side-by-side comparison. Phase 1 scope: a gateway pod you can talk to via the Web UI. No cron, no skills, no autonomous behavior.
+The agent runtime for this monorepo. Owns `projects/application/` — its agents read the application's `.docs/` specs, write code to match, run tests in sandboxes, and open PRs. Runs as a two-service docker-compose project (gateway + git-sync sidecar) under `infrastructure/compose/openclaw/`.
 
-See `.docs/overview.md` for the full spec.
+THE Dev Team (`projects/the-dev-team/`) was the first orchestrator; it's frozen reference material now. See `CLAUDE.md` → Division of labor.
+
+OpenClaw itself is **edited via Claude Code** in the user's laptop CLI — skills, dockerfiles, task wiring all live under `projects/openclaw/`. See `.docs/overview.md` for the full spec.
 
 ## Quickstart
 
-Prerequisites: the rest of the cluster already comes up with `task up` from the repo root. OpenClaw piggybacks on the same helmfile, registry, and Traefik tunnel.
+Prerequisites: the rest of the compose stack comes up with `task up` from the repo root. OpenClaw shares the same compose runtime.
 
-1. **Set env vars** in the repo-root `.env`:
+1. **Set env vars** in `infrastructure/compose/openclaw/.env` (start from the template):
    ```
-   CLAUDE_CODE_OAUTH_TOKEN=<from `claude setup-token`>
+   ANTHROPIC_API_KEY=<your API key>
+   OPENAI_API_KEY=<your API key>
    OPENCLAW_AUTH_TOKEN=<any strong random string>
-   ```
-   Do NOT set `ANTHROPIC_API_KEY` on openclaw's behalf — the container refuses it.
-
-2. **Build and deploy** from the repo root:
-   ```
-   task build:openclaw
-   task deploy:apply
+   GITHUB_APP_ID=
+   GITHUB_APP_INSTALLATION_ID=
+   # Place your GitHub App private key at the path referenced by the compose file.
    ```
 
-3. **Install the dev TLS cert** (one-time per machine):
+2. **Build and start** from the repo root:
    ```
-   task certs:install
+   task openclaw:build
+   task openclaw:up
    ```
-   This runs `mkcert -install`, issues a wildcard cert for `*.${DEV_HOSTNAME}`, and loads it into Traefik as the default TLS store. Every ingress with `tls: true` serves this cert.
 
-4. **Pair your browser** (one-time per browser):
-   ```
-   task openclaw:k8s:pair
-   ```
-   Follow the prompts: open `https://openclaw.${DEV_HOSTNAME}`, enter `OPENCLAW_AUTH_TOKEN`, click Connect, come back and press Enter.
+3. **Pair your browser** (one-time per browser):
+   - Open `http://localhost:3001` (localhost qualifies as a secure context).
+   - Enter `OPENCLAW_AUTH_TOKEN` as the Gateway Token.
+   - Click Connect → you'll see "pairing required".
+   - From a terminal: `task openclaw:pair` — approves the pending device.
+   - Re-click Connect in the browser.
 
-5. **Talk to it.** `https://openclaw.${DEV_HOSTNAME}`.
+4. **Talk to it.** `http://localhost:3001`.
 
 ## Useful tasks
 
 | Task | Purpose |
 |------|---------|
-| `task openclaw:k8s:status`   | Show pod and ingress state |
-| `task openclaw:k8s:logs`     | Tail pod logs |
-| `task openclaw:k8s:shell`    | Bash into the pod |
-| `task openclaw:k8s:restart`  | Rollout restart |
-| `task openclaw:k8s:forward`  | Port-forward svc to `localhost:18789` (fallback if TLS setup breaks) |
-| `task openclaw:k8s:pair`     | Approve a pending browser device |
-| `task openclaw:k8s:health`   | Curl `/health` through the ingress |
+| `task openclaw:ps`       | Show service state |
+| `task openclaw:logs`     | Tail gateway + git-sync logs |
+| `task openclaw:shell`    | Bash into the gateway container |
+| `task openclaw:restart`  | Restart the gateway (git-sync stays up) |
+| `task openclaw:pair`     | Approve a pending browser device |
+| `task openclaw:health`   | Curl `/health` on the gateway |
+| `task openclaw:down`     | Stop everything, preserve the workspace volume |
+| `task openclaw:down:clean` | Stop and wipe the workspace volume (forces fresh clone) |
 
-## What's NOT in Phase 1
+## EC2 deploy
 
-- No cron / hooks / autonomous work loop
-- No skills loaded (empty `app/skills/`)
-- No GitHub App, no workspace repo clone
-- No `ANTHROPIC_API_KEY` anywhere — OAuth token only
-- No the-dev-team-in-openclaw port (planned for a later phase)
+On EC2, the same compose project runs with `infrastructure/compose/openclaw/compose.prod.yml` overlaid — image refs flip to GHCR and Caddy terminates TLS at `https://openclaw.{DOMAIN}`.

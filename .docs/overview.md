@@ -2,19 +2,31 @@
 
 ## What This Is
 
-A monorepo containing an autonomous software development system and the application it builds. Agents read `.docs/` specifications and sync code to match, deploy to sandbox environments, run tests, create PRs, and iterate — with humans guiding the specs.
+A monorepo containing an autonomous software development system (**OpenClaw**) and the application it builds (**the benchmark app under `projects/application/`**). OpenClaw reads `.docs/` specifications and syncs code to match, deploys to sandbox environments, runs tests, creates PRs, and iterates — humans guide the specs.
+
+Claude Code (running on the user's laptop) is the tool humans use to edit OpenClaw itself and everything around it (infrastructure, CI/CD, this docs tree).
+
+## Division of labor
+
+| Actor | Owns | How it's edited |
+|---|---|---|
+| **OpenClaw** (`projects/openclaw/`) | `projects/application/` — the benchmark app | Edited via Claude Code (rebuild gateway image, recreate container) |
+| **Claude Code** (this CLI) | `projects/openclaw/`, `infrastructure/`, `scripts/`, `.github/`, repo-level docs | Edited in-session by a human + Claude |
+| **THE Dev Team** (`projects/the-dev-team/`) | Nothing — frozen reference | Do not edit |
+
+The full rationale is in the top of `CLAUDE.md`.
 
 ## Repository Structure
 
 | Directory | Purpose |
 |-----------|---------|
-| `projects/application/` | The benchmark application — React frontend, NestJS backend, Keycloak auth, PostgreSQL |
-| `projects/the-dev-team/` | The agent orchestration system — Mastra agents, WebSocket streaming, docs page UI, sandbox management |
-| `infrastructure/` | Kubernetes deployment — Helm charts, Helmfile, Terraform, Minikube, agent sandbox environments |
+| `projects/application/` | The benchmark application — Angular frontend, NestJS backend, Keycloak auth, PostgreSQL. **OpenClaw edits this.** |
+| `projects/openclaw/` | The OpenClaw agent runtime: gateway Dockerfile, git-sync sidecar, `openclaw.json`, skills, Taskfile. **Claude Code edits this.** |
+| `projects/the-dev-team/` | Frozen reference. Prior orchestrator; non-runnable post-migration. |
+| `infrastructure/` | Compose stacks (dev, openclaw, sandbox templates), Terraform for the EC2 host, Caddy reverse-proxy config |
 | `.github/` | CI/CD workflows — PR checks, branch-based deployment |
-| `ideas/` | Vision docs, brainstorming, build plan — input that becomes `.docs/` when ready to build |
-| `scripts/` | Shell scripts for K8s secrets, Minikube setup, Tailscale detection |
-| `.claude/commands/` | Claude Code slash commands — `/review-feature`, `/sync-feature`, `/write-tests`, `/review-spec` |
+| `scripts/` | Sandbox lifecycle helpers (`sandbox-*.sh`) + deploy helper (`deploy.sh`) |
+| `.claude/commands/` | Claude Code slash commands — `/review-feature`, `/sync-feature`, `/write-tests`, `/review-spec`, `/document-code` |
 
 ## The `.docs/` Convention
 
@@ -27,9 +39,9 @@ See `.docs/standards/docs-driven-development.md` for the full standard.
 ```
 repo/.docs/                         ← Repo-level: standards, conventions
 .github/.docs/                      ← CI/CD: workflows, deployment targets
-infrastructure/.docs/               ← Infrastructure overview
-infrastructure/k8s/.docs/           ← Kubernetes: helmfile, networking, tailscale
-infrastructure/terraform/.docs/     ← Terraform: provisioning
+infrastructure/.docs/               ← Infrastructure overview + EC2 reverse-proxy ADR
+infrastructure/compose/.docs/       ← Compose stack layout, ports, env files, sandboxes
+infrastructure/terraform/.docs/     ← Terraform: EC2 provisioning
 projects/application/
   ├── backend/.docs/                ← Project-level: overview, coding standards
   │   └── features/*/.docs/         ← Feature-level: spec, flows, contracts, test-plan
@@ -37,31 +49,31 @@ projects/application/
   │   └── features/*/.docs/         ← Feature-level: spec, flows, contracts, test-plan
   ├── database/.docs/               ← Database setup spec
   ├── keycloak/.docs/               ← Auth server config spec
+projects/openclaw/.docs/            ← Gateway topology, skills, deploy model
 ```
 
 ## Deployment Model
 
-Everything runs in Kubernetes — Minikube locally, K3s in production. Same Helm charts, same Helmfile, different environment values.
+Everything runs on docker-compose — locally on a developer laptop (Docker Desktop), in production on a single Ubuntu EC2 host behind Caddy. Same compose files, prod-specific overrides layered via `compose.prod.yml`.
 
 ```
-task up → Minikube + build + deploy + tunnel
+task up → dev compose project + openclaw compose project
 ```
 
-Services are accessed via Tailscale hostnames (e.g., `app.shawns-macbook-pro`). No localhost fallback.
+Locally, services are reachable at `http://localhost:{port}` (frontend 3000, backend 8080, keycloak 8081, openclaw 3001). On EC2, Caddy terminates TLS and routes by `Host` header to the same compose projects.
 
-## Agent System (THE Dev Team)
+## Agent system (OpenClaw)
 
-Five agent types work the doc-driven development loop:
+Four agent personas run inside the OpenClaw gateway. Each has a skill allowlist, a persistent workspace under `/workspace/.openclaw/`, and memory indexed by QMD.
 
 | Agent | Job |
 |-------|-----|
-| **Doc Assistant** | Curates `.docs/` — compares docs against code, flags gaps |
-| **Test Writer** | Writes tests from spec + flows + contracts |
-| **Syncing Agent** | Makes code match `.docs/` spec, runs tests, commits frequently |
-| **Tester Agent** | Tests features in deployed sandboxes (Playwright + HTTP) |
-| **PR Reviewer** | Reviews PRs against `.docs/` spec + code quality |
+| **orchestrator** | Talks to the human. Parses requests, delegates to specialists, returns summaries. |
+| **devops** | Sandbox lifecycle (`task env:*`), git worktrees, branches, PRs, logs. Read-only on source code. |
+| **worker** | Writes code to match `.docs/` specs under `projects/application/`. Commits frequently. |
+| **tester** | Runs tests in sandboxes (HTTP + browser via the OpenClaw browser plugin). |
 
-See `ideas/build-plan.md` for the full implementation roadmap.
+Agent prompts live under `projects/openclaw/app/skills/`. OpenClaw reads them from the synced repo at `/workspace/repo/projects/openclaw/app/skills/` (refreshed by the git-sync sidecar every 60s) rather than from the baked-in image — so a skill edit lands on the next gateway restart without rebuilding.
 
 ## Standards
 

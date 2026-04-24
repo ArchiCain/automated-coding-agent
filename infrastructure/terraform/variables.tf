@@ -28,7 +28,7 @@ variable "instance_type" {
 }
 
 variable "key_name" {
-  description = "SSH key pair name for EC2 access"
+  description = "SSH key pair name for EC2 access (break-glass only; regular access is Tailscale SSH)"
   type        = string
 }
 
@@ -39,19 +39,36 @@ variable "root_volume_size" {
 }
 
 variable "data_volume_size" {
-  description = "Data EBS volume size in GB (K3s persistent volumes)"
+  description = "Data EBS volume size in GB (mounted at /mnt/data, backs /var/lib/docker)"
   type        = number
   default     = 50
 }
 
 variable "ssh_cidr_blocks" {
-  description = "CIDR blocks allowed for SSH and K3s API access"
+  description = "CIDR blocks allowed for SSH break-glass access"
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
 
-variable "domain" {
-  description = "Domain name for the application (e.g., rtsdev.co)"
+variable "tailscale_auth_key" {
+  description = "Reusable Tailscale auth key. See https://login.tailscale.com/admin/settings/keys."
   type        = string
-  default     = ""
+  sensitive   = true
+}
+
+variable "domain" {
+  description = "Base domain served behind Caddy (e.g. scain-coding-agent.dev). Subdomains: app, api, auth, openclaw."
+  type        = string
+}
+
+variable "repo_url" {
+  description = "Repo to clone into /srv/aca during user-data."
+  type        = string
+  default     = "https://github.com/rtslabs/scain-coding-agent.git"
+}
+
+variable "repo_branch" {
+  description = "Branch to check out in /srv/aca."
+  type        = string
+  default     = "dev"
 }

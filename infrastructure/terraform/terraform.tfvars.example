@@ -1,10 +1,20 @@
-project_name    = "automated-repo"
-environment     = "prod"
-aws_region      = "us-east-1"
-aws_profile     = "default"
-instance_type   = "t3.large"
-key_name        = "my-key-pair"
+project_name     = "automated-repo"
+environment      = "prod"
+aws_region       = "us-east-1"
+aws_profile      = "default"
+instance_type    = "t3.large"
+key_name         = "my-key-pair"
 root_volume_size = 30
 data_volume_size = 50
-domain          = "rtsdev.co"
-ssh_cidr_blocks = ["0.0.0.0/0"]
+ssh_cidr_blocks  = ["0.0.0.0/0"]
+
+# Base domain; subdomains app / api / auth / openclaw will be served behind Caddy.
+domain = "rtsdev.co"
+
+# Generate a reusable auth key at https://login.tailscale.com/admin/settings/keys
+# Keep this value out of version control — treat it like a long-lived secret.
+tailscale_auth_key = ""
+
+# Initial repo clone target (optional; defaults shown).
+# repo_url    = "https://github.com/rtslabs/scain-coding-agent.git"
+# repo_branch = "dev"

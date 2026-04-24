@@ -1,0 +1,22 @@
+# Production override for the openclaw stack on EC2.
+#
+# Layer on top of compose.yml:
+#   docker compose \
+#     -f infrastructure/compose/openclaw/compose.yml \
+#     -f infrastructure/compose/openclaw/compose.prod.yml \
+#     up -d
+#
+# Each service switches to a GHCR image and drops the local `build:` block
+# (the EC2 host doesn't have the build context). Ports, environment,
+# depends_on, and volumes come from compose.yml unchanged.
+#
+# IMAGE_TAG is injected by scripts/deploy.sh / the deploy workflow.
+
+services:
+  gateway:
+    image: ghcr.io/rtslabs/scain-coding-agent-openclaw-gateway:${IMAGE_TAG:-latest}
+    build: !reset null
+
+  git-sync:
+    image: ghcr.io/rtslabs/scain-coding-agent-openclaw-git-sync:${IMAGE_TAG:-latest}
+    build: !reset null

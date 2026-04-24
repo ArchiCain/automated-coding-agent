@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  up:
+    desc: Start dev application stack (postgres, backend, frontend, keycloak)
+    cmds:
+      - docker compose -f infrastructure/compose/dev/compose.yml --env-file infrastructure/compose/dev/.env up -d
+
+  down:
+    desc: Stop dev application stack (preserves postgres volume)
+    cmds:
+      - docker compose -f infrastructure/compose/dev/compose.yml down
+
+  down:clean:
+    desc: Stop dev stack AND wipe the postgres volume (destroys data)
+    cmds:
+      - docker compose -f infrastructure/compose/dev/compose.yml down -v
+
+  logs:
+    desc: Tail logs from all dev stack services
+    cmds:
+      - docker compose -f infrastructure/compose/dev/compose.yml logs -f
+
+  build:
+    desc: Build dev stack images
+    cmds:
+      - docker compose -f infrastructure/compose/dev/compose.yml build
+
+  ps:
+    desc: Show dev stack service status
+    cmds:
+      - docker compose -f infrastructure/compose/dev/compose.yml ps

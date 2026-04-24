@@ -1,92 +1,66 @@
 version: "3"
 
-tasks:
-  # Local development operations
-  local:build:
-    desc: "Build PostgreSQL Docker image"
-    dir: "{{.TASKFILE_DIR}}/../.."
-    cmds:
-      - docker compose -f infrastructure/docker/compose.yml build database
+# Service is named `postgres` in infrastructure/compose/dev/compose.yml
+# (compose/dev uses the pgvector/pgvector:pg16 image directly — no
+# local build step). Credentials come from the dev .env (POSTGRES_USER,
+# POSTGRES_PASSWORD, POSTGRES_DB). pgweb is no longer part of the
+# compose stack; if you need a DB UI, run one via `docker run` ad-hoc.
 
+tasks:
   local:start:
-    desc: "Start PostgreSQL database"
-    dir: "{{.TASKFILE_DIR}}/../.."
+    desc: "Start PostgreSQL only"
+    dir: "{{.TASKFILE_DIR}}/../../.."
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml up -d database
+      - docker compose -f infrastructure/compose/dev/compose.yml --env-file infrastructure/compose/dev/.env up -d postgres
 
   local:stop:
-    desc: "Stop PostgreSQL database"
-    dir: "{{.TASKFILE_DIR}}/../.."
+    desc: "Stop PostgreSQL"
+    dir: "{{.TASKFILE_DIR}}/../../.."
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml stop database
+      - docker compose -f infrastructure/compose/dev/compose.yml stop postgres
 
   local:restart:
-    desc: "Restart PostgreSQL database"
-    dir: "{{.TASKFILE_DIR}}/../.."
+    desc: "Restart PostgreSQL"
+    dir: "{{.TASKFILE_DIR}}/../../.."
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml restart database
+      - docker compose -f infrastructure/compose/dev/compose.yml restart postgres
 
   local:logs:
     desc: "View PostgreSQL logs"
-    dir: "{{.TASKFILE_DIR}}/../.."
+    dir: "{{.TASKFILE_DIR}}/../../.."
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml logs -f database
+      - docker compose -f infrastructure/compose/dev/compose.yml logs -f postgres
 
   local:reset:
-    desc: "Reset local database (WARNING: Deletes all data)"
-    dir: "{{.TASKFILE_DIR}}/../.."
+    desc: "Stop PostgreSQL and wipe the named volume (WARNING: deletes all data)"
+    dir: "{{.TASKFILE_DIR}}/../../.."
     cmds:
-      - echo "WARNING - This will delete all local database data"
-      - docker compose -f infrastructure/docker/compose.yml down database
-      - docker volume rm ${COMPOSE_PROJECT_NAME:-projects}_database_data || true
-      - echo "Database reset complete. Run 'task start-local' to recreate with migrations"
+      - echo "WARNING — this deletes the dev_postgres-data volume"
+      - docker compose -f infrastructure/compose/dev/compose.yml stop postgres
+      - docker compose -f infrastructure/compose/dev/compose.yml rm -f postgres
+      - docker volume rm dev_postgres-data || true
+      - echo "Run 'task database:local:start' to recreate the volume."
 
   local:shell:
-    desc: "Connect to PostgreSQL with psql"
-    dir: "{{.TASKFILE_DIR}}/../.."
+    desc: "Open psql shell"
+    dir: "{{.TASKFILE_DIR}}/../../.."
     deps: [local:start]
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml exec database psql -U $DATABASE_USERNAME
+      - docker compose -f infrastructure/compose/dev/compose.yml exec postgres psql -U postgres
 
   local:backup:
-    desc: "Create a database backup"
-    dir: "{{.TASKFILE_DIR}}/../.."
+    desc: "Dump the app database to projects/application/database/backups/"
+    dir: "{{.TASKFILE_DIR}}/../../.."
     deps: [local:start]
-    cmds:
-      - mkdir -p ./projects/database/backups
-      - docker compose -f infrastructure/docker/compose.yml exec database pg_dump -U $DATABASE_USERNAME $DATABASE_NAME > ./projects/database/backups/backup_{{.TIMESTAMP}}.sql
     vars:
       TIMESTAMP:
         sh: date +%Y%m%d_%H%M%S
+    cmds:
+      - mkdir -p projects/application/database/backups
+      - docker compose -f infrastructure/compose/dev/compose.yml exec -T postgres pg_dump -U postgres app > projects/application/database/backups/backup_{{.TIMESTAMP}}.sql
 
   local:health:
-    desc: "Check database health"
-    dir: "{{.TASKFILE_DIR}}/../.."
+    desc: "Check postgres health"
+    dir: "{{.TASKFILE_DIR}}/../../.."
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml exec database pg_isready -U $DATABASE_USERNAME
-
-  # pgweb - Database UI operations
-  pgweb:start:
-    desc: "Start pgweb database UI"
-    dir: "{{.TASKFILE_DIR}}/../.."
-    deps: [local:start]
-    cmds:
-      - docker compose -f infrastructure/docker/compose.yml up -d pgweb
-
-  pgweb:stop:
-    desc: "Stop pgweb"
-    dir: "{{.TASKFILE_DIR}}/../.."
-    cmds:
-      - docker compose -f infrastructure/docker/compose.yml stop pgweb
-
-  pgweb:restart:
-    desc: "Restart pgweb"
-    dir: "{{.TASKFILE_DIR}}/../.."
-    cmds:
-      - docker compose -f infrastructure/docker/compose.yml restart pgweb
-
-  pgweb:logs:
-    desc: "View pgweb logs"
-    dir: "{{.TASKFILE_DIR}}/../.."
-    cmds:
-      - docker compose -f infrastructure/docker/compose.yml logs -f pgweb
+      - docker compose -f infrastructure/compose/dev/compose.yml exec -T postgres pg_isready -U postgres

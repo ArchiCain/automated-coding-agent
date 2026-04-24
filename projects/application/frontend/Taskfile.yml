@@ -13,31 +13,31 @@ tasks:
   local:start:
     desc: Start Frontend Service locally in Docker
     deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml up --build -d frontend
+      - docker compose -f infrastructure/compose/dev/compose.yml up --build -d frontend
       - echo "Frontend Service started at http://localhost:${FRONTEND_PORT}"
 
   local:stop:
     desc: Stop Frontend Service locally
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml stop frontend
+      - docker compose -f infrastructure/compose/dev/compose.yml stop frontend
 
   local:restart:
     desc: Restart Frontend Service locally (rebuild and start)
     deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml stop frontend
-      - docker compose -f infrastructure/docker/compose.yml up --build -d frontend
+      - docker compose -f infrastructure/compose/dev/compose.yml stop frontend
+      - docker compose -f infrastructure/compose/dev/compose.yml up --build -d frontend
       - echo "Frontend Service restarted at http://localhost:${FRONTEND_PORT}"
 
   local:logs:
     desc: Show Frontend Service logs
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml logs -f frontend
+      - docker compose -f infrastructure/compose/dev/compose.yml logs -f frontend
 
   local:health:
     desc: Test Frontend Service health endpoint
@@ -46,15 +46,15 @@ tasks:
 
   local:build:
     desc: Build Docker image for local development
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml build frontend
+      - docker compose -f infrastructure/compose/dev/compose.yml build frontend
 
   local:shell:
     desc: Get a shell inside the running Frontend Service container
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml exec frontend sh
+      - docker compose -f infrastructure/compose/dev/compose.yml exec frontend sh
 
   local:run:
     desc: Run Frontend Service locally outside of Docker (ng serve)

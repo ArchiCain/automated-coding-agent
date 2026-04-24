@@ -98,23 +98,21 @@ For related standards:
 The root `Taskfile.yml` includes project-level Taskfiles:
 
 ```
-task up                    # Start Minikube + build + deploy + tunnel
-task up:build-and-deploy   # Build images + deploy (internal)
-task build:all             # Build all Docker images
-task deploy:apply          # Deploy via Helmfile
-task status                # Show cluster status
-task tunnel                # Start Traefik ingress tunnel
-task close                 # Stop tunnel
-task reset:up              # Wipe and redeploy from scratch
+task up                    # Start full compose stack (dev + openclaw)
+task down                  # Stop everything (preserves volumes)
+task build                 # Build all compose images
+task run-all-tests         # Run backend + frontend unit and integration tests
 
 # Per-project tasks (included from project Taskfiles)
-task backend:local:start:dev    # Start backend dev server
+task backend:local:start        # Start backend dev server
 task frontend:local:run         # Start frontend dev server
+task dev:logs                   # Tail dev compose logs
+task openclaw:logs              # Tail openclaw compose logs
 
-# Infrastructure tasks
-task minikube:start             # Start local K8s cluster
-task env:create -- {name}       # Create sandbox namespace
-task env:destroy -- {name}      # Destroy sandbox namespace
+# Sandbox lifecycle (compose-per-sandbox)
+task env:create -- {name}       # Create an env-{name} compose project
+task env:destroy -- {name}      # Destroy the sandbox
+task env:list                   # List active sandboxes
 ```
 
 ## Best Practices

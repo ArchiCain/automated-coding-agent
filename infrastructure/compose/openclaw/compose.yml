@@ -1,0 +1,71 @@
+# OpenClaw stack for Docker Compose.
+#
+# Two services: gateway, git-sync. One named volume: workspace (shared
+# between both so the sidecar's clone and token file are visible to the
+# gateway). Uses compose's default bridge network for the project —
+# gateway and git-sync coordinate only through the shared /workspace
+# volume, never over the network.
+#
+# Host port mapping (phase 1 port-based URL model):
+#   gateway (Control UI + websocket) -> http://localhost:3001
+#     - container listens on :18789 (EXPOSE in prod.Dockerfile)
+#
+# The gateway bind-mounts the host docker socket so the devops agent can
+# run `docker compose` + `task` directly (phase 4 sandbox provisioning).
+
+services:
+  gateway:
+    build:
+      context: ../../../projects/openclaw
+      dockerfile: dockerfiles/prod.Dockerfile
+    ports:
+      - "3001:18789"
+    depends_on:
+      - git-sync
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENCLAW_AUTH_TOKEN: ${OPENCLAW_AUTH_TOKEN}
+      OPENCLAW_ALLOWED_ORIGINS: http://localhost:3001
+      OPENCLAW_WAIT_FOR_REPO: "1"
+      OPENCLAW_GIT_BRANCH: ${OPENCLAW_GIT_BRANCH:-dev}
+      OPENCLAW_GIT_APP_SLUG: ${OPENCLAW_GIT_APP_SLUG:-scain-openclaw}
+      GITHUB_APP_ID: ${GITHUB_APP_ID}
+    # The gateway runs as `node` (uid 1000); it needs to open the host's
+    # docker socket. Socket ownership differs by runtime:
+    #   Docker Desktop (mac): often root:root 660 → DOCKER_SOCKET_GID=0
+    #   Colima (mac):         root:root 660       → DOCKER_SOCKET_GID=0
+    #   Ubuntu (EC2):         root:docker 660     → DOCKER_SOCKET_GID=<docker gid>
+    #                                                (getent group docker | cut -d: -f3)
+    # Set DOCKER_SOCKET_GID in compose/openclaw/.env to match your host.
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
+    volumes:
+      - workspace:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  git-sync:
+    build:
+      context: ../../../projects/openclaw
+      dockerfile: dockerfiles/git-sync.Dockerfile
+    user: "1000:1000"
+    # Override alpine/git's ENTRYPOINT (which is `git`). Without this reset,
+    # our `command:` below would be appended as `git sh /usr/local/bin/...`.
+    entrypoint: ["sh"]
+    command: ["/usr/local/bin/git-sync.sh"]
+    environment:
+      HOME: /workspace/.openclaw/git-sync-home
+      GIT_REPO_URL: ${GIT_REPO_URL}
+      GIT_BRANCH: ${OPENCLAW_GIT_BRANCH:-dev}
+      GIT_CLONE_DIR: /workspace/repo
+      GIT_INTERVAL: "60"
+      GITHUB_APP_ID: ${GITHUB_APP_ID}
+      GITHUB_APP_INSTALLATION_ID: ${GITHUB_APP_INSTALLATION_ID}
+      GITHUB_APP_PRIVATE_KEY_PATH: /etc/github-app/private-key.pem
+    volumes:
+      - workspace:/workspace
+      - ${GITHUB_APP_PRIVATE_KEY_HOST_PATH}:/etc/github-app/private-key.pem:ro
+      - ./git-sync.sh:/usr/local/bin/git-sync.sh:ro
+
+volumes:
+  workspace:

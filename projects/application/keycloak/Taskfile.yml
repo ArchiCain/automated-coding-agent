@@ -4,29 +4,29 @@ tasks:
   # Local Development Tasks
   local:start:
     desc: Start Keycloak service
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml up -d keycloak
+      - docker compose -f infrastructure/compose/dev/compose.yml up -d keycloak
 
   local:stop:
     desc: Stop Keycloak service
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml stop keycloak
+      - docker compose -f infrastructure/compose/dev/compose.yml stop keycloak
 
   local:restart:
     desc: Restart Keycloak service (rebuild and restart)
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml stop keycloak
-      - docker compose -f infrastructure/docker/compose.yml up --build -d keycloak
+      - docker compose -f infrastructure/compose/dev/compose.yml stop keycloak
+      - docker compose -f infrastructure/compose/dev/compose.yml up --build -d keycloak
       - echo "Keycloak service restarted"
 
   local:logs:
     desc: View Keycloak logs
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml logs -f keycloak
+      - docker compose -f infrastructure/compose/dev/compose.yml logs -f keycloak
 
   local:export-realm:
     desc: Export current realm configuration

@@ -23,15 +23,24 @@ provider "aws" {
 }
 
 # -------------------------------------------------------------------
-# EC2 Instance with K3s
+# EC2 host — docker + tailscale + caddy (compose stack target)
 # -------------------------------------------------------------------
 
-resource "aws_instance" "k3s" {
+resource "aws_instance" "host" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.k3s.id]
-  user_data              = file("${path.module}/k3s-install.sh")
+  vpc_security_group_ids = [aws_security_group.host.id]
+
+  # Terraform renders user-data.sh via templatefile() — placeholders in the
+  # script (TAILSCALE_AUTH_KEY, DOMAIN, REPO_URL, REPO_BRANCH) get
+  # substituted before cloud-init boots the instance.
+  user_data = templatefile("${path.module}/user-data.sh", {
+    TAILSCALE_AUTH_KEY = var.tailscale_auth_key
+    DOMAIN             = var.domain
+    REPO_URL           = var.repo_url
+    REPO_BRANCH        = var.repo_branch
+  })
 
   root_block_device {
     volume_size = var.root_volume_size
@@ -40,7 +49,7 @@ resource "aws_instance" "k3s" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-k3s"
+    Name = "${var.project_name}-${var.environment}-host"
   }
 
   lifecycle {
@@ -48,9 +57,10 @@ resource "aws_instance" "k3s" {
   }
 }
 
-# Separate EBS volume for persistent data (survives instance replacement)
+# Separate EBS volume for persistent data (survives instance replacement).
+# User-data formats it and mounts at /mnt/data; docker data-root lives there.
 resource "aws_ebs_volume" "data" {
-  availability_zone = aws_instance.k3s.availability_zone
+  availability_zone = aws_instance.host.availability_zone
   size              = var.data_volume_size
   type              = "gp3"
   encrypted         = true
@@ -63,68 +73,60 @@ resource "aws_ebs_volume" "data" {
 resource "aws_volume_attachment" "data" {
   device_name = "/dev/xvdf"
   volume_id   = aws_ebs_volume.data.id
-  instance_id = aws_instance.k3s.id
+  instance_id = aws_instance.host.id
 }
 
 # -------------------------------------------------------------------
-# Elastic IP (stable address)
+# Elastic IP (stable address for DNS A records)
 # -------------------------------------------------------------------
 
-resource "aws_eip" "k3s" {
+resource "aws_eip" "host" {
   domain = "vpc"
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-k3s"
+    Name = "${var.project_name}-${var.environment}-host"
   }
 }
 
-resource "aws_eip_association" "k3s" {
-  instance_id   = aws_instance.k3s.id
-  allocation_id = aws_eip.k3s.id
+resource "aws_eip_association" "host" {
+  instance_id   = aws_instance.host.id
+  allocation_id = aws_eip.host.id
 }
 
 # -------------------------------------------------------------------
-# Security Group
+# Security Group — SSH (break-glass), HTTP, HTTPS. Regular access is
+# over Tailscale, not public :22.
 # -------------------------------------------------------------------
 
-resource "aws_security_group" "k3s" {
-  name        = "${var.project_name}-${var.environment}-k3s"
-  description = "Security group for K3s server"
+resource "aws_security_group" "host" {
+  name        = "${var.project_name}-${var.environment}-host"
+  description = "Security group for the compose host (docker + caddy)"
 
-  # SSH
+  # SSH — break-glass only; normal access is over Tailscale SSH.
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = var.ssh_cidr_blocks
-    description = "SSH access"
+    description = "SSH access (break-glass; prefer Tailscale SSH)"
   }
 
-  # HTTP
+  # HTTP — Caddy serves ACME HTTP-01 challenges + redirects to HTTPS.
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTP"
+    description = "HTTP (Caddy / ACME)"
   }
 
-  # HTTPS
+  # HTTPS — Caddy terminates TLS here.
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS"
-  }
-
-  # K3s API server
-  ingress {
-    from_port   = 6443
-    to_port     = 6443
-    protocol    = "tcp"
-    cidr_blocks = var.ssh_cidr_blocks
-    description = "K3s API server"
+    description = "HTTPS (Caddy)"
   }
 
   # All outbound
@@ -137,7 +139,7 @@ resource "aws_security_group" "k3s" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-k3s"
+    Name = "${var.project_name}-${var.environment}-host"
   }
 }
 

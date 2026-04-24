@@ -1,0 +1,74 @@
+name: Deploy to dev (EC2)
+
+# Gated — runs only on explicit workflow_dispatch. No push trigger in phase 5.
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to push and deploy (default = SHA).
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend, keycloak, openclaw-gateway, openclaw-git-sync]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve context + dockerfile for ${{ matrix.service }}
+        id: paths
+        run: |
+          case "${{ matrix.service }}" in
+            backend)
+              echo "context=projects/application/backend" >> "$GITHUB_OUTPUT"
+              echo "file=projects/application/backend/dockerfiles/prod.Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            frontend)
+              echo "context=projects/application/frontend" >> "$GITHUB_OUTPUT"
+              echo "file=projects/application/frontend/dockerfiles/prod.Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            keycloak)
+              echo "context=projects/application/keycloak" >> "$GITHUB_OUTPUT"
+              echo "file=projects/application/keycloak/dockerfiles/Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            openclaw-gateway)
+              echo "context=projects/openclaw" >> "$GITHUB_OUTPUT"
+              echo "file=projects/openclaw/dockerfiles/prod.Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            openclaw-git-sync)
+              echo "context=projects/openclaw" >> "$GITHUB_OUTPUT"
+              echo "file=projects/openclaw/dockerfiles/git-sync.Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.paths.outputs.context }}
+          file: ${{ steps.paths.outputs.file }}
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/scain-coding-agent-${{ matrix.service }}:${{ inputs.image_tag || github.sha }}
+            ghcr.io/${{ github.repository_owner }}/scain-coding-agent-${{ matrix.service }}:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci
+      - run: bash scripts/deploy.sh --host scain-coding-agent --image-tag "${{ inputs.image_tag || github.sha }}"

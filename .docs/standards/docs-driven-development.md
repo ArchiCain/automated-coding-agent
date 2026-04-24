@@ -23,13 +23,8 @@ repo/
 │
 ├── infrastructure/
 │   └── .docs/                              # Infrastructure-level docs
-│       ├── overview.md                     # Deployment stack, sandbox pattern
-│       ├── kubernetes.md                   # K8s, Helmfile, Minikube
-│       ├── networking.md                   # Traefik, DNS, Tailscale
-│       ├── cicd.md                         # GitHub Actions deployment
-│       ├── terraform.md                    # Production provisioning
-│       ├── tailscale-setup.md              # Tailnet configuration
-│       └── github-actions-setup.md         # CI/CD secrets and workflow
+│       ├── overview.md                     # Deployment targets (local compose, EC2 compose)
+│       └── ec2-reverse-proxy.md            # Caddy cert strategy + sandbox-hook contract
 │
 ├── projects/
 │   └── {project}/

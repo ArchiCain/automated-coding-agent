@@ -2,75 +2,65 @@
 
 ## Deployment stack
 
-Everything runs in Kubernetes — Minikube for local development, K3s for production. The same Helm charts and Helmfile configuration deploy to both, differing only in environment variables.
+Two targets:
+
+- **Local development** — docker-compose on the developer's laptop, driven by `task up`. Dev + openclaw projects side-by-side; sandboxes launched on-demand as `env-{id}` compose projects.
+- **Production (EC2)** — the same compose projects running on a single Ubuntu host behind Caddy on `:443`. Provisioned by Terraform; deployed over Tailscale SSH or via the `deploy-dev.yml` GitHub Actions workflow.
+
+No Kubernetes. The k8s/Minikube setup was removed in the compose migration (see `.docs/migrations/compose/`).
 
 ```
-Terraform --> EC2 / Mac Mini running K3s (production)
+Terraform --> Ubuntu EC2 + Docker Engine (production)
                     |
-                    |  Minikube (local development)
+                    |  Docker Desktop (local development)
                     |
-Helmfile --> Helm charts --> Kubernetes cluster
+  docker-compose --> dev / openclaw / env-* compose projects
                     |
-      +-----+-------+------------------+
-      |     |       |                  |
-  Traefik  Registry  App services   THE Dev Team
-  (ingress)(images)  (app ns)       (the-dev-team ns + env-* sandboxes)
+                    +---- Caddy (on EC2 only) terminates TLS, routes by Host header
+                    +---- Tailscale (both) provides secure remote access
 ```
-
-- **Minikube** — local K8s. Use `task up` to get a cluster with everything deployed.
-- **Terraform** — provisions the production server (single host, Ubuntu + K3s).
-- **Helmfile** — orchestrates all Kubernetes resources via Helm charts.
-- **In-cluster registry** — stores images at `localhost:30500` in both environments.
-- **Traefik** — ingress routing (installed via Helm, not K3s's bundled version).
-- **Tailscale** — secure connectivity between devices and CI runners.
-
-## The agent sandbox pattern
-
-THE Dev Team deploys a copy of the full application stack per active task into an ephemeral namespace (`env-{task-id}`). This is the defining infrastructure pattern — every validation gate runs against a real, isolated environment.
 
 ## Directory structure
 
 ```
 infrastructure/
 ├── .docs/
-│   └── overview.md               # This file
-├── k8s/
-│   ├── .docs/                    # K8s docs (helmfile, networking, tailscale)
-│   ├── helmfile.yaml.gotmpl
-│   ├── environments/
-│   ├── values/
-│   ├── charts/
-│   ├── minikube/                 # Minikube lifecycle tasks
-│   └── agent-envs/              # Sandbox lifecycle tasks (env:*)
+│   ├── overview.md               # This file
+│   └── ec2-reverse-proxy.md      # Caddy cert strategy + sandbox-hook contract
+├── compose/
+│   ├── .docs/                    # Compose-stack DDD spec
+│   ├── dev/                      # Long-lived dev stack
+│   ├── openclaw/                 # Gateway + git-sync
+│   └── sandbox/                  # Template for env-{id} sandboxes
 ├── terraform/
-│   ├── .docs/                    # Terraform docs
+│   ├── .docs/                    # Terraform spec
 │   ├── main.tf
-│   └── ...
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── k3s-install.sh            # EC2 bootstrap (slated to be replaced with docker + caddy)
+│   └── terraform.tfvars.example
 └── Taskfile.yml
 ```
 
-## Detailed documentation
+## Where the DDD docs live
 
-- **Kubernetes, Helmfile, charts, sandboxes** — see `infrastructure/k8s/.docs/`
-- **Networking, DNS, ingress** — see `infrastructure/k8s/.docs/networking.md`
-- **Tailscale, split DNS, gateway** — see `infrastructure/k8s/.docs/tailscale.md`
-- **Terraform provisioning** — see `infrastructure/terraform/.docs/`
-- **CI/CD workflows** — see `.github/.docs/`
+- **Compose stack (layout, ports, env files, sandboxes)** — `infrastructure/compose/.docs/overview.md`
+- **EC2 reverse proxy (Caddy, certs, sandbox hooks)** — `infrastructure/.docs/ec2-reverse-proxy.md`
+- **Terraform provisioning** — `infrastructure/terraform/.docs/`
+- **CI/CD workflows** — `.github/.docs/` (if present)
 
-## Secrets management
+## Secrets model
 
-| Environment | How secrets are managed |
-|-------------|------------------------|
-| Local dev | `.env` file (loaded by Taskfile's `dotenv`) |
-| K8s | Helm creates K8s Secrets from `secretEnv` values |
-| CI/CD | GitHub Actions secrets map to the same env vars |
-| Agent pod | Dedicated `the-dev-team-agent-secrets` Secret (Anthropic + GitHub only) |
-
-Database passwords and API keys flow through Helmfile's `requiredEnv` at apply time — they never appear in charts or helmfile config.
+| Context | How secrets land |
+|---------|------------------|
+| Local dev | `.env` files in each compose project directory (`infrastructure/compose/dev/.env`, `infrastructure/compose/openclaw/.env`). Gitignored. Template files carry placeholders. |
+| EC2 | Secrets rsync'd onto the host as part of the deploy flow. No AWS Secrets Manager integration yet — that's a post-migration improvement. |
+| CI (GH Actions) | Standard GitHub Actions secrets. `deploy-dev.yml` references `TAILSCALE_OAUTH_*` and `GITHUB_TOKEN`. |
 
 ## Adding a new service
 
-1. Create `projects/myservice/chart/` (Chart.yaml, values.yaml, templates/)
-2. Add a release block in `infrastructure/k8s/helmfile.yaml.gotmpl`
-3. Add a `build:myservice` task to the root Taskfile and include it in `build:all`
-4. Run `task build:myservice && task deploy:apply`
+1. Write its Dockerfile under `projects/{project}/{service}/dockerfiles/`.
+2. Add a service stanza to `infrastructure/compose/dev/compose.yml` (and the prod overlay if it needs a GHCR tag for EC2).
+3. Add a matching entry to the `deploy-dev.yml` build matrix.
+4. Update the Caddy config if it needs an HTTPS subdomain on EC2 (see `ec2-reverse-proxy.md`).
+5. Document in the project's local `.docs/`.

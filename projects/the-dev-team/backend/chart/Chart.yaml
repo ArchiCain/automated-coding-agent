@@ -1,6 +1,0 @@
-apiVersion: v2
-name: the-dev-team-backend
-description: THE Dev Team NestJS backend with Nix dev environment
-type: application
-version: 0.1.0
-appVersion: "1.0.0"

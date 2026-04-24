@@ -2,9 +2,10 @@
 
 ## Deployment targets
 
-| Target    | Branch      | Registry           | Helmfile env | Workflow file          |
-|-----------|-------------|--------------------|--------------|------------------------|
-| mac-mini  | `mac-mini`  | `mac-mini:30500`   | `mac-mini`   | `deploy-mac-mini.yml`  |
+No deploy workflows are currently configured. When one is added, register it here:
+
+| Target | Branch | Registry | Compose overlay | Workflow file |
+|--------|--------|----------|-----------------|---------------|
 
 ## Trigger model
 
@@ -12,15 +13,14 @@ Branch name equals deployment target. Pushing to a target branch triggers the co
 
 ## Required secrets per target
 
-Each deployment target needs these secrets (replace `{TARGET}` with the uppercase target name, e.g., `MAC_MINI`):
+Each deployment target needs these secrets (replace `{TARGET}` with the uppercase target name):
 
 | Secret                    | Purpose                                          |
 |---------------------------|--------------------------------------------------|
 | `TS_OAUTH_CLIENT_ID`     | Tailscale OAuth client ID (shared across targets) |
 | `TS_OAUTH_SECRET`        | Tailscale OAuth secret (shared across targets)    |
-| `KUBECONFIG_{TARGET}`    | Base64 or raw kubeconfig for the target cluster   |
-| `ENV_FILE_{TARGET}`      | Environment variables injected into `.env`         |
-| `GITHUB_APP_PRIVATE_KEY` | Private key for the GitHub App (the-dev-team)     |
+| `ENV_FILE_{TARGET}`      | Environment variables rsync'd onto the EC2 host  |
+| `GITHUB_APP_PRIVATE_KEY` | Private key for the GitHub App used by OpenClaw's git-sync sidecar |
 
 ## Services built
 
@@ -29,8 +29,8 @@ Each deployment target needs these secrets (replace `{TARGET}` with the uppercas
 | backend                  | `projects/application/backend/dockerfiles/prod.Dockerfile`   | `projects/application/backend`     |
 | frontend                 | `projects/application/frontend/dockerfiles/prod.Dockerfile`  | `projects/application/frontend`    |
 | keycloak                 | `projects/application/keycloak/dockerfiles/Dockerfile`       | `projects/application/keycloak`    |
-| the-dev-team-backend     | `projects/the-dev-team/backend/dockerfiles/prod.Dockerfile`  | `projects/the-dev-team/backend`    |
-| the-dev-team-frontend    | `projects/the-dev-team/frontend/dockerfiles/prod.Dockerfile` | `projects/the-dev-team/frontend`   |
+| openclaw-gateway         | `projects/openclaw/dockerfiles/prod.Dockerfile`              | `projects/openclaw`                |
+| openclaw-git-sync        | `projects/openclaw/dockerfiles/git-sync.Dockerfile`          | `projects/openclaw`                |
 
 Each image is tagged with both `$GITHUB_SHA` and `latest`.
 
@@ -38,16 +38,11 @@ Each image is tagged with both `$GITHUB_SHA` and `latest`.
 
 1. Checkout code.
 2. Connect to Tailscale (ephemeral node with `tag:ci`).
-3. Configure Docker daemon for insecure registry.
-4. Install Helm, Helmfile, and helm-diff plugin.
-5. Write kubeconfig from secret.
-6. Write `.env` file from secret, append `REGISTRY` and `IMAGE_TAG`.
-7. Deploy the registry chart via Helmfile.
-8. Wait for registry to become reachable (up to 60s).
-9. Build and push all 5 service images.
-10. Create/update the GitHub App private key as a Kubernetes secret in the `the-dev-team` namespace.
-11. Deploy all charts via `helmfile -e {target} apply`.
-12. Verify rollout status for all 5 deployments, print pod and ingress status.
+3. Log in to GHCR.
+4. Build each service image and push with `$GITHUB_SHA` + `latest` tags.
+5. Rsync the compose files and the rendered `.env` onto the EC2 host over Tailscale SSH.
+6. On the host: `docker compose pull`, `docker compose up -d` (with the prod overlay).
+7. Verify `docker compose ps` + each service's health endpoint, fail the job on any non-healthy container.
 
 ## CI workflow
 
@@ -61,8 +56,9 @@ Runs on PRs to `main`. Three jobs on the self-hosted runner:
 
 1. Create a new workflow file: `.github/workflows/deploy-{target}.yml`.
 2. Set the push trigger to the new branch name (`branches: [{target}]`).
-3. Update `env.REGISTRY` and `env.DEPLOY_ENV` to match the target.
-4. Add the required secrets to the repository: `KUBECONFIG_{TARGET}`, `ENV_FILE_{TARGET}`.
+3. Set `env.DEPLOY_ENV` to match the target.
+4. Add the required secrets to the repository: `ENV_FILE_{TARGET}`.
 5. Ensure the Tailscale secrets are already configured (shared).
-6. Add a Helmfile environment for the target in `infrastructure/k8s/helmfile.yaml`.
+6. Add/extend a compose overlay for the target (e.g. `infrastructure/compose/dev/compose.{target}.yml`).
 7. Push to the new branch to trigger the first deploy.
+8. Register the target in the "Deployment targets" table above.

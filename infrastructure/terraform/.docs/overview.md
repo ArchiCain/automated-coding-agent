@@ -11,10 +11,6 @@ Terraform is intentionally minimal. It provisions a single EC2 instance with K3s
 
 K3s is installed with `--disable=traefik` so Traefik is managed via Helm alongside everything else.
 
-## When Terraform isn't used
-
-For the Mac Mini, Terraform isn't used — K3s is installed directly on the hardware.
-
 ## Commands
 
 ```bash

@@ -1,0 +1,112 @@
+# Sandbox application stack for Docker Compose.
+#
+# Invoked with `-p env-${SANDBOX_ID}` so compose auto-namespaces the project,
+# its containers (`env-{id}-{svc}-1`), its default bridge network, and the
+# `postgres-data` named volume (`env-{id}_postgres-data`).
+#
+# Ports are published on the host, parameterized at invocation time by the
+# deploy script. The allocator picks a non-overlapping triple from
+# 20000-29990 and exports it before calling `docker compose up -d`.
+#
+# Required environment variables (set inline by `scripts/sandbox-deploy.sh`,
+# or via `compose/sandbox/.env` for manual debugging):
+#   SANDBOX_ID                   — lowercase alphanumeric + hyphen, 1-41 chars
+#   SANDBOX_BASE_PORT_FRONTEND   — host port for frontend (container :8080)
+#   SANDBOX_BASE_PORT_BACKEND    — host port for backend  (container :8080)
+#   SANDBOX_BASE_PORT_KEYCLOAK   — host port for keycloak (container :8080)
+#   IMAGE_TAG                    — defaults to SANDBOX_ID; each service image
+#                                  is tagged `{service}:${IMAGE_TAG}` by the
+#                                  deploy script before compose up runs.
+#
+# Postgres stays internal (unpublished) — service-to-service DNS via the
+# project's default bridge network. Isolation is at the compose-project +
+# volume level; all sandboxes share the same POSTGRES_USER/PASSWORD/DB
+# defaults as the dev stack (they live in separate volumes).
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    image: backend:${IMAGE_TAG:-${SANDBOX_ID}}
+    build:
+      context: ../../../projects/application/backend
+      dockerfile: dockerfiles/prod.Dockerfile
+    ports:
+      - "${SANDBOX_BASE_PORT_BACKEND}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: app
+      DATABASE_SSL: "false"
+      DATABASE_LOGGING: "false"
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_REALM: application
+      KEYCLOAK_CLIENT_ID: backend-service
+      KEYCLOAK_CLIENT_SECRET: backend-service-secret
+      CORS_ORIGINS: http://localhost:${SANDBOX_BASE_PORT_FRONTEND}
+
+  frontend:
+    image: frontend:${IMAGE_TAG:-${SANDBOX_ID}}
+    build:
+      context: ../../../projects/application/frontend
+      dockerfile: dockerfiles/prod.Dockerfile
+    ports:
+      - "${SANDBOX_BASE_PORT_FRONTEND}:8080"
+    depends_on:
+      - backend
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  keycloak:
+    image: keycloak:${IMAGE_TAG:-${SANDBOX_ID}}
+    build:
+      context: ../../../projects/application/keycloak
+      dockerfile: dockerfiles/Dockerfile
+    ports:
+      - "${SANDBOX_BASE_PORT_KEYCLOAK}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_PORT: "5432"
+      KC_DB_URL_DATABASE: app
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KC_DB_SCHEMA: keycloak
+      KC_REALM: application
+      KC_CLIENT_ID: backend-service
+      KEYCLOAK_CLIENT_SECRET: backend-service-secret
+      KC_LOG_LEVEL: INFO
+      KC_TRANSACTION_XA_ENABLED: "false"
+      KC_IMPORT_OVERWRITE: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY: edge
+      DATABASE_SSL: "false"
+      FRONTEND_URL: http://localhost:${SANDBOX_BASE_PORT_FRONTEND}
+
+volumes:
+  postgres-data:

@@ -48,8 +48,27 @@ A route or controller can be marked public to skip the auth check entirely. Publ
 
 ## Known gaps
 
-- Access tokens are decoded, not verified. The backend only reads the JWT's claims and checks the `exp` timestamp against the current time — it never verifies the signature against Keycloak's JWKS. A forged or tampered token with a valid `exp` would currently pass the auth check. Flagged in-code (`services/keycloak-auth.service.ts:157-162`).
-- The permission-checking machinery is wired up but not hooked in. The `@RequirePermission` decorator and its guard are implemented and exported, and the admin-only user-management routes are decorated with permissions like `users:read` and `users:delete` — but the guard is never registered globally and no controller applies it. Today those routes are gated only by "are you signed in," so any authenticated user satisfies them (`src/app.module.ts:23-28`; `features/user-management/controllers/user-management.controller.ts:34,44,54,64,77,88`).
+### `PermissionGuard` is not enforced (real security gap)
+
+**What's wrong.** The permission-checking machinery is implemented but not attached. `PermissionGuard` (`guards/permission.guard.ts`) and the `@RequirePermission(...)` decorator (`decorators/require-permission.decorator.ts`) exist, `KeycloakAuthModule` exports `PermissionGuard` as a provider, and the admin-only user-management routes are decorated with permissions like `users:read` / `users:delete` (`features/user-management/controllers/user-management.controller.ts:34,44,54,64,77,88`). **But the guard is never registered globally.** `src/app.module.ts` registers only `KeycloakJwtGuard` via `APP_GUARD`, so today any authenticated user satisfies every `@RequirePermission` check. A `user`-role account can currently call every user-management endpoint.
+
+**Impact.** User-management routes (`POST /users`, `PUT /users/:id`, `DELETE /users/:id`, `PATCH /users/:id/enabled`) are the most exposed. `user`-role callers can create, modify, and disable accounts today despite the decorators claiming admin-only.
+
+**How to fix (actionable for OpenClaw's worker).**
+
+1. In `src/app.module.ts`, add a second `APP_GUARD` provider for `PermissionGuard` alongside the existing `KeycloakJwtGuard` registration. Order matters: `KeycloakJwtGuard` must run first so `request.user` is populated before `PermissionGuard` reads it. Nest applies globals in registration order.
+2. Double-check `PermissionGuard.canActivate` handles the route-has-no-`@RequirePermission` case by returning `true` (it currently does via the reflector null-check at `guards/permission.guard.ts:46-50`). Confirm this with a unit test (the existing test at line 54 of the test-plan already covers it).
+3. Update the E2E test at the bottom of `test-plan.md` ("Permission metadata currently non-enforcing") — replace with an assertion that a `user`-role login gets **403** on `GET /users` and **admin**-role login gets 200.
+4. Re-verify login flows continue to work (login itself is `@Public()`; refresh and logout are auth-required; guards are already correctly gated on `@Public()`).
+
+**Acceptance criteria:**
+- `user`-role account calling any `/users` endpoint returns `403 Forbidden` with `{ statusCode: 403, message: "Insufficient permissions", error: "Forbidden" }`.
+- `admin`-role account calling `/users` endpoints returns 2xx as today.
+- Login, logout, refresh, and `/auth/check` continue to behave identically.
+- `@Public()` routes (`GET /health`, `POST /auth/login`) stay reachable without auth.
+- Existing unit tests for `PermissionGuard` (already in place at `guards/permission.guard.spec.ts`) continue to pass.
+
+**Owner.** OpenClaw's worker agent should pick this up — the task touches `projects/application/backend/` only, has a concrete spec + acceptance criteria here, and is the kind of small focused change the worker → tester loop handles well.
 
 ## Code map
 
@@ -69,6 +88,8 @@ Paths are relative to `projects/application/backend/app/`.
 | Keycloak logout/revoke call | `src/features/keycloak-auth/services/keycloak-auth.service.ts:98-122` |
 | `validateToken()` — decode-only, `exp` check, no signature verification | `src/features/keycloak-auth/services/keycloak-auth.service.ts:157-162` |
 | User profile derivation from claims (`sub`, `preferred_username`, realm + client roles) | `src/features/keycloak-auth/services/keycloak-auth.service.ts:128-138,145-153` |
+| `firstName`/`lastName` on the user profile come from `given_name`/`family_name` access-token claims | `src/features/keycloak-auth/services/keycloak-auth.service.ts:139-140` |
+| Realm-side protocol mappers that emit `given_name`/`family_name` on the access token (without them, these fields are `undefined`) | `projects/application/keycloak/app/realm-config/realm-export.json` — the `backend-service` client's `protocolMappers` array |
 | Global JWT guard `KeycloakJwtGuard` (runs on every route) | `src/features/keycloak-auth/guards/keycloak-jwt.guard.ts:13` |
 | Global JWT guard wired via `APP_GUARD` | `src/app.module.ts:23-28` |
 | Token extraction: cookie first, then `Authorization: Bearer …` | `src/features/keycloak-auth/guards/keycloak-jwt.guard.ts:45-58` |

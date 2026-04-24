@@ -1,5 +1,22 @@
 # CLAUDE.md
 
+## Division of labor
+
+This repo has **two autonomous coding agents** plus a **frozen reference project**. Each has a clear scope:
+
+| Agent / Project | Scope | How it's edited |
+|---|---|---|
+| **OpenClaw** (`projects/openclaw/`) | Owns **`projects/application/`** — the benchmark application (backend, frontend, keycloak, database). OpenClaw reads `.docs/` specs under `projects/application/` and syncs code to match. | Edited by **Claude Code** (here). When working on OpenClaw skills, prompt flows, or dockerfiles, rebuild the gateway image (`task openclaw:build`) and recreate the container (`task openclaw:restart` or `task openclaw:up`) to pick up changes. |
+| **Claude Code** (this session, from the user's laptop) | Owns **`projects/openclaw/`** — OpenClaw's own configuration, skills, dockerfiles, taskfile. Also owns all cross-cutting concerns: `infrastructure/`, `scripts/`, `.github/`, `Taskfile.yml`, and this file. | Edited in this Claude Code session via the user's CLI. |
+| **THE Dev Team** (`projects/the-dev-team/`) | **Frozen.** Kept as reference material only. Not runnable. Not actively worked on. | Do not edit. If you find yourself wanting to change something under `projects/the-dev-team/`, stop and reconsider — you almost certainly want to be editing `projects/openclaw/` or `projects/application/` instead. |
+
+**Rule of thumb when deciding where work lands:**
+
+- Is it a bug in the benchmark app (backend/frontend/keycloak/database)? → OpenClaw's queue. Open an issue or talk to the orchestrator at `http://localhost:3001`. Do not edit `projects/application/` directly from Claude Code unless it's a cross-cutting infra concern.
+- Is it a change to how OpenClaw itself thinks or acts (skills, agent instructions, docker image, task wiring)? → Claude Code. Edit `projects/openclaw/` directly in this session.
+- Is it infrastructure, CI/CD, or the deployment story? → Claude Code. Edit the relevant `infrastructure/`, `scripts/`, or `.github/` file.
+- Is it anywhere under `projects/the-dev-team/`? → Don't.
+
 ## Documentation-Driven Development
 
 This repo follows a docs-driven development approach. `.docs/` directories are the specification — the source of truth for what code should do. The delta between `.docs/` and code defines all work.
@@ -26,13 +43,13 @@ Documentation is colocated with the code it describes. Look for `.docs/` at the 
 ### Infrastructure
 
 ```
-infrastructure/.docs/overview.md        # High-level deployment stack
-infrastructure/k8s/.docs/
-├── overview.md                         # Helmfile, charts, releases, sandboxes
-├── networking.md                       # Traefik, DNS, hostnames, dnsmasq
-└── tailscale.md                        # Tailnet, split DNS, gateway pod
+infrastructure/.docs/
+├── overview.md                         # Deployment targets (local compose, EC2 compose)
+└── ec2-reverse-proxy.md                # Caddy cert strategy + sandbox-hook contract
+infrastructure/compose/.docs/
+└── overview.md                         # Compose stack layout, ports, env files, sandboxes
 infrastructure/terraform/.docs/
-└── overview.md                         # EC2 provisioning, K3s install
+└── overview.md                         # EC2 provisioning + user-data bootstrap
 ```
 
 ### CI/CD
@@ -56,8 +73,22 @@ projects/{project}/{app}/.docs/
 
 ### Feature-level
 
+`.docs/` lives **inside** the feature directory, not in some sibling or root folder. The exact depth of the `features/` directory depends on the project's framework conventions — **always confirm by looking at a sibling feature's `.docs/` before creating a new one.**
+
+Per-project feature paths currently in use:
+
+| Project | Feature directory |
+|---------|-------------------|
+| `projects/application/frontend/` (Angular) | `app/src/app/features/{feature}/` |
+| `projects/application/backend/` (NestJS) | `app/src/features/{feature}/` |
+| `projects/openclaw/` | N/A — single app, feature docs live in `.docs/` directly |
+
+`projects/the-dev-team/` is frozen reference material and should not have new feature docs.
+
+Inside each feature, `.docs/` contains:
+
 ```
-projects/{project}/{app}/src/features/{feature}/.docs/
+features/{feature}/.docs/
 ├── spec.md                             # WHAT to build (always required)
 ├── flows.md                            # HOW it works step-by-step
 ├── contracts.md                        # API shapes, event schemas
@@ -65,6 +96,8 @@ projects/{project}/{app}/src/features/{feature}/.docs/
 ├── test-data.md                        # WITH what data to test
 └── decisions.md                        # WHY it's this way
 ```
+
+**Never** place feature docs at the repo root (`.docs/features/...`) — the root `.docs/` is reserved for repo-level standards and overview. Feature docs colocate with feature code.
 
 ## How to Use .docs/
 

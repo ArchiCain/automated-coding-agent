@@ -8,13 +8,13 @@ The `/examples` routes do not require any pre-existing rows; `example_schema.exa
 
 All five must be present, otherwise `TypeormDatabaseClientModule.forRoot()` throws before the app starts (`typeorm-database-client.module.ts:33-37`):
 
-| Var | Example (local K8s) | Source |
+| Var | Example (local compose) | Source |
 |---|---|---|
-| `DATABASE_HOST` | `database` | `infrastructure/k8s/helmfile.yaml.gotmpl:142` |
-| `DATABASE_PORT` | `5432` | `infrastructure/k8s/helmfile.yaml.gotmpl:143` |
-| `DATABASE_USERNAME` | matches `POSTGRES_USER` | helmfile env |
-| `DATABASE_PASSWORD` | matches `POSTGRES_PASSWORD` | helmfile env |
-| `DATABASE_NAME` | matches `POSTGRES_DB` | helmfile env |
+| `DATABASE_HOST` | `postgres` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` |
+| `DATABASE_PORT` | `5432` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` |
+| `DATABASE_USERNAME` | matches `POSTGRES_USER` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (from `.env`) |
+| `DATABASE_PASSWORD` | matches `POSTGRES_PASSWORD` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (from `.env`) |
+| `DATABASE_NAME` | matches `POSTGRES_DB` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (from `.env`) |
 | `DATABASE_SSL` | `false` | optional |
 | `DATABASE_LOGGING` | `false` | optional |
 | `DATABASE_SYNC` | (ignored — see spec.md Discrepancies) | — |

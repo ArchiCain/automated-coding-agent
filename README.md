@@ -2,11 +2,17 @@
 
 An autonomous software development system where agents read `.docs/` specifications and sync code to match. Deploy, test, PR, iterate — humans guide the specs, agents write the code.
 
+**Who edits what** (see top of `CLAUDE.md` for the full rationale):
+
+- **OpenClaw** — the active agent runtime. Owns `projects/application/` (the benchmark app). Reached at `http://localhost:3001` after `task up`.
+- **Claude Code** — owns OpenClaw itself (`projects/openclaw/`) plus infrastructure, CI/CD, and this repo's top-level docs. Humans iterate here.
+- **THE Dev Team** (`projects/the-dev-team/`) — frozen reference. Not actively used.
+
 ## Prerequisites
 
 ### 1. Install Nix
 
-All tooling (Node.js, Terraform, kubectl, Helm, Minikube, etc.) is managed through a Nix flake. No manual tool installation needed.
+All tooling (Node.js, Terraform, Task, etc.) is managed through a Nix flake. No manual tool installation needed.
 
 **macOS:**
 ```bash
@@ -38,21 +44,13 @@ echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### 3. Install Tailscale
+### 3. Install Docker Desktop
 
-All services are accessed via Tailscale hostnames — there is no localhost fallback.
+The local stack runs on plain docker-compose. Install from [docker.com](https://www.docker.com/products/docker-desktop/) and make sure the Docker daemon is running before `task up`.
 
-Install from [tailscale.com/download](https://tailscale.com/download), then join the tailnet.
+### 4. Install Tailscale (optional)
 
-### 4. Install dnsmasq
-
-dnsmasq provides wildcard DNS resolution for service hostnames (e.g., `*.shawns-macbook-pro`).
-
-```bash
-brew install dnsmasq
-```
-
-`task up` configures dnsmasq automatically.
+Tailscale is used for secure remote access to the production EC2 host. Local development does not require it. Install from [tailscale.com/download](https://tailscale.com/download) if you need to SSH into the deploy target.
 
 ## Setup
 
@@ -61,30 +59,17 @@ brew install dnsmasq
 cd automated-coding-agent
 direnv allow    # First time — may take a few minutes to download
 
-# 2. Create your .env file
-cp .env.template .env
+# 2. Create the per-project .env files
+cp infrastructure/compose/dev/.env.template       infrastructure/compose/dev/.env
+cp infrastructure/compose/openclaw/.env.template  infrastructure/compose/openclaw/.env
 ```
 
-### Required `.env` values
+### What to fill in
 
-```bash
-# Tailscale
-DEV_HOSTNAME=shawns-macbook-pro      # task tailscale:hostname to find yours
-TAILSCALE_IP=100.64.158.57           # tailscale ip -4
+- **`infrastructure/compose/dev/.env`** — postgres credentials and the Keycloak client secret. Defaults in the template are fine for local development.
+- **`infrastructure/compose/openclaw/.env`** — Anthropic + OpenAI API keys, an `OPENCLAW_AUTH_TOKEN` (`openssl rand -hex 32`), GitHub App ID + installation ID, and the absolute host path to your GitHub App private-key PEM.
 
-# Secrets
-DATABASE_PASSWORD=<something>
-KEYCLOAK_ADMIN_PASSWORD=<something>
-
-# THE Dev Team agent
-CLAUDE_CODE_OAUTH_TOKEN=...          # claude setup-token (requires Max plan)
-
-# GitHub App (for issue/PR automation)
-GITHUB_APP_ID=
-GITHUB_APP_CLIENT_ID=
-GITHUB_APP_INSTALLATION_ID=
-# Place your private key at .github-app-private-key.pem
-```
+The root `.env` (from `.env.template`) is only consumed by legacy and per-project local-dev tasks (e.g. `task backend:local:run`). The compose stack reads directly from the per-project `.env` files above.
 
 ## Start
 
@@ -92,35 +77,31 @@ GITHUB_APP_INSTALLATION_ID=
 task up
 ```
 
-This single command:
-1. Starts Minikube (4 CPU, 8 GB RAM, 50 GB disk)
-2. Creates K8s secrets from `.env`
-3. Builds all Docker images into the cluster
-4. Deploys everything via Helmfile
-5. Configures dnsmasq for wildcard DNS (prompts for sudo once)
-6. Starts a Traefik tunnel in a tmux session
+This brings up the full compose stack: the dev application (postgres, backend, frontend, keycloak) and OpenClaw (gateway + git-sync sidecar).
 
 On completion:
 ```
-============================================
-  THE Dev Team:
-    Chat UI:  http://devteam.{DEV_HOSTNAME}
-    API:      http://agent-api.{DEV_HOSTNAME}
-  Application:
-    Frontend: http://app.{DEV_HOSTNAME}
-    API:      http://api.{DEV_HOSTNAME}
-    Auth:     http://auth.{DEV_HOSTNAME}
-============================================
+Application:
+  Frontend: http://localhost:3000
+  API:      http://localhost:3333
+  Auth:     http://localhost:8080
+
+OpenClaw:
+  Web UI:   http://localhost:3001
 ```
 
 ## Day-to-day
 
 ```bash
-task tunnel       # restart tunnel after reboot or pod restart
-task close        # stop the tunnel
-task status       # check what's running
-task reset:up     # nuclear option: wipe K8s state + redeploy from scratch
+task up                 # bring up dev + openclaw
+task down               # stop everything (preserves volumes)
+task dev:logs           # tail dev stack logs
+task openclaw:logs      # tail openclaw logs
+task env:create -- X    # spin up a sandbox compose project for feature X
+task env:destroy -- X   # tear it down
 ```
+
+See `task --list` for the full surface.
 
 ## What Nix provides
 
@@ -128,14 +109,12 @@ When the dev shell activates, these tools are available:
 
 | Tool | Purpose |
 |------|---------|
-| Node.js 20 | Runtime for backend and frontend |
+| Node.js 22 | Runtime for backend and frontend |
 | Terraform | Production infrastructure provisioning |
-| kubectl | Kubernetes cluster management |
-| Helm + Helmfile | Kubernetes package management and orchestration |
-| Minikube | Local Kubernetes cluster |
 | go-task | Task automation (Taskfile runner) |
 | Docker CLI | Container interactions |
-| tmux | Terminal multiplexer (tunnel session) |
+| AWS CLI | EC2 interaction for the production host |
+| tmux | Terminal multiplexer |
 
 ## Documentation
 

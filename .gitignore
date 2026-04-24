@@ -2,7 +2,7 @@
 *.pem
 .github-app-private-key.pem
 
-# mkcert-generated dev certs (Traefik default TLS store)
+# mkcert-generated dev certs (no longer actively used; kept for safety)
 .certs/
 
 # Agent worktrees
@@ -267,14 +267,14 @@ cython_debug/
 /nbdist/
 /.nb-gradle/
 
-# Terraform / OpenTofu (infrastructure/)
-infrastructure/.terraform/
-infrastructure/*.tfstate
-infrastructure/*.tfstate.backup
-infrastructure/*.tfplan
+# Terraform / OpenTofu (infrastructure/ and subdirs)
+**/.terraform/
+**/.terraform.lock.hcl
+infrastructure/**/*.tfstate
+infrastructure/**/*.tfstate.backup
+infrastructure/**/*.tfplan
+infrastructure/**/terraform.tfvars
 infrastructure/crash.log
-infrastructure/terraform.tfvars
-infrastructure/.terraform.lock.hcl
 
 example-files/.worktrees/
 

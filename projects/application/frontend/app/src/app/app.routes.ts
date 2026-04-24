@@ -16,7 +16,12 @@ export const routes: Routes = [
       ),
     canActivate: [authGuard],
     children: [
-      { path: '', redirectTo: 'smoke-tests', pathMatch: 'full' },
+      { path: '', redirectTo: 'home', pathMatch: 'full' },
+      {
+        path: 'home',
+        loadComponent: () =>
+          import('./features/home/pages/home.page').then(m => m.HomePage),
+      },
       {
         path: 'smoke-tests',
         loadComponent: () =>

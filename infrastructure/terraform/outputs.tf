@@ -1,24 +1,29 @@
-output "k3s_ip" {
-  description = "Elastic IP address of the K3s server"
-  value       = aws_eip.k3s.public_ip
+output "eip" {
+  description = "Elastic IP address of the compose host"
+  value       = aws_eip.host.public_ip
 }
 
 output "instance_id" {
   description = "EC2 instance ID"
-  value       = aws_instance.k3s.id
+  value       = aws_instance.host.id
 }
 
 output "ssh_command" {
-  description = "SSH command to connect to the server"
-  value       = "ssh ubuntu@${aws_eip.k3s.public_ip}"
+  description = "SSH command to connect to the server (break-glass; prefer Tailscale SSH)"
+  value       = "ssh ubuntu@${aws_eip.host.public_ip}"
 }
 
-output "kubeconfig_command" {
-  description = "Command to fetch kubeconfig from the server"
-  value       = "scp ubuntu@${aws_eip.k3s.public_ip}:/etc/rancher/k3s/k3s.yaml ~/.kube/k3s-config && sed -i '' 's/127.0.0.1/${aws_eip.k3s.public_ip}/g' ~/.kube/k3s-config"
+output "tailscale_hostname" {
+  description = "The --hostname user-data passed to `tailscale up`. Reachable over the Tailnet as scain-coding-agent or scain-coding-agent.{tailnet}.ts.net."
+  value       = "scain-coding-agent"
+}
+
+output "caddy_status_command" {
+  description = "Check Caddy is running and serving."
+  value       = "ssh ubuntu@${aws_eip.host.public_ip} systemctl status caddy"
 }
 
 output "dns_instructions" {
   description = "DNS configuration instructions"
-  value       = var.domain != "" ? "Add a wildcard DNS record: *.${var.domain} -> A -> ${aws_eip.k3s.public_ip}" : "Set the 'domain' variable to get DNS instructions"
+  value       = "Point these A records at ${aws_eip.host.public_ip}: app.${var.domain}, api.${var.domain}, auth.${var.domain}, openclaw.${var.domain}."
 }

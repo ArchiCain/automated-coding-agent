@@ -14,7 +14,7 @@
           config.allowUnfree = true;
         };
 
-        nodeVersion = pkgs.nodejs_20;
+        nodeVersion = pkgs.nodejs_22;
         pythonVersion = pkgs.python311;
         terraform = pkgs.terraform;
       in
@@ -23,27 +23,20 @@
           buildInputs = [
             pkgs.docker
             pkgs.docker-client
-            pkgs.colima
-            pkgs.minikube
             pkgs.direnv
             pkgs.go-task
             pkgs.git
 
             terraform
             pkgs.awscli2
-            pkgs.kubectl
-            pkgs.kubernetes-helm
-            pkgs.helmfile
 
             pkgs.tmux
 
             nodeVersion
-            nodeVersion.pkgs.npm
 
             pythonVersion
             pythonVersion.pkgs.pip
             pythonVersion.pkgs.virtualenv
-            pythonVersion.pkgs.fastapi
           ];
 
           shellHook = ''
@@ -54,14 +47,8 @@
             echo "  Python $(python3 --version)"
             echo "  Terraform $(terraform --version | head -n1)"
             echo "  AWS CLI $(aws --version)"
-            echo "  kubectl $(kubectl version --client -o json 2>/dev/null | grep gitVersion | head -1 | cut -d'"' -f4)"
-            echo "  Helm $(helm version --short 2>/dev/null)"
-            echo "  Helmfile $(helmfile --version 2>/dev/null)"
             echo "  Task $(task --version)"
             echo ""
-
-            # Install helm-diff plugin (required by helmfile)
-            helm plugin install https://github.com/databus23/helm-diff 2>/dev/null || true
 
             # Enable Task shell completion
             if [ -n "$BASH_VERSION" ]; then

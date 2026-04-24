@@ -72,6 +72,23 @@ describe('Keycloak Auth Endpoints (Integration)', () => {
         roles: expect.arrayContaining(['admin']),
       });
     });
+
+    it('should include firstName and lastName mapped from Keycloak claims', async () => {
+      // Act
+      const response = await request(BACKEND_URL)
+        .post('/auth/login')
+        .send({ username: 'testuser', password: 'password' });
+
+      // Assert — the realm export sets testuser.firstName=Test, lastName=User,
+      // and the backend-service client has protocol mappers copying those
+      // into given_name / family_name claims on the access token. The
+      // service maps them back to firstName / lastName on the response.
+      expect(response.body.user).toMatchObject({
+        username: 'testuser',
+        firstName: 'Test',
+        lastName: 'User',
+      });
+    });
   });
 
   describe('POST /auth/refresh', () => {
@@ -172,6 +189,8 @@ describe('Keycloak Auth Endpoints (Integration)', () => {
         username: 'admin',
         email: expect.any(String),
         roles: expect.arrayContaining(['admin']),
+        firstName: 'Admin',
+        lastName: 'User',
       });
     });
 

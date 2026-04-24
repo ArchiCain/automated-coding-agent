@@ -27,7 +27,7 @@ This single-file approach eliminates configuration fragmentation and provides on
 ### Service Configuration Layer (Helm Values + Taskfile)
 Each service's configuration is split between:
 - **Helm chart values**: Non-sensitive config like ports, replica counts, resource limits
-- **Helmfile environment overrides**: Per-environment values (dev, mac-mini, prod)
+- **Helmfile environment overrides**: Per-environment values (dev, prod)
 - **Taskfile `dotenv`**: Automatic `.env` loading for local development commands
 
 This separation ensures that sensitive data never appears in version control while keeping service-specific configuration co-located with the deployment definition.

@@ -13,31 +13,31 @@ tasks:
   local:start:
     desc: Start Backend Service locally
     deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml up --build -d backend
+      - docker compose -f infrastructure/compose/dev/compose.yml up --build -d backend
       - echo "Backend Service started at http://localhost:${BACKEND_PORT}"
 
   local:stop:
     desc: Stop Backend Service locally
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml stop backend
+      - docker compose -f infrastructure/compose/dev/compose.yml stop backend
 
   local:restart:
     desc: Restart Backend Service locally (rebuild and start)
     deps: [local:install]
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml stop backend
-      - docker compose -f infrastructure/docker/compose.yml up --build -d backend
+      - docker compose -f infrastructure/compose/dev/compose.yml stop backend
+      - docker compose -f infrastructure/compose/dev/compose.yml up --build -d backend
       - echo "Backend Service restarted at http://localhost:${BACKEND_PORT}"
 
   local:logs:
     desc: Show Backend Service logs
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml logs -f backend
+      - docker compose -f infrastructure/compose/dev/compose.yml logs -f backend
 
   local:health:
     desc: Test Backend Service health endpoint
@@ -46,15 +46,15 @@ tasks:
 
   local:build:
     desc: Build Docker image for local development
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml build backend
+      - docker compose -f infrastructure/compose/dev/compose.yml build backend
 
   local:shell:
     desc: Get a shell inside the running Backend Service container
-    dir: '{{.TASKFILE_DIR}}/../..'
+    dir: '{{.TASKFILE_DIR}}/../../..'
     cmds:
-      - docker compose -f infrastructure/docker/compose.yml exec backend sh
+      - docker compose -f infrastructure/compose/dev/compose.yml exec backend sh
 
   local:run:
     desc: Run Backend Service locally outside of Docker
