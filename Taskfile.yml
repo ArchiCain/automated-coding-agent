@@ -24,6 +24,16 @@ tasks:
     cmds:
       - task --list
 
+  setup:check:
+    desc: "Validate root .env has every value the GH Actions deploy workflow needs"
+    cmds:
+      - bash scripts/env-check.sh
+
+  gh:setup:
+    desc: "Push root .env values into this repo's GitHub Actions secrets + variables"
+    cmds:
+      - bash scripts/gh-setup.sh
+
   up:
     desc: Start the full compose stack (dev app + openclaw)
     cmds:

@@ -3,17 +3,24 @@
 #
 # Usage:
 #   scripts/deploy.sh --host <tailscale-hostname> [--user <ssh-user>] \
-#                     [--image-tag <tag>] [--services <csv>] [--dry-run]
+#                     [--image-tag <tag>] [--config-dir <dir>] \
+#                     [--services <csv>] [--dry-run]
 #
 # --host        Tailscale hostname of the target host (required)
 # --user        SSH user on the target host (default: $DEPLOY_USER or "ubuntu")
 # --image-tag   Image tag to pull (default: latest)
+# --config-dir  If set, rsync dev.env / openclaw.env / github-app.pem from
+#               this directory onto the host before compose pull.
+#               Use this when the deploy workflow has rendered config files
+#               from GH secrets. Omit for manual re-deploys where the host's
+#               .env files are already in place.
 # --services    Which compose projects to deploy: dev, openclaw, or dev,openclaw
 #               (default: dev,openclaw)
 # --dry-run     Print every rsync/ssh command that WOULD run, exit 0
 #
 # The dev + openclaw .prod.yml overrides point at ghcr.io images,
-# so IMAGE_TAG propagates through compose var substitution.
+# so IMAGE_TAG propagates through compose var substitution. Packages on
+# GHCR are public for this repo, so no `docker login` is needed.
 
 set -euo pipefail
 
@@ -23,39 +30,23 @@ set -euo pipefail
 HOST=""
 USER_NAME="${DEPLOY_USER:-ubuntu}"
 IMAGE_TAG="latest"
+CONFIG_DIR=""
 SERVICES="dev,openclaw"
 DRY_RUN=0
 
 usage() {
-  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --help|-h)
-      usage
-      exit 0
-      ;;
-    --host)
-      HOST="${2:-}"
-      shift 2
-      ;;
-    --user)
-      USER_NAME="${2:-}"
-      shift 2
-      ;;
-    --image-tag)
-      IMAGE_TAG="${2:-}"
-      shift 2
-      ;;
-    --services)
-      SERVICES="${2:-}"
-      shift 2
-      ;;
-    --dry-run)
-      DRY_RUN=1
-      shift
-      ;;
+    --help|-h)      usage; exit 0 ;;
+    --host)         HOST="${2:-}";       shift 2 ;;
+    --user)         USER_NAME="${2:-}";  shift 2 ;;
+    --image-tag)    IMAGE_TAG="${2:-}";  shift 2 ;;
+    --config-dir)   CONFIG_DIR="${2:-}"; shift 2 ;;
+    --services)     SERVICES="${2:-}";   shift 2 ;;
+    --dry-run)      DRY_RUN=1;           shift ;;
     *)
       echo "ERROR: unknown argument: $1" >&2
       usage >&2
@@ -76,7 +67,6 @@ fi
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 run() {
-  # Pretty-print the command; execute only when not dry-run.
   printf '  $ %s\n' "$*"
   if [ "$DRY_RUN" -eq 0 ]; then
     eval "$@"
@@ -98,28 +88,32 @@ if [ "$DRY_RUN" -eq 0 ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 1. Ship config + helpers to the host.
+# 1. Ship compose config to the host.
 # -----------------------------------------------------------------------------
 echo "==> Syncing compose config to ${HOST}"
 run "rsync -a --delete ${REPO_ROOT}/infrastructure/compose/ ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/"
-run "rsync -a ${REPO_ROOT}/scripts/ghcr-login.sh ${USER_NAME}@${HOST}:/srv/aca/scripts/"
 
 # -----------------------------------------------------------------------------
-# 2. Log the host's docker into GHCR using the GitHub App already on it.
-#    The openclaw compose .env has GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID,
-#    and GITHUB_APP_PRIVATE_KEY_HOST_PATH — we source it and run the helper,
-#    which mints a ~1h installation token and does `docker login ghcr.io`.
+# 2. Ship rendered .env files + PEM if --config-dir was passed.
+#    (The GH Actions workflow renders these from repo secrets/vars.)
 # -----------------------------------------------------------------------------
-echo "==> GHCR login on ${HOST} via GitHub App"
-run "ssh ${USER_NAME}@${HOST} 'set -a; . /srv/aca/infrastructure/compose/openclaw/.env; set +a; bash /srv/aca/scripts/ghcr-login.sh'"
-
-# Whatever happens from here, log out of GHCR on the host before we exit so
-# no token sits in ~/.docker/config.json past the deploy window. The token
-# itself expires in ~60m regardless.
-trap '[ "$DRY_RUN" -eq 0 ] && ssh "${USER_NAME}@${HOST}" "docker logout ghcr.io" >/dev/null 2>&1 || true' EXIT
+if [ -n "$CONFIG_DIR" ]; then
+  echo "==> Shipping rendered host config from ${CONFIG_DIR}"
+  for f in dev.env openclaw.env github-app.pem; do
+    if [ ! -f "${CONFIG_DIR}/${f}" ]; then
+      echo "ERROR: ${CONFIG_DIR}/${f} not found" >&2
+      exit 5
+    fi
+  done
+  run "ssh ${USER_NAME}@${HOST} 'install -d -m 0700 /srv/aca/secrets'"
+  run "rsync -a ${CONFIG_DIR}/dev.env      ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/dev/.env"
+  run "rsync -a ${CONFIG_DIR}/openclaw.env ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/openclaw/.env"
+  run "rsync -a --chmod=0600 ${CONFIG_DIR}/github-app.pem ${USER_NAME}@${HOST}:/srv/aca/secrets/github-app.pem"
+fi
 
 # -----------------------------------------------------------------------------
 # 3. For each requested compose project: pull + up -d.
+#    Packages are public on GHCR → no docker login needed.
 # -----------------------------------------------------------------------------
 IFS=',' read -r -a PROJECTS <<< "$SERVICES"
 for project in "${PROJECTS[@]}"; do
@@ -127,7 +121,7 @@ for project in "${PROJECTS[@]}"; do
     dev|openclaw) ;;
     *)
       echo "ERROR: unknown service '$project' (valid: dev, openclaw)" >&2
-      exit 5
+      exit 6
       ;;
   esac
 

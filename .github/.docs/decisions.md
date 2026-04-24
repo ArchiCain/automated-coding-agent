@@ -32,25 +32,39 @@ the Actions runner already has a `GITHUB_TOKEN` with packages:write
 permission — no extra cloud provider account, no registry secrets to
 rotate.
 
-## GitHub App (not PAT) for host-side GHCR pulls
+## Public GHCR packages — no host-side auth needed
 
-host-machine authenticates to GHCR using a **GitHub App installation
-token**, not a PAT. `scripts/ghcr-login.sh` mints a ~1h token on the
-host using the App PEM already placed there for the openclaw git-sync
-sidecar, does `docker login ghcr.io`, and the deploy script's EXIT trap
-runs `docker logout` at the end.
+This repo is public. GHCR packages linked to a public repo are free and
+unlimited for storage + bandwidth, and `docker pull` against a public
+package requires no authentication. So the host doesn't do
+`docker login ghcr.io` at deploy time — it just pulls.
+
+The GitHub App is still used on the host, but only by the OpenClaw
+git-sync sidecar for cloning the repo. App permissions required:
+**Contents: Read**, **Metadata: Read**. No Packages permission needed.
+
+One-time manual step after the first deploy: each new GHCR package
+defaults to private even when pushed by a workflow on a public repo.
+Visit each package's settings and flip visibility to Public.
+
+## Laptop-as-source-of-truth for GH secrets + variables
+
+All values the workflow reads — secrets like `TS_AUTHKEY`,
+`POSTGRES_PASSWORD`, `GITHUB_APP_PRIVATE_KEY`, and variables like
+`DEPLOY_HOST`, `GITHUB_APP_ID`, `DOCKER_SOCKET_GID` — live in a single
+root `.env` on the developer's laptop. `scripts/gh-setup.sh` reads that
+file, previews (char counts only), and pushes each value to the repo
+via `gh` over stdin (values never appear in argv).
 
 Rationale:
-- No static PAT to rotate, store, or leak.
-- Single source of truth for GitHub auth on the host — the same App PEM
-  that git-sync uses.
-- No GitHub secrets needed for deploy (contrast with minting the token
-  in CI via `actions/create-github-app-token`, which would require
-  storing `GH_APP_ID` + `GH_APP_PRIVATE_KEY` as repo secrets *in
-  addition* to the PEM on the host).
-- Token scope is bounded to the installation + short TTL.
-
-The App needs Packages: Read permission on this repo's GHCR packages.
+- **One rotation mechanism.** Edit `.env`, re-run `task gh:setup`.
+- **No click-through GitHub UI onboarding.** A fresh clone with a
+  populated `.env` is one command away from a deployable repo.
+- **Stdin-only.** `gh secret set --body "$VAL"` shows values in `ps` /
+  shell history. The stdin form doesn't.
+- **Variables, not secrets, for non-sensitive values.** Hostnames, IDs,
+  and gids don't get masked as `***` in logs, which matters when
+  debugging a failing run.
 
 ## Self-hosted runner for CI, GitHub-hosted for deploy
 

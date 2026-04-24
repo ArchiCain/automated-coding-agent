@@ -27,8 +27,10 @@ infrastructure/
 
 ## Deploy in one line
 
-`.github/workflows/deploy-dev.yml` → dispatch-only. Builds images, pushes
-to GHCR (auth: built-in `GITHUB_TOKEN`), joins the tailnet, runs
-`scripts/deploy.sh` which rsyncs compose files and `scripts/ghcr-login.sh`,
-then mints a short-lived GitHub App token on the host for
-`docker compose pull && up -d`. Full sequence diagram in `ecosystem.md`.
+`.github/workflows/deploy-dev.yml` triggers on every push/merge to
+`dev`. Builds images, pushes to public GHCR (auth: built-in
+`GITHUB_TOKEN`), renders compose `.env` files + the App PEM from repo
+secrets, joins the tailnet via `TS_AUTHKEY`, runs `scripts/deploy.sh`
+which rsyncs everything to `/srv/aca/` on the host and runs
+`docker compose pull && up -d` (no GHCR auth needed — packages are
+public). Full sequence diagram in `ecosystem.md`.

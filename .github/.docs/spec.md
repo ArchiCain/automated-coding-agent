@@ -47,18 +47,24 @@ Images are tagged with both the commit SHA and `latest`, pushed to
 1. `actions/checkout@v4`.
 2. Build each service image (matrix), push to GHCR using the built-in
    `GITHUB_TOKEN` with `${SHA}` and `latest` tags.
-3. `tailscale/github-action@v2` — ephemeral node with `tag:ci`.
-4. `bash scripts/deploy.sh --host ${DEPLOY_HOST} --image-tag ${SHA}`:
+3. **Render host config** from repo secrets + vars into `/tmp/config/`
+   on the runner:
+   - `dev.env` (Postgres creds + Keycloak client secret)
+   - `openclaw.env` (API keys, App IDs, gateway token, GIT_REPO_URL,
+     PEM path, DOCKER_SOCKET_GID)
+   - `github-app.pem` (the App private key)
+4. `tailscale/github-action@v2` with `authkey: ${{ secrets.TS_AUTHKEY }}`
+   — joins as an ephemeral `tag:ci` node.
+5. `bash scripts/deploy.sh --host ${DEPLOY_HOST} --image-tag ${SHA}
+   --config-dir /tmp/config`:
    a. rsync `infrastructure/compose/` → host:`/srv/aca/infrastructure/compose/`
-   b. rsync `scripts/ghcr-login.sh` → host:`/srv/aca/scripts/`
-   c. ssh host: source `/srv/aca/infrastructure/compose/openclaw/.env`,
-      run `ghcr-login.sh` — mints a ~1h GitHub App installation token
-      from the PEM already on the host, runs `docker login ghcr.io`
-   d. ssh host: `docker compose … pull` for each compose project (auth via the login in step c)
-   e. ssh host: `docker compose … up -d` for each compose project
-   f. ssh host: `docker logout ghcr.io` (trap fires on exit, always)
+   b. rsync `/tmp/config/dev.env` → host:`/srv/aca/infrastructure/compose/dev/.env`
+   c. rsync `/tmp/config/openclaw.env` → host:`/srv/aca/infrastructure/compose/openclaw/.env`
+   d. rsync `/tmp/config/github-app.pem` → host:`/srv/aca/secrets/github-app.pem` (0600)
+   e. ssh host: `docker compose … pull` — GHCR packages are public, no auth
+   f. ssh host: `docker compose … up -d`
 
-`.env` files on the host stay put between deploys. Only the compose
-`*.yml` files and the `ghcr-login.sh` helper are rsynced. No GHCR creds
-are ever written to GitHub secrets or to the host's disk past the deploy
-window.
+The host's `/srv/aca/` layout is fully derived from repo state each
+deploy. No manual `.env` placement; no persistent PEM file the operator
+maintains by hand. Rotating any secret is `edit .env → task gh:setup →
+git push`.

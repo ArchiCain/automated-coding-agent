@@ -63,24 +63,50 @@ Required to reach the deploy host. Install from
 [tailscale.com/download](https://tailscale.com/download) and join your
 tailnet.
 
-## First-time host bootstrap
+## Bootstrap (first-time only)
 
-See `infrastructure/.docs/ecosystem.md` → "Bootstrapping a host" for the
-one-off setup on host-machine (install Docker, join tailnet, place `.env`
-files and GitHub App PEM, set `vars.DEPLOY_HOST` on GitHub).
+**On the laptop:**
+
+```bash
+cp .env.template .env
+# fill in every value in .env (TS_AUTHKEY, DEPLOY_HOST, API keys, etc.)
+
+task setup:check     # validates nothing's missing
+task gh:setup        # pushes secrets + vars into this repo's GH Actions config
+```
+
+**On host-machine:**
+
+Install Docker + docker compose, install Tailscale and rename the
+machine to `host-machine` (or whatever `DEPLOY_HOST` you set), then
+`sudo install -d -o $USER /srv/aca`. That's it — `.env` files on the
+host are rendered from GH secrets on every deploy.
+
+Full walkthrough: `infrastructure/.docs/ecosystem.md` → "Bootstrapping
+a host."
 
 ## Deploying
 
 Auto-deploys on every push/merge to `dev` via the GitHub Actions
 "Deploy to dev" workflow (`.github/workflows/deploy-dev.yml`). The
-workflow builds images, pushes to GHCR, joins the tailnet, and runs
-`scripts/deploy.sh` against the host.
+workflow builds images, pushes to GHCR, renders compose `.env` files
++ the App PEM from repo secrets, joins the tailnet via `TS_AUTHKEY`,
+then runs `scripts/deploy.sh` to ship everything to host-machine and
+`docker compose pull && up -d`.
 
 Docs-only pushes are skipped via `paths-ignore` (the git-sync sidecar
 picks those up on the host within 60s). A newer push cancels an older
 deploy in flight via `concurrency: cancel-in-progress`.
 `workflow_dispatch` stays available for manual redeploys. Full
 sequence diagram in `infrastructure/.docs/ecosystem.md`.
+
+## Rotating a secret
+
+```bash
+# edit .env with the new value
+task gh:setup      # re-push — gh secret set is idempotent
+git push           # triggers a deploy with the new value
+```
 
 ## Day-to-day (on host-machine, typically via `ssh`)
 

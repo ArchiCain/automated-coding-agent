@@ -106,19 +106,19 @@ sequenceDiagram
   actor Human as Human / OpenClaw
   participant GH as GitHub<br/>(dev branch)
   participant CI as CI runner<br/>(ubuntu-latest)
-  participant GHCR as GHCR<br/>(image registry)
+  participant GHCR as GHCR<br/>(public images)
   participant Host as host-machine
 
   Human->>GH: push / merge → dev
   GH->>CI: push event (unless paths-ignored)
   CI->>CI: build each image (linux/amd64, matrix of 5)
   CI->>GHCR: push {sha} + latest tags (auth: GITHUB_TOKEN)
-  CI->>CI: tailscale up (ephemeral tag:ci node)
-  CI->>Host: rsync infrastructure/compose/ + scripts/ghcr-login.sh → /srv/aca/
-  Host->>Host: ghcr-login.sh: mint App installation token → docker login ghcr.io
-  Host->>GHCR: docker compose pull (auth: App token)
+  CI->>CI: render dev.env + openclaw.env + github-app.pem from secrets/vars
+  CI->>CI: tailscale up via TS_AUTHKEY (ephemeral tag:ci node)
+  CI->>Host: rsync infrastructure/compose/ → /srv/aca/
+  CI->>Host: rsync rendered .env files + PEM → /srv/aca/
+  Host->>GHCR: docker compose pull (public, no auth)
   Host->>Host: docker compose up -d
-  Host->>Host: docker logout ghcr.io (no creds left)
   Host-->>CI: containers up
   CI-->>GH: run ✅
 ```
@@ -147,40 +147,63 @@ below).
 
 ## Bootstrapping a host
 
-First-time setup on host-machine (one-off, done by a human over SSH):
+First-time setup is split between **the laptop** (populate root `.env`
+and push to GitHub once) and **the mac-mini** (install docker +
+tailscale + create target directory). GitHub Actions handles everything
+else on each deploy.
 
-1. Install Docker Engine + `docker compose` plugin. (`openssl`, `curl`,
-   and `rsync` are needed too; they're in Ubuntu by default.)
-2. Install and authenticate Tailscale (`tailscale up`). Note the
-   hostname — this goes in `vars.DEPLOY_HOST` on GitHub.
-3. Create the deploy target directories: `sudo install -d -o $USER
-   /srv/aca/infrastructure/compose /srv/aca/scripts`.
-4. Place the per-compose-project `.env` files:
-   - `/srv/aca/infrastructure/compose/dev/.env`
-   - `/srv/aca/infrastructure/compose/openclaw/.env`
-   See each directory's `.env.template` for the variable set.
-5. Place the GitHub App private-key PEM at the host path referenced by
-   `GITHUB_APP_PRIVATE_KEY_HOST_PATH` in the openclaw `.env`.
-6. In GitHub repo settings → Variables, set `DEPLOY_HOST` to the tailnet
-   hostname from step 2 (and `DEPLOY_USER` if the SSH user is not `ubuntu`).
-7. Dispatch `Deploy to dev` from the Actions tab.
+### On the laptop — one-off
 
-No `docker login ghcr.io` needed here — the deploy script mints a
-short-lived GitHub App installation token on the host at deploy time
-(`scripts/ghcr-login.sh`) using the App creds already in the openclaw
-`.env`. It runs `docker login`, pulls, and logs out at the end of each
-run, leaving no credentials on disk.
+1. Populate `.env` at the repo root using `.env.template` as the guide.
+   Required values include `TS_AUTHKEY`, `DEPLOY_HOST` (the tailnet
+   hostname you'll pick in the next section), `DEPLOY_USER`,
+   `DOCKER_SOCKET_GID`, API keys, Postgres credentials, GitHub App IDs,
+   and the path to the App PEM.
+2. `task setup:check` — fails loudly if anything's missing or still at
+   a placeholder.
+3. `task gh:setup` — shows a preview (character counts, no values
+   shown), prompts y/N, pushes each value to the repo's GH secrets /
+   variables via `gh` over stdin, and flips the repo-level default
+   workflow permission to `write` so the workflow can push to GHCR.
 
-### GitHub App permission needed
+### On the mac-mini — one-off
 
-The App must have **Packages: Read** permission on this repo's GHCR
-packages (in addition to whatever it already has for the git-sync
-sidecar — typically Contents: Read + Metadata: Read). Without Packages:
-Read, `docker pull` will 403 even though login succeeded.
+4. Install Docker Engine + `docker compose` plugin.
+5. Install and authenticate Tailscale. Rename the machine in the
+   Tailscale admin UI to match `DEPLOY_HOST` from the laptop's `.env`
+   (convention: `host-machine`).
+6. Create the deploy target directory:
+   `sudo install -d -o $USER /srv/aca`.
 
-graphics-machine setup is out-of-band — Ollama installed as a systemd
-service, models pulled, tailnet-joined. See `ideas/openclaw-local-llm-hybrid.md`
-for the running notes.
+### First deploy
+
+7. Push to `dev` (or dispatch the workflow manually). Actions builds
+   images, renders config from secrets, ships to the host, and
+   `docker compose up -d`.
+8. **First-time only**: go to
+   `https://github.com/ArchiCain?tab=packages` (or the repo's Packages
+   tab) and flip each of the 5 new packages
+   (`automated-coding-agent-{backend, frontend, keycloak,
+   openclaw-gateway, openclaw-git-sync}`) to **Public** via each
+   package's settings → Danger Zone → Change visibility. Also connect
+   each to this repo while you're there. Public packages mean no
+   authentication is needed for `docker pull`, so deploy 2+ just works.
+
+### GitHub App — required permissions
+
+The App needs only what OpenClaw's git-sync sidecar needs on this repo:
+
+- **Contents: Read**
+- **Metadata: Read**
+
+No `Packages: Read` required, because GHCR pulls go against public
+packages after step 8.
+
+### graphics-machine
+
+Out-of-band — Ollama installed as a systemd service, models pulled,
+tailnet-joined. See `ideas/openclaw-local-llm-hybrid.md` for the
+running notes.
 
 ## What lives where in docs
 

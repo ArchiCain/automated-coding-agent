@@ -28,10 +28,13 @@ Two workflows:
   `${SHA}` and `latest`.
 - Joins the tailnet as an ephemeral `tag:ci` node via
   `tailscale/github-action`.
-- Runs `scripts/deploy.sh --host ${DEPLOY_HOST} --image-tag ${SHA}` which
-  rsyncs the compose files + `scripts/ghcr-login.sh` to host-machine,
-  logs the host's docker into GHCR using the GitHub App token, and runs
-  `docker compose pull && up -d` for each compose project.
+- Renders the host's compose `.env` files + the GitHub App PEM from
+  repo secrets/vars into `/tmp/config/` on the runner.
+- Runs `scripts/deploy.sh --host ${DEPLOY_HOST} --image-tag ${SHA}
+  --config-dir /tmp/config` which rsyncs compose files and rendered
+  config to host-machine, then `docker compose pull && up -d` for each
+  compose project. GHCR packages are public, so no `docker login` is
+  needed.
 
 Full sequence diagram and bootstrap steps:
 `infrastructure/.docs/ecosystem.md`.
