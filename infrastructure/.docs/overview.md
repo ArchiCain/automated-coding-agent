@@ -28,6 +28,7 @@ infrastructure/
 ## Deploy in one line
 
 `.github/workflows/deploy-dev.yml` → dispatch-only. Builds images, pushes
-to GHCR, joins the tailnet, runs `scripts/deploy.sh` to rsync compose
-files and `docker compose pull && up -d` on the host. Full sequence
-diagram in `ecosystem.md`.
+to GHCR (auth: built-in `GITHUB_TOKEN`), joins the tailnet, runs
+`scripts/deploy.sh` which rsyncs compose files and `scripts/ghcr-login.sh`,
+then mints a short-lived GitHub App token on the host for
+`docker compose pull && up -d`. Full sequence diagram in `ecosystem.md`.

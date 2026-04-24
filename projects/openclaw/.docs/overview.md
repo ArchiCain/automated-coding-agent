@@ -120,7 +120,7 @@ Phase A is a stripped-down memory system; Honcho is deferred to Phase B.
 | `ANTHROPIC_API_KEY` | Agent reasoning — all four agents | Yes |
 | `OPENAI_API_KEY` | Memory search embeddings | Yes |
 | `OPENCLAW_AUTH_TOKEN` | Browser → gateway auth (pairing) | Yes |
-| GitHub App (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `github-app-key` file) | Git-sync sidecar auth — mints installation tokens | Yes |
+| GitHub App (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `github-app-key` file) | (1) Git-sync sidecar — mints installation tokens to clone + pull the repo. (2) Deploy-time `scripts/ghcr-login.sh` — mints a short-lived token for `docker login ghcr.io` so image pulls work. Requires Contents:Read, Metadata:Read, and Packages:Read on the repo. | Yes |
 
 No OAuth token, no Claude Code CLI. The API key is the primary reasoning credential.
 

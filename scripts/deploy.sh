@@ -98,13 +98,28 @@ if [ "$DRY_RUN" -eq 0 ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 1. Ship config to the host.
+# 1. Ship config + helpers to the host.
 # -----------------------------------------------------------------------------
 echo "==> Syncing compose config to ${HOST}"
 run "rsync -a --delete ${REPO_ROOT}/infrastructure/compose/ ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/"
+run "rsync -a ${REPO_ROOT}/scripts/ghcr-login.sh ${USER_NAME}@${HOST}:/srv/aca/scripts/"
 
 # -----------------------------------------------------------------------------
-# 2. For each requested compose project: pull + up -d.
+# 2. Log the host's docker into GHCR using the GitHub App already on it.
+#    The openclaw compose .env has GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID,
+#    and GITHUB_APP_PRIVATE_KEY_HOST_PATH — we source it and run the helper,
+#    which mints a ~1h installation token and does `docker login ghcr.io`.
+# -----------------------------------------------------------------------------
+echo "==> GHCR login on ${HOST} via GitHub App"
+run "ssh ${USER_NAME}@${HOST} 'set -a; . /srv/aca/infrastructure/compose/openclaw/.env; set +a; bash /srv/aca/scripts/ghcr-login.sh'"
+
+# Whatever happens from here, log out of GHCR on the host before we exit so
+# no token sits in ~/.docker/config.json past the deploy window. The token
+# itself expires in ~60m regardless.
+trap '[ "$DRY_RUN" -eq 0 ] && ssh "${USER_NAME}@${HOST}" "docker logout ghcr.io" >/dev/null 2>&1 || true' EXIT
+
+# -----------------------------------------------------------------------------
+# 3. For each requested compose project: pull + up -d.
 # -----------------------------------------------------------------------------
 IFS=',' read -r -a PROJECTS <<< "$SERVICES"
 for project in "${PROJECTS[@]}"; do

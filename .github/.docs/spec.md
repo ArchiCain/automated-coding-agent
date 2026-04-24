@@ -38,13 +38,20 @@ Images are tagged with both the commit SHA and `latest`, pushed to
 ## Deploy step sequence
 
 1. `actions/checkout@v4`.
-2. Build each service image (matrix), push to GHCR with `${SHA}` and
-   `latest` tags.
+2. Build each service image (matrix), push to GHCR using the built-in
+   `GITHUB_TOKEN` with `${SHA}` and `latest` tags.
 3. `tailscale/github-action@v2` — ephemeral node with `tag:ci`.
 4. `bash scripts/deploy.sh --host ${DEPLOY_HOST} --image-tag ${SHA}`:
    a. rsync `infrastructure/compose/` → host:`/srv/aca/infrastructure/compose/`
-   b. `ssh host 'docker compose -f .../compose.yml -f .../compose.prod.yml pull'`
-   c. `ssh host 'docker compose ... up -d'` — one per compose project (dev, openclaw)
+   b. rsync `scripts/ghcr-login.sh` → host:`/srv/aca/scripts/`
+   c. ssh host: source `/srv/aca/infrastructure/compose/openclaw/.env`,
+      run `ghcr-login.sh` — mints a ~1h GitHub App installation token
+      from the PEM already on the host, runs `docker login ghcr.io`
+   d. ssh host: `docker compose … pull` for each compose project (auth via the login in step c)
+   e. ssh host: `docker compose … up -d` for each compose project
+   f. ssh host: `docker logout ghcr.io` (trap fires on exit, always)
 
 `.env` files on the host stay put between deploys. Only the compose
-`*.yml` files are rsynced.
+`*.yml` files and the `ghcr-login.sh` helper are rsynced. No GHCR creds
+are ever written to GitHub secrets or to the host's disk past the deploy
+window.
