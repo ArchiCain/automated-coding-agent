@@ -2,16 +2,17 @@ version: "3"
 
 # Service is named `postgres` in infrastructure/compose/dev/compose.yml
 # (compose/dev uses the pgvector/pgvector:pg16 image directly — no
-# local build step). Credentials come from the dev .env (POSTGRES_USER,
-# POSTGRES_PASSWORD, POSTGRES_DB). pgweb is no longer part of the
-# compose stack; if you need a DB UI, run one via `docker run` ad-hoc.
+# local build step). Credentials are baked into compose.yml as literals
+# (postgres/postgres/app) — no .env file required. pgweb is no longer
+# part of the compose stack; if you need a DB UI, run one via
+# `docker run` ad-hoc.
 
 tasks:
   local:start:
     desc: "Start PostgreSQL only"
     dir: "{{.TASKFILE_DIR}}/../../.."
     cmds:
-      - docker compose -f infrastructure/compose/dev/compose.yml --env-file infrastructure/compose/dev/.env up -d postgres
+      - docker compose -f infrastructure/compose/dev/compose.yml up -d postgres
 
   local:stop:
     desc: "Stop PostgreSQL"

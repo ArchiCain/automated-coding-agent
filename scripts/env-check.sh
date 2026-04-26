@@ -34,20 +34,12 @@ is_placeholder() {
 }
 
 # Check that key exists, isn't empty, and isn't a placeholder.
-# Fallback key lets us accept either POSTGRES_USER or legacy DATABASE_USERNAME.
 check() {
-  local key="$1" used_by="$2" fallback="${3:-}"
+  local key="$1" used_by="$2"
   local val
   val=$(get_env "$ENV_FILE" "$key")
-  if [ -z "$val" ] && [ -n "$fallback" ]; then
-    val=$(get_env "$ENV_FILE" "$fallback")
-  fi
   if [ -z "$val" ] || is_placeholder "$val"; then
-    if [ -n "$fallback" ]; then
-      echo "  .env: ${key} (or ${fallback})"
-    else
-      echo "  .env: ${key}"
-    fi
+    echo "  .env: ${key}"
     echo "      needed for: ${used_by}"
     ISSUES=$((ISSUES+1))
   fi
@@ -85,32 +77,25 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 # --- Tailscale (CI tailnet join) ---
-check TS_AUTHKEY               "CI runner joins the tailnet (tailscale/github-action)"
+check TS_AUTHKEY                 "CI runner joins the tailnet (tailscale/github-action)"
 
 # --- Deploy target ---
-check DEPLOY_HOST              "scripts/deploy.sh ssh target (Tailscale hostname)"
-check DEPLOY_USER              "scripts/deploy.sh ssh user"
-check DOCKER_SOCKET_GID        "openclaw gateway container's group_add for /var/run/docker.sock"
-
-# --- Database (accept POSTGRES_* or legacy DATABASE_*) ---
-check POSTGRES_USER            "dev compose: postgres + backend + keycloak creds" DATABASE_USERNAME
-check POSTGRES_PASSWORD        "dev compose: postgres + backend + keycloak creds" DATABASE_PASSWORD
-check POSTGRES_DB              "dev compose: postgres database name + keycloak KC_DB_URL_DATABASE" DATABASE_NAME
-
-# --- Keycloak ---
-check KEYCLOAK_CLIENT_SECRET   "backend ↔ keycloak shared client secret"
+check DEPLOY_HOST                "scripts/deploy.sh ssh target (Tailscale hostname)"
 
 # --- LLM API keys ---
-check ANTHROPIC_API_KEY        "openclaw gateway agent reasoning"
-check OPENAI_API_KEY           "openclaw memory-search embeddings"
+check ANTHROPIC_API_KEY          "openclaw gateway agent reasoning"
+check OPENAI_API_KEY             "openclaw memory-search embeddings"
 
 # --- OpenClaw ---
-check OPENCLAW_AUTH_TOKEN      "openclaw browser-to-gateway pairing"
+check OPENCLAW_AUTH_TOKEN        "openclaw browser-to-gateway pairing"
 
 # --- GitHub App (for openclaw git-sync, not for GHCR) ---
-check GITHUB_APP_ID            "openclaw git-sync: repo clone/pull auth"
+check GITHUB_APP_ID              "openclaw git-sync: repo clone/pull auth"
 check GITHUB_APP_INSTALLATION_ID "openclaw git-sync: repo clone/pull auth"
 check_file GITHUB_APP_PRIVATE_KEY_PATH "openclaw git-sync: repo clone/pull auth (PEM contents pushed as GH secret)"
+
+# DEPLOY_USER and DOCKER_SOCKET_GID are optional — defaults handled by
+# scripts/deploy.sh and infrastructure/compose/openclaw/compose.yml.
 
 if [ $ISSUES -eq 0 ]; then
   [ $QUIET -eq 0 ] && echo "✓ all required .env values present"

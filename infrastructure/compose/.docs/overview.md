@@ -58,16 +58,14 @@ create. Reach services via the tailnet hostname — e.g.
 
 ## Bringing a stack up
 
-Each compose project has an `.env.template` documenting its variables.
-Before first boot (on host-machine):
+The dev stack reads no env — postgres user/password/db and the keycloak
+client secret are baked into `infrastructure/compose/dev/compose.yml`
+as literals. The openclaw stack does need an `.env` (API keys, GitHub
+App credentials, etc.); the GH Actions deploy workflow renders it on
+every deploy and rsyncs it to host-machine. See
+`infrastructure/compose/openclaw/.env.template` for the variable set.
 
-```
-cp infrastructure/compose/dev/.env.template       /srv/aca/infrastructure/compose/dev/.env
-cp infrastructure/compose/openclaw/.env.template  /srv/aca/infrastructure/compose/openclaw/.env
-```
-
-Fill in secrets (API keys, GitHub App credentials). After that, deploys
-are one-shot through the GH Actions workflow; for manual operation:
+Manual operation on the host:
 
 ```
 task up            # dev + openclaw

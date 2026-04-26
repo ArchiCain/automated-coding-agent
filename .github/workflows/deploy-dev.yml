@@ -89,16 +89,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Render the compose .env files + the GitHub App PEM from repo
-      # secrets/vars into /tmp/config/. deploy.sh ships this to the host.
-      # GH Actions automatically masks known secrets in logs, so even a
-      # leaky `set -x` won't print them.
+      # Render the openclaw .env + the GitHub App PEM from repo
+      # secrets/vars into /tmp/config/. deploy.sh ships them to the host.
+      # The dev compose stack reads no env at runtime (postgres creds +
+      # keycloak client secret are baked into compose.yml as literals).
+      # GH Actions auto-masks known secrets in logs.
       - name: Render host config from secrets + vars
         env:
-          POSTGRES_USER: ${{ vars.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
-          KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENCLAW_AUTH_TOKEN: ${{ secrets.OPENCLAW_AUTH_TOKEN }}
@@ -109,13 +106,6 @@ jobs:
         run: |
           mkdir -p /tmp/config
 
-          cat > /tmp/config/dev.env <<EOF
-          POSTGRES_USER=${POSTGRES_USER}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-          POSTGRES_DB=${POSTGRES_DB}
-          KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
-          EOF
-
           cat > /tmp/config/openclaw.env <<EOF
           ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
           OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -124,8 +114,6 @@ jobs:
           GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID}
           GITHUB_APP_PRIVATE_KEY_HOST_PATH=/srv/aca/secrets/github-app.pem
           GIT_REPO_URL=https://github.com/${{ github.repository }}.git
-          OPENCLAW_GIT_BRANCH=dev
-          OPENCLAW_GIT_APP_SLUG=scain-openclaw
           DOCKER_SOCKET_GID=${DOCKER_SOCKET_GID}
           EOF
 

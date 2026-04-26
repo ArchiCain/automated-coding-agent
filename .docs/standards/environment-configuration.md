@@ -4,23 +4,23 @@ Environment variable patterns and secrets handling across compose stacks.
 
 ## Where values live
 
-Each compose project carries its own `.env` file alongside its
-`compose.yml`. These files are **not** checked in; templates with
-placeholders are.
+The deploy workflow reads from one place — the **root `.env`** on the
+developer's laptop — and pushes everything to GH secrets/variables via
+`task gh:setup`. On every deploy, the workflow renders the openclaw
+compose `.env` from those secrets and rsyncs it to the host along with
+the GitHub App PEM.
 
-| Compose project | Tracked template | Live `.env` (on host-machine) |
+| File | Source of truth | What's in it |
 |---|---|---|
-| `dev` | `infrastructure/compose/dev/.env.template` | `/srv/aca/infrastructure/compose/dev/.env` |
-| `openclaw` | `infrastructure/compose/openclaw/.env.template` | `/srv/aca/infrastructure/compose/openclaw/.env` |
+| Root `.env` | Developer's laptop (gitignored) | Every value the deploy workflow needs (8 required + 2 optional). Validated by `scripts/env-check.sh`. |
+| `/srv/aca/infrastructure/compose/openclaw/.env` (on host) | Rendered by CI from GH secrets | Anthropic/OpenAI keys, gateway pairing token, GitHub App IDs, PEM path, GIT_REPO_URL, DOCKER_SOCKET_GID |
+| `/srv/aca/secrets/github-app.pem` (on host) | Rendered by CI from GH secret | The App's private key |
 
-The host's `.env` files are placed once during
-[host bootstrap](../../infrastructure/.docs/ecosystem.md) and stay put
-between deploys. `scripts/deploy.sh` rsyncs the compose `.yml` files
-but deliberately does **not** touch `.env`.
-
-There is no top-level `.env` consumed by anything that deploys. (A
-root-level `.env` may exist on the dev laptop for ad-hoc tasks, but it
-is not part of the deploy model.)
+The dev compose stack reads no env at runtime — postgres credentials,
+the database name, and the Keycloak client secret are baked into
+`infrastructure/compose/dev/compose.yml` as literals (the same model
+that `infrastructure/compose/sandbox/compose.yml` uses). So there's no
+`dev/.env` to render or place.
 
 ## No-defaults policy
 

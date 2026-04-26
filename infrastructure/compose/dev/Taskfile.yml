@@ -4,7 +4,7 @@ tasks:
   up:
     desc: Start dev application stack (postgres, backend, frontend, keycloak)
     cmds:
-      - docker compose -f infrastructure/compose/dev/compose.yml --env-file infrastructure/compose/dev/.env up -d
+      - docker compose -f infrastructure/compose/dev/compose.yml up -d
 
   down:
     desc: Stop dev application stack (preserves postgres volume)

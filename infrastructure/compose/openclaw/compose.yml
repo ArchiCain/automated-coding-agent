@@ -37,7 +37,7 @@ services:
     #   DOCKER_SOCKET_GID=$(getent group docker | cut -d: -f3)
     # Set it in /srv/aca/infrastructure/compose/openclaw/.env.
     group_add:
-      - "${DOCKER_SOCKET_GID:-0}"
+      - "${DOCKER_SOCKET_GID:-999}"
     volumes:
       - workspace:/workspace
       - /var/run/docker.sock:/var/run/docker.sock

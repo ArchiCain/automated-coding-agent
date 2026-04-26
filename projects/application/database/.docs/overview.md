@@ -37,12 +37,11 @@ Port 5432 is **not** published to the host — access is via
 
 - **host-machine:** `task dev:up` (or `task up`) brings the stack up via
   `docker compose -f infrastructure/compose/dev/compose.yml up -d`. For CI-driven deploys,
-  `compose.prod.yml` layers pre-built GHCR images over the base file. `POSTGRES_USER`,
-  `POSTGRES_PASSWORD`, and `POSTGRES_DB` come from the host's `.env`
-  (defaults in `.env.template`: `postgres` / `postgres` / `app`).
-- **Credentials:** `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` are set directly
-  on the `postgres` service `environment` block via `${...}` interpolation from `.env`
-  (`infrastructure/compose/dev/compose.yml`, service `postgres`).
+  `compose.prod.yml` layers pre-built GHCR images over the base file.
+- **Credentials:** `POSTGRES_USER` (`postgres`), `POSTGRES_PASSWORD` (`postgres`),
+  and `POSTGRES_DB` (`app`) are baked into the `postgres` service `environment`
+  block in `infrastructure/compose/dev/compose.yml` as literals. The dev compose
+  stack reads no `.env` file.
 - **Health:** `pg_isready -U postgres` drives the healthcheck (5s interval, 10 retries).
   Other services use `depends_on: postgres: condition: service_healthy` to wait for it.
 - **Extensions:** `uuid-ossp` and `vector` are created by the backend's initial TypeORM

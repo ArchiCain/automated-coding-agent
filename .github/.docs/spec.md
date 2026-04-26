@@ -49,20 +49,20 @@ Images are tagged with both the commit SHA and `latest`, pushed to
    `GITHUB_TOKEN` with `${SHA}` and `latest` tags.
 3. **Render host config** from repo secrets + vars into `/tmp/config/`
    on the runner:
-   - `dev.env` (Postgres creds + Keycloak client secret)
    - `openclaw.env` (API keys, App IDs, gateway token, GIT_REPO_URL,
-     PEM path, DOCKER_SOCKET_GID)
+     PEM path, optional DOCKER_SOCKET_GID)
    - `github-app.pem` (the App private key)
+   The dev compose stack reads no env at runtime, so no `dev.env` is
+   rendered or rsynced.
 4. `tailscale/github-action@v2` with `authkey: ${{ secrets.TS_AUTHKEY }}`
    — joins as an ephemeral `tag:ci` node.
 5. `bash scripts/deploy.sh --host ${DEPLOY_HOST} --image-tag ${SHA}
    --config-dir /tmp/config`:
    a. rsync `infrastructure/compose/` → host:`/srv/aca/infrastructure/compose/`
-   b. rsync `/tmp/config/dev.env` → host:`/srv/aca/infrastructure/compose/dev/.env`
-   c. rsync `/tmp/config/openclaw.env` → host:`/srv/aca/infrastructure/compose/openclaw/.env`
-   d. rsync `/tmp/config/github-app.pem` → host:`/srv/aca/secrets/github-app.pem` (0600)
-   e. ssh host: `docker compose … pull` — GHCR packages are public, no auth
-   f. ssh host: `docker compose … up -d`
+   b. rsync `/tmp/config/openclaw.env` → host:`/srv/aca/infrastructure/compose/openclaw/.env`
+   c. rsync `/tmp/config/github-app.pem` → host:`/srv/aca/secrets/github-app.pem` (0600)
+   d. ssh host: `docker compose … pull` — GHCR packages are public, no auth
+   e. ssh host: `docker compose … up -d`
 
 The host's `/srv/aca/` layout is fully derived from repo state each
 deploy. No manual `.env` placement; no persistent PEM file the operator

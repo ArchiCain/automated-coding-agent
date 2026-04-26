@@ -12,9 +12,9 @@ All five must be present, otherwise `TypeormDatabaseClientModule.forRoot()` thro
 |---|---|---|
 | `DATABASE_HOST` | `postgres` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` |
 | `DATABASE_PORT` | `5432` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` |
-| `DATABASE_USERNAME` | matches `POSTGRES_USER` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (from `.env`) |
-| `DATABASE_PASSWORD` | matches `POSTGRES_PASSWORD` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (from `.env`) |
-| `DATABASE_NAME` | matches `POSTGRES_DB` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (from `.env`) |
+| `DATABASE_USERNAME` | matches `POSTGRES_USER` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (literal) |
+| `DATABASE_PASSWORD` | matches `POSTGRES_PASSWORD` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (literal) |
+| `DATABASE_NAME` | matches `POSTGRES_DB` | `infrastructure/compose/dev/compose.yml` · `services.backend.environment` (literal) |
 | `DATABASE_SSL` | `false` | optional |
 | `DATABASE_LOGGING` | `false` | optional |
 | `DATABASE_SYNC` | (ignored — see spec.md Discrepancies) | — |

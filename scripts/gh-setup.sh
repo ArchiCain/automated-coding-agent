@@ -30,27 +30,13 @@ get_env() {
   printf '%s' "$val"
 }
 
-# Prefer `key`, fall back to `fallback` if unset/empty.
-get_pref() {
-  local file="$1" key="$2" fallback="$3" val
-  val=$(get_env "$file" "$key")
-  [ -z "$val" ] && val=$(get_env "$file" "$fallback")
-  printf '%s' "$val"
-}
-
-# --- Load values from the root .env ---
+# --- Required values ---
 SEC_TS=$(get_env "$ENV_FILE"   TS_AUTHKEY)
-SEC_PG=$(get_pref "$ENV_FILE"  POSTGRES_PASSWORD DATABASE_PASSWORD)
-SEC_KC=$(get_env "$ENV_FILE"   KEYCLOAK_CLIENT_SECRET)
 SEC_ANTH=$(get_env "$ENV_FILE" ANTHROPIC_API_KEY)
 SEC_OAI=$(get_env "$ENV_FILE"  OPENAI_API_KEY)
 SEC_OCT=$(get_env "$ENV_FILE"  OPENCLAW_AUTH_TOKEN)
 
 VAR_HOST=$(get_env "$ENV_FILE" DEPLOY_HOST)
-VAR_USER=$(get_env "$ENV_FILE" DEPLOY_USER)
-VAR_GID=$(get_env "$ENV_FILE"  DOCKER_SOCKET_GID)
-VAR_PGU=$(get_pref "$ENV_FILE" POSTGRES_USER DATABASE_USERNAME)
-VAR_PGDB=$(get_pref "$ENV_FILE" POSTGRES_DB  DATABASE_NAME)
 VAR_APP=$(get_env "$ENV_FILE"  GITHUB_APP_ID)
 VAR_INST=$(get_env "$ENV_FILE" GITHUB_APP_INSTALLATION_ID)
 
@@ -59,17 +45,18 @@ PEM_PATH=$(get_env "$ENV_FILE" GITHUB_APP_PRIVATE_KEY_PATH)
 [[ "$PEM_PATH" != /* ]] && PEM_PATH="${REPO_ROOT}/${PEM_PATH}"
 PEM_BYTES=$(wc -c < "$PEM_PATH" | tr -d ' ')
 
+# --- Optional values (push only if non-empty) ---
+VAR_USER=$(get_env "$ENV_FILE" DEPLOY_USER)
+VAR_GID=$(get_env "$ENV_FILE"  DOCKER_SOCKET_GID)
+
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 
-# --- Preview (no values, only shapes + sources) ---
 cat <<EOF
 
 GitHub configuration for ${REPO}
 ============================================================
 Secrets (content hidden; only lengths shown):
   TS_AUTHKEY                 ${#SEC_TS} chars
-  POSTGRES_PASSWORD          ${#SEC_PG} chars
-  KEYCLOAK_CLIENT_SECRET     ${#SEC_KC} chars
   ANTHROPIC_API_KEY          ${#SEC_ANTH} chars
   OPENAI_API_KEY             ${#SEC_OAI} chars
   OPENCLAW_AUTH_TOKEN        ${#SEC_OCT} chars
@@ -77,12 +64,22 @@ Secrets (content hidden; only lengths shown):
 
 Variables (set in-the-clear; visible in GH UI + Actions logs):
   DEPLOY_HOST                = ${VAR_HOST}
-  DEPLOY_USER                = ${VAR_USER}
-  DOCKER_SOCKET_GID          = ${VAR_GID}
-  POSTGRES_USER              = ${VAR_PGU}
-  POSTGRES_DB                = ${VAR_PGDB}
   GITHUB_APP_ID              = ${VAR_APP}
   GITHUB_APP_INSTALLATION_ID = ${VAR_INST}
+EOF
+
+if [ -n "$VAR_USER" ]; then
+  echo "  DEPLOY_USER                = ${VAR_USER}"
+else
+  echo "  DEPLOY_USER                = (skipped — defaults to 'ubuntu')"
+fi
+if [ -n "$VAR_GID" ]; then
+  echo "  DOCKER_SOCKET_GID          = ${VAR_GID}"
+else
+  echo "  DOCKER_SOCKET_GID          = (skipped — defaults to 999)"
+fi
+
+cat <<EOF
 
 Repo-level actions permission:
   default_workflow_permissions = write (required for GHCR push)
@@ -93,23 +90,19 @@ read -rp "Proceed? [y/N] " CONF
 
 # --- Push secrets (values piped via stdin; never in argv) ---
 echo "==> Pushing secrets"
-printf '%s' "$SEC_TS"   | gh secret set TS_AUTHKEY             --repo "$REPO"
-printf '%s' "$SEC_PG"   | gh secret set POSTGRES_PASSWORD      --repo "$REPO"
-printf '%s' "$SEC_KC"   | gh secret set KEYCLOAK_CLIENT_SECRET --repo "$REPO"
-printf '%s' "$SEC_ANTH" | gh secret set ANTHROPIC_API_KEY      --repo "$REPO"
-printf '%s' "$SEC_OAI"  | gh secret set OPENAI_API_KEY         --repo "$REPO"
-printf '%s' "$SEC_OCT"  | gh secret set OPENCLAW_AUTH_TOKEN    --repo "$REPO"
+printf '%s' "$SEC_TS"   | gh secret set TS_AUTHKEY            --repo "$REPO"
+printf '%s' "$SEC_ANTH" | gh secret set ANTHROPIC_API_KEY     --repo "$REPO"
+printf '%s' "$SEC_OAI"  | gh secret set OPENAI_API_KEY        --repo "$REPO"
+printf '%s' "$SEC_OCT"  | gh secret set OPENCLAW_AUTH_TOKEN   --repo "$REPO"
 gh secret set GITHUB_APP_PRIVATE_KEY --repo "$REPO" < "$PEM_PATH"
 
-# --- Push variables (visible in UI; --body is fine, not sensitive) ---
+# --- Push variables ---
 echo "==> Pushing variables"
 gh variable set DEPLOY_HOST                --repo "$REPO" --body "$VAR_HOST"
-gh variable set DEPLOY_USER                --repo "$REPO" --body "$VAR_USER"
-gh variable set DOCKER_SOCKET_GID          --repo "$REPO" --body "$VAR_GID"
-gh variable set POSTGRES_USER              --repo "$REPO" --body "$VAR_PGU"
-gh variable set POSTGRES_DB                --repo "$REPO" --body "$VAR_PGDB"
 gh variable set GITHUB_APP_ID              --repo "$REPO" --body "$VAR_APP"
 gh variable set GITHUB_APP_INSTALLATION_ID --repo "$REPO" --body "$VAR_INST"
+[ -n "$VAR_USER" ] && gh variable set DEPLOY_USER       --repo "$REPO" --body "$VAR_USER"
+[ -n "$VAR_GID" ]  && gh variable set DOCKER_SOCKET_GID --repo "$REPO" --body "$VAR_GID"
 
 # --- Workflow permissions at the repo level ---
 echo "==> Setting repo-level default workflow permissions to 'write' (GHCR push)"

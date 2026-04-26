@@ -9,11 +9,13 @@
 # --host        Tailscale hostname of the target host (required)
 # --user        SSH user on the target host (default: $DEPLOY_USER or "ubuntu")
 # --image-tag   Image tag to pull (default: latest)
-# --config-dir  If set, rsync dev.env / openclaw.env / github-app.pem from
-#               this directory onto the host before compose pull.
-#               Use this when the deploy workflow has rendered config files
-#               from GH secrets. Omit for manual re-deploys where the host's
-#               .env files are already in place.
+# --config-dir  If set, rsync openclaw.env + github-app.pem from this
+#               directory onto the host before compose pull. Use this when
+#               the deploy workflow has rendered config files from GH
+#               secrets. Omit for manual re-deploys.
+#               (The dev compose stack reads no env — postgres creds +
+#               keycloak client secret are baked into compose.yml as
+#               literals — so only openclaw needs a rendered .env.)
 # --services    Which compose projects to deploy: dev, openclaw, or dev,openclaw
 #               (default: dev,openclaw)
 # --dry-run     Print every rsync/ssh command that WOULD run, exit 0
@@ -94,19 +96,19 @@ echo "==> Syncing compose config to ${HOST}"
 run "rsync -a --delete ${REPO_ROOT}/infrastructure/compose/ ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/"
 
 # -----------------------------------------------------------------------------
-# 2. Ship rendered .env files + PEM if --config-dir was passed.
-#    (The GH Actions workflow renders these from repo secrets/vars.)
+# 2. Ship rendered openclaw.env + PEM if --config-dir was passed.
+#    (The GH Actions workflow renders these from repo secrets/vars.
+#    The dev compose stack reads no env, so only openclaw needs this.)
 # -----------------------------------------------------------------------------
 if [ -n "$CONFIG_DIR" ]; then
   echo "==> Shipping rendered host config from ${CONFIG_DIR}"
-  for f in dev.env openclaw.env github-app.pem; do
+  for f in openclaw.env github-app.pem; do
     if [ ! -f "${CONFIG_DIR}/${f}" ]; then
       echo "ERROR: ${CONFIG_DIR}/${f} not found" >&2
       exit 5
     fi
   done
   run "ssh ${USER_NAME}@${HOST} 'install -d -m 0700 /srv/aca/secrets'"
-  run "rsync -a ${CONFIG_DIR}/dev.env      ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/dev/.env"
   run "rsync -a ${CONFIG_DIR}/openclaw.env ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/openclaw/.env"
   run "rsync -a --chmod=0600 ${CONFIG_DIR}/github-app.pem ${USER_NAME}@${HOST}:/srv/aca/secrets/github-app.pem"
 fi

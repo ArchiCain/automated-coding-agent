@@ -113,7 +113,7 @@ sequenceDiagram
   GH->>CI: push event (unless paths-ignored)
   CI->>CI: build each image (linux/amd64, matrix of 5)
   CI->>GHCR: push {sha} + latest tags (auth: GITHUB_TOKEN)
-  CI->>CI: render dev.env + openclaw.env + github-app.pem from secrets/vars
+  CI->>CI: render openclaw.env + github-app.pem from secrets/vars
   CI->>CI: tailscale up via TS_AUTHKEY (ephemeral tag:ci node)
   CI->>Host: rsync infrastructure/compose/ → /srv/aca/
   CI->>Host: rsync rendered .env files + PEM → /srv/aca/
@@ -155,10 +155,12 @@ else on each deploy.
 ### On the laptop — one-off
 
 1. Populate `.env` at the repo root using `.env.template` as the guide.
-   Required values include `TS_AUTHKEY`, `DEPLOY_HOST` (the tailnet
-   hostname you'll pick in the next section), `DEPLOY_USER`,
-   `DOCKER_SOCKET_GID`, API keys, Postgres credentials, GitHub App IDs,
-   and the path to the App PEM.
+   Eight required values: `TS_AUTHKEY`, `DEPLOY_HOST`,
+   `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENCLAW_AUTH_TOKEN`,
+   `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, and
+   `GITHUB_APP_PRIVATE_KEY_PATH`. Two optional overrides
+   (`DEPLOY_USER` defaults to `ubuntu`; `DOCKER_SOCKET_GID` defaults to
+   `999`).
 2. `task setup:check` — fails loudly if anything's missing or still at
    a placeholder.
 3. `task gh:setup` — shows a preview (character counts, no values

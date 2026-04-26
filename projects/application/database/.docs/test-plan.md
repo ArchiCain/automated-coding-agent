@@ -16,8 +16,8 @@ projects.
 - [ ] Container reaches `healthy` state when `pg_isready -U postgres` succeeds
       (healthcheck: 5s interval, 10 retries)
       (`services.postgres.healthcheck`).
-- [ ] `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` arrive from the project `.env`
-      file via `${...}` interpolation on `services.postgres.environment`.
+- [ ] `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` are baked as literals
+      on `services.postgres.environment` in `infrastructure/compose/dev/compose.yml`.
 - [ ] Named volume (`postgres-data` — persists across `task dev:down`; wiped by
       `task dev:down:clean`) is mounted at `/var/lib/postgresql/data`
       (`services.postgres.volumes`, `volumes.postgres-data`).

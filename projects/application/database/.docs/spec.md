@@ -12,7 +12,7 @@ The `postgres` compose service runs a single Postgres 16 container from the `pgv
 
 ### Credentials
 
-`POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` are set directly on the `postgres` service's `environment` block with `${...}` interpolation from the project `.env` file. Defaults in `.env.template` are `postgres` / `postgres` / `app`. The backend reads the same values as `DATABASE_USERNAME`, `DATABASE_PASSWORD`, and `DATABASE_NAME`; Keycloak reads them as `KC_DB_USERNAME`, `KC_DB_PASSWORD`, and `KC_DB_URL_DATABASE`. All three are wired from the same `.env` entries in `infrastructure/compose/dev/compose.yml`.
+`POSTGRES_USER` (`postgres`), `POSTGRES_PASSWORD` (`postgres`), and `POSTGRES_DB` (`app`) are baked into the `postgres` service's `environment` block as literals in `infrastructure/compose/dev/compose.yml`. The backend reads the same values as `DATABASE_USERNAME`, `DATABASE_PASSWORD`, and `DATABASE_NAME` (also literals on the `backend` service); Keycloak reads them as `KC_DB_USERNAME`, `KC_DB_PASSWORD`, `KC_DB_URL_DATABASE` (also literals on the `keycloak` service). The dev compose stack reads no `.env` file — `compose.yml` is self-contained for these values.
 
 ### Persistence
 
@@ -26,7 +26,7 @@ The compose service does not create schemas or extensions. The backend's TypeORM
 
 - [ ] `task dev:up` starts a Postgres 16 container (`pgvector/pgvector:pg16`) reachable on port 5432 from other services on the compose network.
 - [ ] The `postgres` service does not publish port 5432 to the host.
-- [ ] `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` reach the container from the project `.env` file via `${...}` interpolation.
+- [ ] `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` reach the container as literals from the `postgres` service `environment:` block in `infrastructure/compose/dev/compose.yml`.
 - [ ] The container becomes healthy only after `pg_isready -U postgres` succeeds (5s interval, up to 10 retries).
 - [ ] The named volume `postgres-data` is mounted at `/var/lib/postgresql/data` and data survives `task dev:down && task dev:up`.
 - [ ] `task dev:down:clean` removes the volume so the next `task dev:up` starts with an empty database.
