@@ -67,6 +67,17 @@ services:
     volumes:
       - workspace:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
+      # Mount the host deploy directory at the SAME path as on the host so
+      # `docker compose -f /srv/aca/.../compose.yml ...` resolves `./relative`
+      # bind-mounts (like the dev frontend's `./nginx.conf`) to a path the
+      # host's docker daemon can actually find. Without this, devops invoking
+      # compose from inside the gateway breaks every sandbox/dev container
+      # that uses a relative bind-mount: compose evaluates `./nginx.conf`
+      # against the gateway's view (e.g. `/workspace/repo/...`), passes that
+      # path to the daemon, and the daemon fails with "not a directory".
+      # Read-only because devops is meant to RUN compose against these files,
+      # not edit them — edits flow through git.
+      - /srv/aca:/srv/aca:ro
 
   git-sync:
     build:
