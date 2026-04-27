@@ -108,7 +108,7 @@ jobs:
           cat > /tmp/config/openclaw.env <<EOF
           OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama-local}
           OPENCLAW_AUTH_TOKEN=${OPENCLAW_AUTH_TOKEN}
-          OPENCLAW_ALLOWED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,http://host-machine:3001
+          OPENCLAW_ALLOWED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,http://host-machine:3001,https://host-machine.heron-bearded.ts.net
           GITHUB_APP_ID=${GITHUB_APP_ID}
           GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID}
           GITHUB_APP_PRIVATE_KEY_HOST_PATH=/srv/aca/secrets/github-app.pem
