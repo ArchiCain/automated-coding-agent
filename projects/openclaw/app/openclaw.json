@@ -31,7 +31,18 @@
       "ollama": {
         "apiKey": "ollama-local",
         "baseUrl": "http://graphics-machine:11434",
-        "api": "ollama"
+        "api": "ollama",
+        "models": [
+          {
+            "id": "qwen-coder-next-256k",
+            "name": "qwen-coder-next-256k",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 262144,
+            "maxTokens": 32768
+          }
+        ]
       }
     }
   },
