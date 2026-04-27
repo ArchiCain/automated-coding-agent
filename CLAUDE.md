@@ -1,5 +1,52 @@
 # CLAUDE.md
 
+## Active work — local-LLM migration in progress
+
+This repo is mid-transition. Two parallel changes are in flight; a new
+session should expect the user to want to talk about either or both.
+
+### 1. Cloud APIs → self-hosted two-machine LLM stack
+
+Current `projects/openclaw/app/openclaw.json` reasons via Anthropic + uses
+OpenAI for embeddings. Target stack:
+
+| Role | Machine | Model | Status |
+|---|---|---|---|
+| Brain (primary coding LLM) | `graphics-machine` (Windows + RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-64k` (Qwen3-Coder family derivative, 64K context) served via Ollama on `:11434` | Being installed now. Base model + quant TBD-confirmed via `ollama list`. |
+| Memory (embeddings) | `host-machine` (Mac mini, Ubuntu) | `bge-m3-8k` (BAAI bge-m3 with 8K context) served via Ollama on `:11434` | Already installed per `ideas/openclaw-local-llm-hybrid.md`. |
+| Fallback LLM (optional, when graphics-machine offline) | `host-machine` | `qwen-coder-32k` (Qwen2.5-Coder-32B Q6_K, CPU-only) | Already installed. User TBD on whether to wire fallback. |
+
+References:
+- `ideas/openclaw-local-llm-hybrid.md` — architecture rationale, hardware inventory, model selection
+- `ideas/graphics-machine-setup.md` — handoff doc for the agent setting up graphics-machine on the Windows side
+- `infrastructure/.docs/ecosystem.md` — ecosystem map (host roles, deploy flow)
+
+### 2. Current OpenClaw → polished OpenClaw migration
+
+The user has a polished OpenClaw implementation in a **separate repo**
+that will be migrated **into** this repo, completely replacing
+`projects/openclaw/`. The two changes interact: after the polished
+OpenClaw lands, its provider config gets adapted to call the local-LLM
+endpoints instead of cloud APIs.
+
+If the user says **"here's my polished openclaw project that I want to
+migrate into this project"** (or similar), they mean: import the
+contents of their other repo into `projects/openclaw/` and adapt for
+the local-LLM topology. Migration playbook + open questions:
+`ideas/migration-plan-polished-openclaw.md`. Read it before proposing
+how to do the import.
+
+### What survives the migration unchanged
+
+- `infrastructure/compose/` — dev + openclaw + sandbox compose stacks
+- `.github/workflows/deploy-dev.yml` — auto-deploy on push to dev
+- `scripts/{deploy,env-check,gh-setup}.sh` — deploy + bootstrap tooling
+- Root `.env`-driven GH Actions secret/var workflow (`task gh:setup`)
+- `host-machine` / `graphics-machine` host-role naming throughout docs
+
+The polished OpenClaw will have to fit into the existing
+infrastructure shape, not the other way around.
+
 ## Division of labor
 
 This repo has **two autonomous coding agents** plus a **frozen reference project**. Each has a clear scope:

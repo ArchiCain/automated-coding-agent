@@ -1,5 +1,15 @@
 # OpenClaw — Overview
 
+> **⚠️ Pending replacement.** The contents of `projects/openclaw/` are
+> scaffolding that the operator plans to replace wholesale with a
+> polished OpenClaw implementation from another repo. After the
+> migration, the LLM provider config will be swapped from cloud APIs
+> (Anthropic + OpenAI) to the local two-machine stack (graphics-machine
+> for generation, host-machine for embeddings). Background and
+> open questions: `ideas/migration-plan-polished-openclaw.md`. Until
+> then, this overview describes the **current scaffolding only**, not
+> the target state.
+
 ## What This Is
 
 OpenClaw is the active agent runtime for this repo — a four-agent orchestration stack (orchestrator, devops, worker, tester) built on the `ghcr.io/openclaw/openclaw` gateway. Each agent is an OpenClaw persona with its own workspace, memory, and skill allowlist. A single human user drives documentation-driven development of `projects/application/` through conversation with the orchestrator, who delegates to specialists.

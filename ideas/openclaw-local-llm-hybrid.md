@@ -61,6 +61,26 @@ OpenClaw provider config, roughly:
 - Main model → `http://gaming-pc:11434` model `qwen-coder-72b` (primary), `http://mac-mini:11434` model `qwen-coder-32k` (fallback)
 - Memory embedding → `http://mac-mini:11434` model `bge-m3-8k`
 
+## Revisions to the original plan
+
+**2026-04-26.** Two updates to the design above as the operator iterates:
+
+- **Graphics-machine OS:** stays on Windows (no Ubuntu dual-boot). Ollama
+  has native Windows support; gaming and inference are mutually exclusive
+  by operator policy (Ollama quit from tray when gaming). See
+  `ideas/graphics-machine-setup.md` for the handoff doc.
+- **Brain model:** the agent setting up graphics-machine could not get
+  Qwen2.5-Coder-72B Q8_0 working from Ollama's library, and pivoted to
+  a Qwen3-Coder-family derivative the operator named `qwen-coder-next-64k`
+  (Modelfile-baked 64K context). Base model + quant TBD-confirmed via
+  `ollama list`. Likely Qwen3-Coder-30B-A3B (MoE, 3B active) which
+  would fit comfortably in 96 GB RAM and run faster than the dense 72B.
+- **OpenClaw replacement coming.** The current `projects/openclaw/` will
+  be replaced wholesale by a polished OpenClaw the operator is bringing
+  in from another repo. Migration plan + open questions:
+  `ideas/migration-plan-polished-openclaw.md`. Provider config swap
+  (cloud APIs → local stack) is part of that migration.
+
 ## Current state (as of 2026-04-24)
 
 **Done on mac-mini:**
