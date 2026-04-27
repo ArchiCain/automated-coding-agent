@@ -85,9 +85,10 @@ if [ "$DRY_RUN" -eq 0 ]; then
   fi
   # tailscale up returns before the netmap is fully populated; the GH Actions
   # runner often needs a couple seconds before peers show up. Retry with a
-  # short backoff instead of a one-shot check.
+  # short backoff. Match against the text output's hostname column — JSON
+  # whitespace varies and is fragile to grep against.
   TS_TRIES=0
-  until sudo tailscale status --json 2>/dev/null | grep -q "\"HostName\":\"${HOST}\""; do
+  until sudo tailscale status 2>/dev/null | awk '{print $2}' | grep -qFx "${HOST}"; do
     TS_TRIES=$((TS_TRIES + 1))
     if [ "$TS_TRIES" -ge 20 ]; then
       echo "ERROR: host '$HOST' not reachable via Tailscale after 40s. Run 'tailscale status' to check." >&2
