@@ -12,7 +12,7 @@ OpenAI for embeddings. Target stack:
 
 | Role | Machine | Model | Status |
 |---|---|---|---|
-| Brain (primary coding LLM) | `graphics-machine` (Windows + RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-64k` (Qwen3-Coder family derivative, 64K context) served via Ollama on `:11434` | Being installed now. Base model + quant TBD-confirmed via `ollama list`. |
+| Brain (primary coding LLM) | `graphics-machine` (Windows + RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active per token, Q4_K_M, 48 GB), 256K context baked in via Modelfile. Served via Ollama on `:11434`. | Installed. |
 | Memory (embeddings) | `host-machine` (Mac mini, Ubuntu) | `bge-m3-8k` (BAAI bge-m3 with 8K context) served via Ollama on `:11434` | Already installed per `ideas/openclaw-local-llm-hybrid.md`. |
 | Fallback LLM (optional, when graphics-machine offline) | `host-machine` | `qwen-coder-32k` (Qwen2.5-Coder-32B Q6_K, CPU-only) | Already installed. User TBD on whether to wire fallback. |
 

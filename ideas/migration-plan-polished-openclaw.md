@@ -62,10 +62,11 @@ will be needed:
 
 1. **LLM provider config (in whatever the polished version's equivalent
    of `openclaw.json` is)** — point reasoning at
-   `http://graphics-machine:11434` with model `qwen-coder-next-64k`
-   (or whatever the agent on the Windows side actually named it),
-   point embeddings at `http://host-machine:11434` with model
-   `bge-m3-8k`. The exact JSON shape depends on the polished version.
+   `http://graphics-machine:11434` with model `qwen-coder-next-256k`
+   (derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M`, Qwen3-Next
+   80B MoE / 3B active), point embeddings at
+   `http://host-machine:11434` with model `bge-m3-8k`. The exact JSON
+   shape depends on the polished version.
 
 2. **Optional: failover provider** — if the polished OpenClaw supports
    multi-provider failover (the docs in `ideas/openclaw-local-llm-hybrid.md`

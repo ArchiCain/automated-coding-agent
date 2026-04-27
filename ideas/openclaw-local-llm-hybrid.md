@@ -71,10 +71,15 @@ OpenClaw provider config, roughly:
   `ideas/graphics-machine-setup.md` for the handoff doc.
 - **Brain model:** the agent setting up graphics-machine could not get
   Qwen2.5-Coder-72B Q8_0 working from Ollama's library, and pivoted to
-  a Qwen3-Coder-family derivative the operator named `qwen-coder-next-64k`
-  (Modelfile-baked 64K context). Base model + quant TBD-confirmed via
-  `ollama list`. Likely Qwen3-Coder-30B-A3B (MoE, 3B active) which
-  would fit comfortably in 96 GB RAM and run faster than the dense 72B.
+  `frob/qwen3-coder-next:80b-a3b-q4_K_M` — Qwen3-Next 80B MoE with
+  3B active params per token, Q4_K_M quant, 48 GB on disk. Wrapped in
+  a Modelfile derivative named `qwen-coder-next-256k` with `num_ctx`
+  baked to 262144. Net result: bigger total parameter count than the
+  original 72B-dense plan, faster generation (3B active makes inference
+  fast on partial GPU offload), and a massive 256K context window for
+  codebase-aware tasks. The Q4 quant trades some accuracy headroom for
+  the comfortable memory footprint (~48 GB weights + KV cache fits
+  inside 96 GB with room for OS overhead).
 - **OpenClaw replacement coming.** The current `projects/openclaw/` will
   be replaced wholesale by a polished OpenClaw the operator is bringing
   in from another repo. Migration plan + open questions:
@@ -92,13 +97,22 @@ OpenClaw provider config, roughly:
 - Generation sanity-check passed: 1.24 tok/s, output coherent
 - Embedding sanity-check passed: 1024-dim vectors returned
 
-**Not yet started — gaming PC side:**
-- Install Ubuntu on the Linux drive (already planned dual-boot)
-- Install NVIDIA proprietary drivers + CUDA runtime
-- Install Ollama, configure for GPU
-- Pull `qwen2.5-coder:72b-instruct-q4_K_M`
-- Create `qwen-coder-72b-32k` Modelfile with `num_ctx 32768`
-- Validate: `ollama ps` shows GPU layers loaded; benchmark tok/s
+**Done — graphics-machine (gaming PC) side, 2026-04-26:**
+- Installed Ollama for Windows directly (Ubuntu dual-boot abandoned per
+  the revisions note above).
+- Joined tailnet as `graphics-machine` via Tailscale for Windows.
+- `OLLAMA_HOST=0.0.0.0:11434`, `OLLAMA_KEEP_ALIVE=24h`,
+  `OLLAMA_NUM_PARALLEL=1`, `OLLAMA_MAX_LOADED_MODELS=1` set as user-level
+  env vars; firewall rule allows port 11434 from the Tailscale CGNAT
+  range only.
+- Pulled `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B
+  active, Q4_K_M, 48 GB on disk) instead of the originally-planned
+  Qwen2.5-Coder-72B Q4_K_M.
+- Created `qwen-coder-next-256k` Modelfile derivative with
+  `num_ctx 262144` instead of 32K — the model's hybrid attention makes
+  the long context tractable on this hardware.
+- Validated: model loads, generates coherent code over the tailnet from
+  host-machine.
 
 **Not yet started — OpenClaw side:**
 - Stand up OpenClaw (deployment method TBD — last prototype used Helm on k3s, but that's wiped; user may choose a simpler install path now)

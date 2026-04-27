@@ -57,8 +57,23 @@ escalate — the model choice below assumes them.
 A reachable Ollama HTTP endpoint at `http://graphics-machine:11434` on
 the user's tailnet, serving:
 
-- `qwen-coder-72b-32k` — a derivative of `qwen2.5-coder:72b-instruct-q8_0`
-  with 32K context baked in via Modelfile.
+- `qwen-coder-next-256k` — a derivative of
+  `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE with 3B
+  active params per token, Q4_K_M quant) with 256K context baked in
+  via Modelfile.
+
+> **Why this model.** Qwen3-Next 80B-A3B is the strongest open-source
+> coder that fits on a single non-data-center machine in late April
+> 2026. The MoE architecture (3B active per token out of 80B total)
+> means generation speed is comparable to a small dense model while
+> quality reflects the much larger total parameter count. Q4_K_M was
+> chosen over higher quants because the operator's machine has 96 GB
+> RAM and Q8 (~80 GB) would leave too little headroom for the 256K KV
+> cache + OS overhead. The earlier plan to use Qwen2.5-Coder-72B at
+> Q8_0 was abandoned when the agent setting this up couldn't get that
+> exact tag from Ollama's library; the Qwen3-Next pivot is an upgrade
+> on multiple axes (larger total params, newer architecture, much
+> larger context window).
 
 The acceptance checklist at the end of this doc enumerates every probe
 that must pass before declaring the setup done.
@@ -207,47 +222,51 @@ Expected: `Direction = Inbound`, `Action = Allow`, `Enabled = True`.
 
 ## Step 5 — Pull the model
 
-The chosen model and quant:
+The chosen model:
 
-- **Model:** `qwen2.5-coder:72b-instruct-q8_0`
-- **Size on disk:** ~76 GB
-- **Why this model:** Qwen2.5-Coder-72B is the open-source accuracy
-  ceiling for code that fits in this machine's 96 GB of RAM. Larger
-  models (DeepSeek-Coder-V2 236B MoE, DeepSeek-V3 671B,
-  Qwen3-Coder-480B) do not fit at any reasonable quant.
-- **Why Q8_0** instead of the more popular Q4_K_M: Q8_0 is
-  indistinguishable from full FP16 in coding evals. The original plan
-  for this machine called for Q4_K_M for VRAM headroom; the operator
-  has revised that to "absolute most accurate" — Q8 is the answer.
-  Trade-off: ~0.5–1 tok/s generation vs Q4's ~2–3 tok/s. Acceptable
-  for autonomous overnight coding runs.
+- **Model:** `frob/qwen3-coder-next:80b-a3b-q4_K_M`
+- **Architecture:** Qwen3-Next, MoE with 80B total params and 3B active
+  per token. Hybrid attention (linear + standard).
+- **Quant:** Q4_K_M
+- **Size on disk:** ~48 GB
+- **Why this model:** Qwen3-Next 80B-A3B is the strongest
+  fits-on-this-hardware coder available. The MoE 3B-active design
+  means inference compute is closer to a small dense model than to
+  the 80B total parameter count would suggest. Larger models
+  (DeepSeek-V3, Qwen3-Coder-480B) don't fit at any reasonable quant
+  on 96 GB RAM.
+- **Why Q4_K_M:** at higher quants (Q6 ~60 GB, Q8 ~80 GB) the working
+  set + 256K KV cache + Windows overhead becomes too tight on a 96 GB
+  box. Q4_K_M leaves comfortable headroom and the quality difference
+  vs Q8 is small for MoE models of this size.
 
-Pull it (downloads ~76 GB; this will take a while):
+Pull it (downloads ~48 GB; this will take a while):
 ```powershell
-ollama pull qwen2.5-coder:72b-instruct-q8_0
+ollama pull frob/qwen3-coder-next:80b-a3b-q4_K_M
 ```
 
 Verify:
 ```powershell
 ollama list
 ```
-Expected: a row for `qwen2.5-coder:72b-instruct-q8_0` with a SIZE
-column near 76 GB.
+Expected: a row for `frob/qwen3-coder-next:80b-a3b-q4_K_M` with a SIZE
+column near 48 GB.
 
 ---
 
-## Step 6 — Create the 32K-context derivative
+## Step 6 — Create the 256K-context derivative
 
 Ollama's default context window is 2048 tokens — far too small for
-real coding work. Bake 32K context into a named derivative model:
+real coding work. Bake 256K context into a named derivative model so
+OpenClaw can ask for the full window without per-call configuration:
 
-1. Create a file `qwen-coder-72b-32k.Modelfile` anywhere convenient
+1. Create a file `qwen-coder-next-256k.Modelfile` anywhere convenient
    (Documents is fine). Use Notepad or any text editor. Contents:
 
    ```
-   FROM qwen2.5-coder:72b-instruct-q8_0
+   FROM frob/qwen3-coder-next:80b-a3b-q4_K_M
 
-   PARAMETER num_ctx 32768
+   PARAMETER num_ctx 262144
 
    # Low-temperature for deterministic code-review / sync work.
    PARAMETER temperature 0.1
@@ -257,23 +276,25 @@ real coding work. Bake 32K context into a named derivative model:
 2. Create the derivative:
    ```powershell
    cd <directory containing the Modelfile>
-   ollama create qwen-coder-72b-32k -f qwen-coder-72b-32k.Modelfile
+   ollama create qwen-coder-next-256k -f qwen-coder-next-256k.Modelfile
    ```
 
 3. Verify:
    ```powershell
    ollama list
    ```
-   Expected: a new row for `qwen-coder-72b-32k`. It shares weights
-   with the base, so the on-disk footprint barely grows.
+   Expected: a new row for `qwen-coder-next-256k`. It shares weights
+   with the base, so the on-disk footprint barely grows (both rows
+   show ~48 GB).
 
-> **VRAM/RAM headroom note.** At 32K context, the 72B KV cache is
-> roughly 10–11 GB at FP16. With ~76 GB for weights and Windows OS
-> overhead of 4–6 GB, total memory pressure is ~90–93 GB on a 96 GB
-> machine. Tight but workable. If the model fails to load with
-> out-of-memory errors, fall back to Q6_K (`qwen2.5-coder:72b-instruct-q6_K`,
-> ~58 GB) — quality drop vs Q8 is minor; total memory pressure drops
-> to ~75 GB.
+> **Memory headroom note.** Qwen3-Next is a hybrid-attention model, so
+> KV cache scaling at long context is more efficient than for a vanilla
+> transformer. 256K context is workable on this machine alongside the
+> 48 GB weights; if it fails to load with out-of-memory errors, drop
+> `num_ctx` to 131072 (128K) or 65536 (64K) and re-create the
+> derivative. Most coding tasks don't need 256K — 64K is plenty for
+> almost everything; the bigger window is for whole-codebase summary /
+> review work.
 
 ---
 
@@ -282,7 +303,7 @@ real coding work. Bake 32K context into a named derivative model:
 Generate something to confirm everything is wired correctly:
 
 ```powershell
-ollama run qwen-coder-72b-32k "Write a Python function that returns the nth Fibonacci number iteratively. Return only the function, no commentary."
+ollama run qwen-coder-next-256k "Write a Python function that returns the nth Fibonacci number iteratively. Return only the function, no commentary."
 ```
 
 What to expect:
@@ -311,13 +332,13 @@ curl -sS http://graphics-machine:11434/api/tags
 
 # 2. Generation works?
 curl -sS http://graphics-machine:11434/api/generate \
-  -d '{"model":"qwen-coder-72b-32k","prompt":"hello","stream":false}'
+  -d '{"model":"qwen-coder-next-256k","prompt":"hello","stream":false}'
 ```
 
 Expected:
 
-- `/api/tags` returns JSON listing both `qwen2.5-coder:72b-instruct-q8_0`
-  and `qwen-coder-72b-32k`.
+- `/api/tags` returns JSON listing both `frob/qwen3-coder-next:80b-a3b-q4_K_M`
+  and `qwen-coder-next-256k`.
 - `/api/generate` returns JSON with a `response` field containing a
   generation. (May take a while for the first call after a cold
   start.)
@@ -340,11 +361,11 @@ box is checked.**
 - [ ] `[Environment]::GetEnvironmentVariable("OLLAMA_HOST", "User")` returns `0.0.0.0:11434`
 - [ ] `[Environment]::GetEnvironmentVariable("OLLAMA_KEEP_ALIVE", "User")` returns `24h`
 - [ ] `Get-NetFirewallRule -DisplayName "Ollama (tailnet)"` exists, Enabled, Allow, port 11434, RemoteAddress 100.64.0.0/10
-- [ ] `ollama list` shows `qwen2.5-coder:72b-instruct-q8_0`
-- [ ] `ollama list` shows `qwen-coder-72b-32k`
-- [ ] Local `ollama run qwen-coder-72b-32k "…"` produces coherent code
+- [ ] `ollama list` shows `frob/qwen3-coder-next:80b-a3b-q4_K_M`
+- [ ] `ollama list` shows `qwen-coder-next-256k`
+- [ ] Local `ollama run qwen-coder-next-256k "…"` produces coherent code
 - [ ] From host-machine: `curl http://graphics-machine:11434/api/tags` returns JSON listing both models
-- [ ] From host-machine: a generate call against `qwen-coder-72b-32k` returns a non-empty `response` field
+- [ ] From host-machine: a generate call against `qwen-coder-next-256k` returns a non-empty `response` field
 
 ## Hand-back
 
@@ -353,7 +374,7 @@ When complete, report to the operator:
 1. The exact tailnet hostname (`graphics-machine`, confirmed in
    Tailscale admin).
 2. The two model names available on the endpoint
-   (`qwen2.5-coder:72b-instruct-q8_0`, `qwen-coder-72b-32k`).
+   (`frob/qwen3-coder-next:80b-a3b-q4_K_M`, `qwen-coder-next-256k`).
 3. Any deviations from this guide (e.g., fallback to Q6_K, different
    firewall scope). The operator will use these to update OpenClaw's
    provider config on host-machine.
