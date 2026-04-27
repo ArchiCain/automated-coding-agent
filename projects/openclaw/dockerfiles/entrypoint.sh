@@ -90,30 +90,26 @@ if [ -d /workspace/repo/.git ]; then
   fi
 fi
 
-# ---------- Wipe gateway config backups so the synced repo always wins ----------
+# ---------- Wipe stale openclaw.json + backups so the synced repo always wins ----------
 # The gateway maintains rolling backups (`openclaw.json.bak`, `.last-good`,
 # `.clobbered.<ts>`) and on startup will *auto-restore* from `.last-good` if it
 # considers our seeded config to be "missing meta". On the first deploy of a
 # new shape (per-agent skills allowlist, plugin entries, mcp.servers) it
 # silently reverted to a previous boot's clobbered state, dropping our intent.
 #
-# Strategy: wipe every backup before we copy. The seeded openclaw.json from
-# the synced repo is the single source of truth; if the gateway mutates it,
-# we'll re-seed the next boot. Backups buy nothing here — git is the backup.
-echo "Wiping stale openclaw.json backups under $OPENCLAW_STATE_DIR..."
-rm -f "$OPENCLAW_STATE_DIR"/openclaw.json.bak* \
+# Strategy: wipe every backup AND the live config before plugin install. The
+# seeded openclaw.json from the synced repo is reapplied below.
+#
+# Why wipe the live config (not just backups): `openclaw plugins install`
+# parses the existing config first and bails with "plugin not found" if the
+# config references a slot/allow entry whose plugin isn't installed yet. On a
+# clean state dir there's no config, so install proceeds. We use the same
+# strategy on every boot — config is reseeded from git after install.
+echo "Wiping live openclaw.json + stale backups under $OPENCLAW_STATE_DIR..."
+rm -f "$OPENCLAW_STATE_DIR"/openclaw.json \
+      "$OPENCLAW_STATE_DIR"/openclaw.json.bak* \
       "$OPENCLAW_STATE_DIR"/openclaw.json.last-good \
       "$OPENCLAW_STATE_DIR"/openclaw.json.clobbered.*
-
-# ---------- Seed openclaw.json from the synced repo, falling back to /app ----------
-
-if [ -f "$REPO_APP_DIR/openclaw.json" ]; then
-  echo "Using openclaw.json from synced repo: $REPO_APP_DIR/openclaw.json"
-  cp "$REPO_APP_DIR/openclaw.json" "$OPENCLAW_STATE_DIR/openclaw.json"
-else
-  echo "Using openclaw.json from image baseline: /app/openclaw.json"
-  cp /app/openclaw.json "$OPENCLAW_STATE_DIR/openclaw.json"
-fi
 
 # ---------- Skills: prefer synced repo, fallback to /app/skills ----------
 # `skills.load.extraDirs: ["./skills"]` resolves relative to the gateway's
@@ -202,11 +198,18 @@ fi
 
 # ---------- Pinned install: Honcho memory plugin ----------
 # `RUN openclaw plugins install ...` in the Dockerfile silently no-ops at
-# build time (gateway state dirs not yet initialized). Runtime install works.
-# We pin a specific version and force-install on every boot so deploys can't
-# silently drift to whatever ClawHub had last time the volume was wiped.
+# build time (gateway state dirs not yet initialized). Runtime install works,
+# but only if openclaw.json doesn't reference openclaw-honcho yet — the CLI
+# parses config first and refuses to install when a slot points at a plugin
+# that isn't installed. We've already wiped openclaw.json above; the synced
+# config gets reseeded after this block.
+#
+# Plugins install under $OPENCLAW_STATE_DIR/extensions/ (state-dir-aware) —
+# NOT under /home/node/.openclaw/. The version probe must read from the
+# state dir or it'll always think nothing is installed and reinstall every
+# boot (slow over the network, especially on flaky links).
 HONCHO_PLUGIN_VERSION="1.3.3"
-INSTALLED_VERSION=$(cat /home/node/.openclaw/extensions/openclaw-honcho/package.json 2>/dev/null \
+INSTALLED_VERSION=$(cat "$OPENCLAW_STATE_DIR/extensions/openclaw-honcho/package.json" 2>/dev/null \
   | grep -E '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/')
 
 if [ "$INSTALLED_VERSION" = "$HONCHO_PLUGIN_VERSION" ]; then
@@ -222,6 +225,20 @@ else
   else
     echo "WARNING: Honcho plugin install failed — gateway will boot without it." >&2
   fi
+fi
+
+# ---------- Seed openclaw.json from the synced repo, falling back to /app ----------
+# Done AFTER plugin install: the synced config references openclaw-honcho via
+# plugins.slots.memory; if it were in place during install, the CLI would
+# refuse to install the plugin. Subsequent `openclaw config set` / `openclaw
+# mcp set` calls below mutate this seeded config in place.
+
+if [ -f "$REPO_APP_DIR/openclaw.json" ]; then
+  echo "Using openclaw.json from synced repo: $REPO_APP_DIR/openclaw.json"
+  cp "$REPO_APP_DIR/openclaw.json" "$OPENCLAW_STATE_DIR/openclaw.json"
+else
+  echo "Using openclaw.json from image baseline: /app/openclaw.json"
+  cp /app/openclaw.json "$OPENCLAW_STATE_DIR/openclaw.json"
 fi
 
 # ---------- Idempotent register: GitNexus MCP server ----------
