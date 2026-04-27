@@ -115,7 +115,7 @@ run "ssh ${SSH_OPTS} ${USER_NAME}@${HOST} 'sudo install -d -m 0755 -o ${USER_NAM
 # 1. Ship compose config to the host.
 # -----------------------------------------------------------------------------
 echo "==> Syncing compose config to ${HOST}"
-run "rsync -a --delete -e 'ssh ${SSH_OPTS}' ${REPO_ROOT}/infrastructure/compose/ ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/"
+run "rsync -a --mkpath --delete -e 'ssh ${SSH_OPTS}' ${REPO_ROOT}/infrastructure/compose/ ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/"
 
 # -----------------------------------------------------------------------------
 # 2. Ship rendered openclaw.env + PEM if --config-dir was passed.
@@ -130,8 +130,8 @@ if [ -n "$CONFIG_DIR" ]; then
       exit 5
     fi
   done
-  run "rsync -a -e 'ssh ${SSH_OPTS}' ${CONFIG_DIR}/openclaw.env ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/openclaw/.env"
-  run "rsync -a --chmod=0600 -e 'ssh ${SSH_OPTS}' ${CONFIG_DIR}/github-app.pem ${USER_NAME}@${HOST}:/srv/aca/secrets/github-app.pem"
+  run "rsync -a --mkpath -e 'ssh ${SSH_OPTS}' ${CONFIG_DIR}/openclaw.env ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/openclaw/.env"
+  run "rsync -a --mkpath --chmod=0600 -e 'ssh ${SSH_OPTS}' ${CONFIG_DIR}/github-app.pem ${USER_NAME}@${HOST}:/srv/aca/secrets/github-app.pem"
 fi
 
 # -----------------------------------------------------------------------------
