@@ -83,10 +83,19 @@ if [ "$DRY_RUN" -eq 0 ]; then
     echo "ERROR: tailscale CLI not found; install it or run with --dry-run" >&2
     exit 3
   fi
-  if ! tailscale status --json 2>/dev/null | grep -q "\"HostName\":\"${HOST}\""; then
-    echo "ERROR: host '$HOST' not reachable via Tailscale. Run 'tailscale status' to check." >&2
-    exit 4
-  fi
+  # tailscale up returns before the netmap is fully populated; the GH Actions
+  # runner often needs a couple seconds before peers show up. Retry with a
+  # short backoff instead of a one-shot check.
+  TS_TRIES=0
+  until sudo tailscale status --json 2>/dev/null | grep -q "\"HostName\":\"${HOST}\""; do
+    TS_TRIES=$((TS_TRIES + 1))
+    if [ "$TS_TRIES" -ge 20 ]; then
+      echo "ERROR: host '$HOST' not reachable via Tailscale after 40s. Run 'tailscale status' to check." >&2
+      sudo tailscale status >&2 || true
+      exit 4
+    fi
+    sleep 2
+  done
 fi
 
 # -----------------------------------------------------------------------------
