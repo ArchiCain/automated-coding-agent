@@ -145,10 +145,19 @@ services:
       timeout: 3s
       retries: 5
 
-  # One-shot Alembic migration. Honcho's docker-compose example does NOT
-  # auto-migrate; their self-hosting README expects the operator to run
-  # `alembic upgrade head` manually. We bake it into the compose graph so
-  # a clean deploy works hands-off.
+  # One-shot Alembic migration + pgvector dimension fix. Honcho's
+  # docker-compose example does NOT auto-migrate; their self-hosting README
+  # expects the operator to run `alembic upgrade head` manually. We bake it
+  # into the compose graph so a clean deploy works hands-off.
+  #
+  # Post-migration step: Honcho v3.0.6's alembic migrations hardcode the
+  # pgvector embedding column at vector(1536) — the OpenAI default. Our
+  # `[vector_store].DIMENSIONS = 1024` config setting in honcho-config.toml
+  # is honored by Honcho's runtime checks but NOT by the migration. Without
+  # this fix, every Honcho save fails with
+  #   ValueError: expected 1536 dimensions, not 1024
+  # because bge-m3 emits 1024-dim. We re-ALTER the columns + rebuild HNSW
+  # indexes after alembic. Idempotent: skips if already 1024.
   honcho-migrate:
     image: ghcr.io/plastic-labs/honcho:v3.0.6
     restart: "no"
@@ -156,7 +165,33 @@ services:
       honcho-db:
         condition: service_healthy
     working_dir: /app
-    command: ["alembic", "upgrade", "head"]
+    entrypoint: ["python"]
+    command:
+      - -c
+      - |
+        import os, subprocess, sys, psycopg
+        rc = subprocess.call(["alembic", "upgrade", "head"])
+        if rc != 0:
+            sys.exit(rc)
+        url = os.environ["DB_CONNECTION_URI"].replace("+psycopg", "")
+        target = 1024
+        with psycopg.connect(url, autocommit=True) as conn, conn.cursor() as cur:
+            for tbl, idx in (("documents", "ix_documents_embedding_hnsw"),
+                             ("message_embeddings", "ix_message_embeddings_embedding_hnsw")):
+                cur.execute(
+                    "SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
+                    "WHERE attrelid = %s::regclass AND attname = 'embedding'", (tbl,))
+                cur_type = (cur.fetchone() or [""])[0]
+                if cur_type == f"vector({target})":
+                    print(f"{tbl}.embedding already vector({target}); skipping")
+                    continue
+                print(f"{tbl}.embedding is {cur_type!r}; migrating to vector({target})")
+                cur.execute(f"DROP INDEX IF EXISTS {idx}")
+                cur.execute(f"ALTER TABLE {tbl} ALTER COLUMN embedding TYPE vector({target})")
+                cur.execute(
+                    f"CREATE INDEX {idx} ON {tbl} USING hnsw (embedding vector_cosine_ops) "
+                    "WITH (m=16, ef_construction=64)")
+                print(f"  done.")
     volumes:
       - ./honcho-config.toml:/app/config.toml:ro
     environment:
