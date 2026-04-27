@@ -94,11 +94,15 @@ MAX_TOOL_ITERATIONS = 10
 # Dreaming is a heavyweight pattern-finding pass over message history. We
 # keep it disabled but still set the provider so import-time client lookup
 # succeeds — Honcho's client resolver is config-driven, not enabled-driven.
+# THINKING_BUDGET_TOKENS uses a `gt=0` validator on DreamSettings (unlike
+# DialecticLevelSettings, which accepts 0). Set to a positive value even
+# though qwen-coder has no thinking mode — the value is unused at runtime
+# while ENABLED=false.
 [dream]
 ENABLED = false
 PROVIDER = "custom"
 MODEL = "qwen-coder-32k"
-THINKING_BUDGET_TOKENS = 0
+THINKING_BUDGET_TOKENS = 1024
 MAX_TOOL_ITERATIONS = 1
 DEDUCTION_MODEL = "qwen-coder-32k"
 INDUCTION_MODEL = "qwen-coder-32k"
