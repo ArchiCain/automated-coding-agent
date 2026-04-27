@@ -1,5 +1,8 @@
 version: '3'
 
+# DEPLOY_HOST and DEPLOY_USER are sourced from the root .env via the root
+# Taskfile's `dotenv` (included Taskfiles can't declare their own dotenv).
+
 tasks:
   up:
     desc: Start OpenClaw stack (gateway + git-sync sidecar)
@@ -82,3 +85,42 @@ tasks:
           echo "Make sure the browser tab is open with the Gateway Token entered."
           exit 1
         '
+
+  pair:remote:
+    desc: Approve the pending device on the deployed host (over SSH to DEPLOY_HOST)
+    cmds:
+      - |
+        HOST="${DEPLOY_HOST:-host-machine}"
+        USER_NAME="${DEPLOY_USER:-scain}"
+        echo ""
+        echo "=== OpenClaw Device Pairing (remote: ${USER_NAME}@${HOST}) ==="
+        echo ""
+        echo "1. Open https://${HOST}.<your-tailnet>.ts.net (or http://${HOST}:3001) in your browser"
+        echo "2. Enter your OPENCLAW_AUTH_TOKEN as the Gateway Token"
+        echo "3. Click Connect — you'll see 'pairing required'"
+        echo "4. Keep the tab open while this task polls for the ephemeral request."
+        echo ""
+        # Same poll-and-approve loop as `pair`, but executed inside the
+        # gateway container running on the deploy host. The CLI is told to
+        # talk to ws://127.0.0.1:3001 explicitly because the in-image default
+        # config still expects port 18789.
+        ssh "${USER_NAME}@${HOST}" "docker exec -i openclaw-gateway-1 sh -c '
+          TIMEOUT=60
+          i=0
+          while [ \$i -lt \$TIMEOUT ]; do
+            RESP=\$(openclaw devices list --json --url ws://127.0.0.1:3001 --token \"\$OPENCLAW_AUTH_TOKEN\" 2>/dev/null)
+            REQ=\$(echo \"\$RESP\" | grep -oE \"\\\"requestId\\\":[[:space:]]*\\\"[^\\\"]+\\\"\" | head -1 | cut -d\"\\\"\" -f4)
+            if [ -n \"\$REQ\" ] && [ \"\$REQ\" != \"null\" ]; then
+              echo \"Found pending request: \$REQ\"
+              openclaw devices approve \"\$REQ\" --url ws://127.0.0.1:3001 --token \"\$OPENCLAW_AUTH_TOKEN\"
+              echo \"\"
+              echo \"Device approved. Browser should connect on its next retry.\"
+              exit 0
+            fi
+            i=\$((i + 1))
+            sleep 0.5
+          done
+          echo \"No pending pairing requests caught in 30s.\"
+          echo \"Make sure the browser tab is open with the Gateway Token entered.\"
+          exit 1
+        '"
