@@ -123,6 +123,18 @@ jobs:
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
+      - name: Load deploy SSH key into agent
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          eval "$(ssh-agent -s)" >/dev/null
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          # Persist agent socket + pid for the next step.
+          echo "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=${SSH_AGENT_PID}" >> "$GITHUB_ENV"
+          printf '%s\n' "$DEPLOY_SSH_KEY" | ssh-add - >/dev/null
+          ssh-add -l
+
       - env:
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
         run: |
