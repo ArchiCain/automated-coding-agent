@@ -2,11 +2,13 @@
 set -e
 
 # =============================================================================
-# OpenClaw entrypoint (Phase 2)
+# OpenClaw entrypoint
 #
-# OpenClaw runs four agents (orchestrator, devops, worker, tester). All four
-# reason via the Anthropic API using ANTHROPIC_API_KEY. Memory search uses
-# OpenAI embeddings via OPENAI_API_KEY.
+# All four agents (orchestrator, devops, worker, tester) reason via Ollama on
+# graphics-machine (qwen-coder-next-256k) and embed via Ollama on host-machine
+# (bge-m3-8k). Both endpoints are configured in openclaw.json. The gateway
+# only needs OLLAMA_API_KEY set so the bundled provider plugin activates;
+# any non-empty value works for self-hosted Ollama.
 #
 # Config and skills are sourced from the synced repo at /workspace/repo if
 # available (updated continuously by the git-sync sidecar), falling back to
@@ -15,13 +17,8 @@ set -e
 # restart without an image rebuild.
 # =============================================================================
 
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-  echo "ERROR: ANTHROPIC_API_KEY is not set. OpenClaw agents cannot reason without it." >&2
-  exit 1
-fi
-
-if [ -z "$OPENAI_API_KEY" ]; then
-  echo "ERROR: OPENAI_API_KEY is not set. Memory search (embeddings) requires it." >&2
+if [ -z "$OLLAMA_API_KEY" ]; then
+  echo "ERROR: OLLAMA_API_KEY is not set. The Ollama provider plugin needs a non-empty value (use 'ollama-local' for self-hosted)." >&2
   exit 1
 fi
 

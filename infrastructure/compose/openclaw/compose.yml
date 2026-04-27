@@ -23,10 +23,9 @@ services:
     depends_on:
       - git-sync
     environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-ollama-local}
       OPENCLAW_AUTH_TOKEN: ${OPENCLAW_AUTH_TOKEN}
-      OPENCLAW_ALLOWED_ORIGINS: http://localhost:3001
+      OPENCLAW_ALLOWED_ORIGINS: ${OPENCLAW_ALLOWED_ORIGINS:-http://localhost:3001}
       OPENCLAW_WAIT_FOR_REPO: "1"
       OPENCLAW_GIT_BRANCH: ${OPENCLAW_GIT_BRANCH:-dev}
       OPENCLAW_GIT_APP_SLUG: ${OPENCLAW_GIT_APP_SLUG:-scain-openclaw}

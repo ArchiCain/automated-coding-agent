@@ -82,9 +82,10 @@ check TS_AUTHKEY                 "CI runner joins the tailnet (tailscale/github-
 # --- Deploy target ---
 check DEPLOY_HOST                "scripts/deploy.sh ssh target (Tailscale hostname)"
 
-# --- LLM API keys ---
-check ANTHROPIC_API_KEY          "openclaw gateway agent reasoning"
-check OPENAI_API_KEY             "openclaw memory-search embeddings"
+# --- Ollama provider activation ---
+# Non-empty placeholder ('ollama-local') is enough for self-hosted Ollama.
+# Real endpoints are pinned in projects/openclaw/app/openclaw.json.
+check OLLAMA_API_KEY             "openclaw bundled Ollama provider plugin (placeholder ok)"
 
 # --- OpenClaw ---
 check OPENCLAW_AUTH_TOKEN        "openclaw browser-to-gateway pairing"

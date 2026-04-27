@@ -26,14 +26,19 @@
       ]
     }
   },
+  "models": {
+    "providers": {
+      "ollama": {
+        "apiKey": "ollama-local",
+        "baseUrl": "http://graphics-machine:11434",
+        "api": "ollama"
+      }
+    }
+  },
   "agents": {
     "defaults": {
-      "models": {
-        "anthropic/claude-opus-4-6": {
-          "params": {
-            "context1m": true
-          }
-        }
+      "model": {
+        "primary": "ollama/qwen-coder-next-256k"
       },
       "subagents": {
         "allowAgents": ["orchestrator", "devops", "worker", "tester"],
@@ -43,38 +48,42 @@
         "runTimeoutSeconds": 1800
       },
       "compaction": {
-        "model": "anthropic/claude-sonnet-4-6",
+        "model": "ollama/qwen-coder-next-256k",
         "identifierPolicy": "strict",
         "notifyUser": true
       },
       "memorySearch": {
         "provider": "openai",
-        "model": "text-embedding-3-small"
+        "model": "bge-m3-8k",
+        "remote": {
+          "baseUrl": "http://host-machine:11434/v1",
+          "apiKey": "ollama-local"
+        }
       }
     },
     "list": [
       {
         "id": "orchestrator",
         "default": true,
-        "model": "anthropic/claude-opus-4-6",
+        "model": "ollama/qwen-coder-next-256k",
         "workspace": "/workspace/repo",
         "agentDir": "/workspace/.openclaw/agents/orchestrator/agent"
       },
       {
         "id": "devops",
-        "model": "anthropic/claude-opus-4-6",
+        "model": "ollama/qwen-coder-next-256k",
         "workspace": "/workspace/repo",
         "agentDir": "/workspace/.openclaw/agents/devops/agent"
       },
       {
         "id": "worker",
-        "model": "anthropic/claude-opus-4-6",
+        "model": "ollama/qwen-coder-next-256k",
         "workspace": "/workspace/repo",
         "agentDir": "/workspace/.openclaw/agents/worker/agent"
       },
       {
         "id": "tester",
-        "model": "anthropic/claude-opus-4-6",
+        "model": "ollama/qwen-coder-next-256k",
         "workspace": "/workspace/repo",
         "agentDir": "/workspace/.openclaw/agents/tester/agent"
       }

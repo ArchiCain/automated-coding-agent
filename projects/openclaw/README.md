@@ -12,13 +12,16 @@ Prerequisites: the rest of the compose stack comes up with `task up` from the re
 
 1. **Set env vars** in `infrastructure/compose/openclaw/.env` (start from the template):
    ```
-   ANTHROPIC_API_KEY=<your API key>
-   OPENAI_API_KEY=<your API key>
+   OLLAMA_API_KEY=ollama-local        # placeholder; activates the Ollama plugin
    OPENCLAW_AUTH_TOKEN=<any strong random string>
    GITHUB_APP_ID=
    GITHUB_APP_INSTALLATION_ID=
    # Place your GitHub App private key at the path referenced by the compose file.
    ```
+
+   Model endpoints are baked into `app/openclaw.json` — chat goes to
+   `http://graphics-machine:11434` (qwen-coder-next-256k), embeddings to
+   `http://host-machine:11434` (bge-m3-8k). No cloud API keys are used.
 
 2. **Build and start** from the repo root:
    ```

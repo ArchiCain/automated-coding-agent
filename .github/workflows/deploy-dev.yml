@@ -96,20 +96,19 @@ jobs:
       # GH Actions auto-masks known secrets in logs.
       - name: Render host config from secrets + vars
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
           OPENCLAW_AUTH_TOKEN: ${{ secrets.OPENCLAW_AUTH_TOKEN }}
-          GITHUB_APP_ID: ${{ vars.GITHUB_APP_ID }}
-          GITHUB_APP_INSTALLATION_ID: ${{ vars.GITHUB_APP_INSTALLATION_ID }}
-          GITHUB_APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
+          GITHUB_APP_ID: ${{ vars.OPENCLAW_GITHUB_APP_ID }}
+          GITHUB_APP_INSTALLATION_ID: ${{ vars.OPENCLAW_GITHUB_APP_INSTALLATION_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.OPENCLAW_GITHUB_APP_PRIVATE_KEY }}
           DOCKER_SOCKET_GID: ${{ vars.DOCKER_SOCKET_GID }}
         run: |
           mkdir -p /tmp/config
 
           cat > /tmp/config/openclaw.env <<EOF
-          ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-          OPENAI_API_KEY=${OPENAI_API_KEY}
+          OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama-local}
           OPENCLAW_AUTH_TOKEN=${OPENCLAW_AUTH_TOKEN}
+          OPENCLAW_ALLOWED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,http://host-machine:3001
           GITHUB_APP_ID=${GITHUB_APP_ID}
           GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID}
           GITHUB_APP_PRIVATE_KEY_HOST_PATH=/srv/aca/secrets/github-app.pem

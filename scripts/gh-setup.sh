@@ -32,11 +32,12 @@ get_env() {
 
 # --- Required values ---
 SEC_TS=$(get_env "$ENV_FILE"   TS_AUTHKEY)
-SEC_ANTH=$(get_env "$ENV_FILE" ANTHROPIC_API_KEY)
-SEC_OAI=$(get_env "$ENV_FILE"  OPENAI_API_KEY)
+SEC_OLL=$(get_env "$ENV_FILE"  OLLAMA_API_KEY)
 SEC_OCT=$(get_env "$ENV_FILE"  OPENCLAW_AUTH_TOKEN)
 
 VAR_HOST=$(get_env "$ENV_FILE" DEPLOY_HOST)
+# These two are uploaded under names that don't begin with GITHUB_ — GitHub
+# rejects "GITHUB_*" as a reserved prefix for repo secrets/variables.
 VAR_APP=$(get_env "$ENV_FILE"  GITHUB_APP_ID)
 VAR_INST=$(get_env "$ENV_FILE" GITHUB_APP_INSTALLATION_ID)
 
@@ -57,15 +58,14 @@ GitHub configuration for ${REPO}
 ============================================================
 Secrets (content hidden; only lengths shown):
   TS_AUTHKEY                 ${#SEC_TS} chars
-  ANTHROPIC_API_KEY          ${#SEC_ANTH} chars
-  OPENAI_API_KEY             ${#SEC_OAI} chars
+  OLLAMA_API_KEY             ${#SEC_OLL} chars
   OPENCLAW_AUTH_TOKEN        ${#SEC_OCT} chars
-  GITHUB_APP_PRIVATE_KEY     ${PEM_BYTES} bytes    (from ${PEM_PATH})
+  OPENCLAW_GITHUB_APP_PRIVATE_KEY  ${PEM_BYTES} bytes  (from ${PEM_PATH})
 
 Variables (set in-the-clear; visible in GH UI + Actions logs):
-  DEPLOY_HOST                = ${VAR_HOST}
-  GITHUB_APP_ID              = ${VAR_APP}
-  GITHUB_APP_INSTALLATION_ID = ${VAR_INST}
+  DEPLOY_HOST                          = ${VAR_HOST}
+  OPENCLAW_GITHUB_APP_ID               = ${VAR_APP}
+  OPENCLAW_GITHUB_APP_INSTALLATION_ID  = ${VAR_INST}
 EOF
 
 if [ -n "$VAR_USER" ]; then
@@ -91,16 +91,15 @@ read -rp "Proceed? [y/N] " CONF
 # --- Push secrets (values piped via stdin; never in argv) ---
 echo "==> Pushing secrets"
 printf '%s' "$SEC_TS"   | gh secret set TS_AUTHKEY            --repo "$REPO"
-printf '%s' "$SEC_ANTH" | gh secret set ANTHROPIC_API_KEY     --repo "$REPO"
-printf '%s' "$SEC_OAI"  | gh secret set OPENAI_API_KEY        --repo "$REPO"
+printf '%s' "$SEC_OLL"  | gh secret set OLLAMA_API_KEY        --repo "$REPO"
 printf '%s' "$SEC_OCT"  | gh secret set OPENCLAW_AUTH_TOKEN   --repo "$REPO"
-gh secret set GITHUB_APP_PRIVATE_KEY --repo "$REPO" < "$PEM_PATH"
+gh secret set OPENCLAW_GITHUB_APP_PRIVATE_KEY --repo "$REPO" < "$PEM_PATH"
 
 # --- Push variables ---
 echo "==> Pushing variables"
-gh variable set DEPLOY_HOST                --repo "$REPO" --body "$VAR_HOST"
-gh variable set GITHUB_APP_ID              --repo "$REPO" --body "$VAR_APP"
-gh variable set GITHUB_APP_INSTALLATION_ID --repo "$REPO" --body "$VAR_INST"
+gh variable set DEPLOY_HOST                         --repo "$REPO" --body "$VAR_HOST"
+gh variable set OPENCLAW_GITHUB_APP_ID              --repo "$REPO" --body "$VAR_APP"
+gh variable set OPENCLAW_GITHUB_APP_INSTALLATION_ID --repo "$REPO" --body "$VAR_INST"
 [ -n "$VAR_USER" ] && gh variable set DEPLOY_USER       --repo "$REPO" --body "$VAR_USER"
 [ -n "$VAR_GID" ]  && gh variable set DOCKER_SOCKET_GID --repo "$REPO" --body "$VAR_GID"
 
