@@ -50,9 +50,9 @@ Visit each package's settings and flip visibility to Public.
 ## Laptop-as-source-of-truth for GH secrets + variables
 
 All values the workflow reads — secrets like `TS_AUTHKEY`,
-`ANTHROPIC_API_KEY`, `GITHUB_APP_PRIVATE_KEY`, and variables like
-`DEPLOY_HOST`, `GITHUB_APP_ID` — live in a single root `.env` on the
-developer's laptop. Postgres credentials and the Keycloak client
+`OLLAMA_API_KEY`, `OPENCLAW_AUTH_TOKEN`, `GITHUB_APP_PRIVATE_KEY`,
+and variables like `DEPLOY_HOST`, `GITHUB_APP_ID` — live in a single
+root `.env` on the developer's laptop. Postgres credentials and the Keycloak client
 secret are not on this list — they're baked into
 `infrastructure/compose/dev/compose.yml` as literals. `scripts/gh-setup.sh` reads that
 file, previews (char counts only), and pushes each value to the repo

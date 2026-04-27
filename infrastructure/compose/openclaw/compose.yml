@@ -1,18 +1,28 @@
 # OpenClaw stack for Docker Compose.
 #
-# Two services: gateway, git-sync. One named volume: workspace (shared
-# between both so the sidecar's clone and token file are visible to the
-# gateway).
+# Two surface services (gateway, git-sync) and a five-service Honcho memory
+# substack (honcho-{db,redis,migrate,api,deriver}). One named volume,
+# `workspace`, is shared between gateway + git-sync so the sidecar's clone
+# and the rolling installation token are visible to the gateway. Another
+# named volume, `honcho-db-data`, persists Honcho's pgvector store.
 #
 # Network model:
 #   The gateway uses `network_mode: host` so it inherits host-machine's
 #   tailnet routes. Without this, the container can't resolve or reach
-#   `graphics-machine` (the box hosting the brain LLM) over the tailnet.
-#   The gateway listens on host:3001 directly (per gateway.port in
-#   openclaw.json); the bridge `ports:` mapping is unused under host net.
+#   `graphics-machine` (the brain LLM box) over the tailnet. The gateway
+#   listens on host:3001 directly (per gateway.port in openclaw.json).
+#
+#   The Honcho services run on the project's default bridge network and
+#   talk to each other via service names. honcho-api is published on
+#   127.0.0.1:8000 so the host-networked gateway can reach it via
+#   `http://localhost:8000` (see plugins.openclaw-honcho.config.baseUrl in
+#   openclaw.json). honcho-{api,migrate,deriver} reach host-machine's
+#   Ollama (where qwen-coder-32k + the bge-m3-8k alias live) via
+#   `host.docker.internal` — wired through `extra_hosts: host-gateway`
+#   on each service.
 #
 # The gateway bind-mounts the host docker socket so the devops agent can
-# run `docker compose` + `task` directly (phase 4 sandbox provisioning).
+# run `docker compose` + `task` directly for sandbox provisioning.
 
 services:
   gateway:
@@ -20,8 +30,21 @@ services:
       context: ../../../projects/openclaw
       dockerfile: dockerfiles/prod.Dockerfile
     network_mode: host
+    # Restart on crash so transient OpenClaw plugin issues don't leave the
+    # gateway down indefinitely. `unless-stopped` won't fight an explicit
+    # `compose down`.
+    restart: unless-stopped
+    # Wait for Honcho's API to pass its healthcheck before starting. The
+    # openclaw-honcho plugin's SDK memoizes _ensureWorkspace() on first call;
+    # if Honcho is down at gateway start, the rejected promise is cached and
+    # every subsequent honcho_* call returns the cached failure WITHOUT making
+    # an HTTP request — only a gateway restart clears it. Strict ordering
+    # avoids ever hitting that trap.
     depends_on:
-      - git-sync
+      git-sync:
+        condition: service_started
+      honcho-api:
+        condition: service_healthy
     environment:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-ollama-local}
       OPENCLAW_AUTH_TOKEN: ${OPENCLAW_AUTH_TOKEN}
@@ -49,6 +72,7 @@ services:
     build:
       context: ../../../projects/openclaw
       dockerfile: dockerfiles/git-sync.Dockerfile
+    restart: unless-stopped
     user: "1000:1000"
     # Override alpine/git's ENTRYPOINT (which is `git`). Without this reset,
     # our `command:` below would be appended as `git sh /usr/local/bin/...`.
@@ -68,5 +92,129 @@ services:
       - ${GITHUB_APP_PRIVATE_KEY_HOST_PATH}:/etc/github-app/private-key.pem:ro
       - ./git-sync.sh:/usr/local/bin/git-sync.sh:ro
 
+  # ---------------------------------------------------------------------------
+  # Honcho — AI-native cross-session memory for OpenClaw agents.
+  # Self-hosted: pgvector + Redis + one-shot Alembic migrate + API + deriver.
+  # Pinned to v3.0.6 for reproducibility.
+  #
+  # Startup ordering:
+  #   honcho-db (healthy)
+  #     → honcho-migrate (alembic upgrade head, then exits)
+  #       → honcho-api (waits for migrate completion + db; healthcheck on /health)
+  #         → honcho-deriver (waits for api healthy)
+  #         → gateway (waits for api healthy — see gateway.depends_on above)
+  #
+  # All three Honcho services that call LLMs (migrate is config-only, no calls)
+  # route through OPENAI_COMPATIBLE_BASE_URL → host-machine's Ollama on the
+  # tailnet host. Embedding and chat completions go to the same endpoint
+  # because Ollama's /v1 shim handles both. Provider/model selection is in
+  # honcho-config.toml.
+  # ---------------------------------------------------------------------------
+  honcho-db:
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: honcho
+      POSTGRES_PASSWORD: ${HONCHO_DB_PASSWORD:-honcho}
+      POSTGRES_DB: honcho
+    volumes:
+      - honcho-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "honcho", "-d", "honcho"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  honcho-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # One-shot Alembic migration. Honcho's docker-compose example does NOT
+  # auto-migrate; their self-hosting README expects the operator to run
+  # `alembic upgrade head` manually. We bake it into the compose graph so
+  # a clean deploy works hands-off.
+  honcho-migrate:
+    image: ghcr.io/plastic-labs/honcho:v3.0.6
+    restart: "no"
+    depends_on:
+      honcho-db:
+        condition: service_healthy
+    working_dir: /app
+    command: ["alembic", "upgrade", "head"]
+    volumes:
+      - ./honcho-config.toml:/app/config.toml:ro
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://honcho:${HONCHO_DB_PASSWORD:-honcho}@honcho-db:5432/honcho
+
+  honcho-api:
+    image: ghcr.io/plastic-labs/honcho:v3.0.6
+    restart: unless-stopped
+    depends_on:
+      honcho-db:
+        condition: service_healthy
+      honcho-migrate:
+        condition: service_completed_successfully
+      honcho-redis:
+        condition: service_started
+    # Loopback-only: the host-networked gateway reaches this via
+    # http://localhost:8000. Nothing outside the host should hit it.
+    ports:
+      - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      # GET /health returns {"status":"ok"} when the FastAPI app is up. Image
+      # has no curl/wget — use stdlib urllib.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/health', timeout=2); sys.exit(0)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./honcho-config.toml:/app/config.toml:ro
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://honcho:${HONCHO_DB_PASSWORD:-honcho}@honcho-db:5432/honcho
+      REDIS_URL: redis://honcho-redis:6379
+      LLM_OPENAI_COMPATIBLE_API_KEY: ${OLLAMA_API_KEY:-ollama-local}
+      LLM_OPENAI_COMPATIBLE_BASE_URL: http://host.docker.internal:11434/v1
+      AUTH_USE_AUTH: "false"
+      SENTRY_ENABLED: "false"
+
+  honcho-deriver:
+    image: ghcr.io/plastic-labs/honcho:v3.0.6
+    restart: unless-stopped
+    depends_on:
+      honcho-api:
+        condition: service_healthy
+    command: ["python", "-m", "src.deriver"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # The image's default healthcheck probes localhost:8000/health, but the
+    # deriver doesn't run an HTTP server — only the api does. Disable to stop
+    # docker from marking this container unhealthy.
+    healthcheck:
+      disable: true
+    volumes:
+      - ./honcho-config.toml:/app/config.toml:ro
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://honcho:${HONCHO_DB_PASSWORD:-honcho}@honcho-db:5432/honcho
+      REDIS_URL: redis://honcho-redis:6379
+      LLM_OPENAI_COMPATIBLE_API_KEY: ${OLLAMA_API_KEY:-ollama-local}
+      LLM_OPENAI_COMPATIBLE_BASE_URL: http://host.docker.internal:11434/v1
+      AUTH_USE_AUTH: "false"
+      SENTRY_ENABLED: "false"
+
 volumes:
   workspace:
+  honcho-db-data:

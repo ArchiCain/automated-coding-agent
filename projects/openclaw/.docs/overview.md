@@ -1,15 +1,5 @@
 # OpenClaw — Overview
 
-> **⚠️ Pending replacement.** The contents of `projects/openclaw/` are
-> scaffolding that the operator plans to replace wholesale with a
-> polished OpenClaw implementation from another repo. After the
-> migration, the LLM provider config will be swapped from cloud APIs
-> (Anthropic + OpenAI) to the local two-machine stack (graphics-machine
-> for generation, host-machine for embeddings). Background and
-> open questions: `ideas/migration-plan-polished-openclaw.md`. Until
-> then, this overview describes the **current scaffolding only**, not
-> the target state.
-
 ## What This Is
 
 OpenClaw is the active agent runtime for this repo — a four-agent orchestration stack (orchestrator, devops, worker, tester) built on the `ghcr.io/openclaw/openclaw` gateway. Each agent is an OpenClaw persona with its own workspace, memory, and skill allowlist. A single human user drives documentation-driven development of `projects/application/` through conversation with the orchestrator, who delegates to specialists.
@@ -20,19 +10,21 @@ OpenClaw is the active agent runtime for this repo — a four-agent orchestratio
 
 OpenClaw runs as a two-service docker-compose project under `infrastructure/compose/openclaw/`:
 
-- **gateway** — the OpenClaw daemon (chat UI, agent orchestration, plugin host). Listens on container `:18789`, published on host `:3001`.
+- **gateway** — the OpenClaw daemon (chat UI, agent orchestration, plugin host). Runs with `network_mode: host` so it can resolve `graphics-machine` over the tailnet; listens directly on host `:3001` (per `gateway.port` in `openclaw.json`).
 - **git-sync** — a sidecar built from `dockerfiles/git-sync.Dockerfile` (alpine/git + curl + openssl, running as uid 1000). Mints GitHub App installation tokens every ~50 minutes and keeps `/workspace/repo` synced with `origin/dev`.
+- **honcho-{db,redis,migrate,api,deriver}** — the self-hosted Honcho memory substack. `honcho-api` is published on `127.0.0.1:8000` so the host-networked gateway can reach it via `http://localhost:8000`. The other four services stay on the project's bridge network.
 
-Both services share a named volume `workspace` mounted at `/workspace`; git-sync's clone is what the gateway reads for its `openclaw.json`, skills, and QMD index.
+The gateway and git-sync share a named volume `workspace` mounted at `/workspace`; git-sync's clone is what the gateway reads for its `openclaw.json`, skills, and QMD index. Honcho's pgvector data lives in a separate named volume `honcho-db-data`.
 
 The gateway container also bind-mounts the host's Docker socket (`/var/run/docker.sock`). That lets the `devops` agent run `docker compose` and `task env:*` directly against the host daemon — the sandbox provisioning path.
 
 ### Ports
 
-| Service | Host | Container |
-|---------|------|-----------|
-| gateway | 3001 | 18789 |
-| git-sync | (none) | (sidecar only) |
+| Service | Host | Container | Notes |
+|---------|------|-----------|-------|
+| gateway | 3001 | (host net) | Listens directly on the host via `network_mode: host` |
+| git-sync | (none) | (sidecar only) | |
+| honcho-api | 127.0.0.1:8000 | 8000 | Loopback only — only the gateway needs it |
 
 ### Running
 
@@ -45,28 +37,32 @@ The gateway container also bind-mounts the host's Docker socket (`/var/run/docke
 
 See `projects/openclaw/Taskfile.yml` for the full list.
 
-### Deploy to host-machine
+### Tailnet host deploy
 
-Same compose project; `compose.prod.yml` swaps the `build:` blocks for `ghcr.io/archicain/automated-coding-agent-openclaw-*` image references. CI runs `scripts/deploy.sh` to rsync compose files onto host-machine and `docker compose pull && up -d`. Reached over the tailnet at `http://<host-machine>:3001`.
+Same compose project, deployed to `host-machine` (always-on Ubuntu on the tailnet) by `.github/workflows/deploy-dev.yml` on every push to `dev`. The gateway is reachable at `http://host-machine:3001` from any tailnet member, or via the MagicDNS HTTPS URL once Tailscale Funnel/Serve is configured.
 
 ## Agents
 
-All four agents reason via the Anthropic API using `ANTHROPIC_API_KEY`. Memory search uses OpenAI embeddings via `OPENAI_API_KEY`. The `claude-opus-4-6` model with 1M-token context is configured as the default for all agents.
+All four agents reason via the same self-hosted Ollama on `graphics-machine` (model `qwen-coder-next-256k`, 256K ctx — see `infrastructure/.docs/hosts.md`). Memory search embeddings come from `bge-m3-8k` running on `host-machine`. Provider registration lives in `app/openclaw.json` under `models.providers.ollama`; the only env-based credential is `OLLAMA_API_KEY`, a non-empty placeholder that activates OpenClaw's bundled Ollama plugin.
 
-| Agent | Role | Writes | Does not write |
-|-------|------|--------|----------------|
-| `orchestrator` (default) | Daily chat with user, spec authoring, doc curation, delegation, doc review | All of `.docs/` | Source code, tests |
-| `devops` | Sandbox lifecycle, worktrees, branches, deploys, logs, PR/issue creation | (read-only everywhere) | — |
-| `worker` | Implementation per spec; coordinates with tester; opens PRs | Source code, `.docs/features/{X}/{contracts,flows,decisions}.md` | `spec.md`, `test-plan.md`, any test file, docs outside active feature |
-| `tester` | Owns tests and test-plan.md; runs Playwright + API tests; reports findings | Test files, `.docs/features/{X}/test-plan.md` | Source code, other docs |
+Each agent is a fully scoped OpenClaw persona — its own workspace, persona files (`SOUL.md`, `AGENTS.md`, `IDENTITY.md`), state directory, and session store. They are not the same agent wearing different role-prompt hats. The user picks which agent to talk to via the WebUI's agent selector.
+
+| Agent | Emoji | Role | Writes | Does not write |
+|-------|-------|------|--------|----------------|
+| `orchestrator` (default) | 🎯 | Daily chat with user, spec authoring, doc curation, delegation, doc review | All of `.docs/` | Source code, tests |
+| `devops` | 🛠 | Sandbox lifecycle, worktrees, branches, deploys, logs, PR/issue creation | (read-only everywhere) | — |
+| `worker` | ⚙️ | Implementation per spec; coordinates with tester; opens PRs | Source code, `.docs/features/{X}/{contracts,flows,decisions}.md` | `spec.md`, `test-plan.md`, any test file, docs outside active feature |
+| `tester` | 🧪 | Owns tests and test-plan.md; runs Playwright + API tests; reports findings | Test files, `.docs/features/{X}/test-plan.md` | Source code, other docs |
 
 The test-writing separation is intentional — the worker cannot modify tests, so it cannot weaken them to make failures go away. If a test is genuinely wrong, the worker writes its argument in `decisions.md` and orchestrator routes the change to tester.
 
 ## Delegation
 
-Agent-to-agent calls are enabled (`tools.agentToAgent.enabled: true`) with an allowlist covering all four agents. Orchestrator is the user-facing surface; the other three are invoked by orchestrator. Users don't address workers, devops, or tester directly.
+Agents delegate to each other via OpenClaw's sub-agent spawn (`sessions_spawn` with explicit `agentId`). The cross-agent allowlist is set under `agents.defaults.subagents.allowAgents`, covering all four agents. Sub-agent runs announce their results back to the requester when complete.
 
-Delegation prefers sub-agent spawn (for Honcho-style parent-observer relationships, once Honcho is added in Phase B). It falls back to the A2A tool if sub-agent spawn isn't available for named agents.
+**Sub-agent context constraint:** OpenClaw injects `AGENTS.md` + `TOOLS.md` into spawned sub-agents — but **not** `SOUL.md`, `IDENTITY.md`, or `USER.md`. Anything load-bearing about how an agent should *behave* (not just sound) belongs in `AGENTS.md`. SOUL.md is voice-only and won't fire in delegation scenarios.
+
+Phase B (Honcho) will add parent-observer relationships so orchestrator automatically sees what spawned children are doing, without polling `sessions_history`.
 
 ## Branching Model
 
@@ -110,44 +106,78 @@ Soft changes — skills, `openclaw.json`, `.docs/` — are picked up by the gate
 
 ## Memory Stack
 
-Phase A is a stripped-down memory system; Honcho is deferred to Phase B.
-
 | Layer | Role | Config |
 |-------|------|--------|
-| Builtin | Per-agent SQLite (FTS5 + vector), chunked memory files | On by default |
-| **QMD** | Search backend replacing builtin. Indexes docs + feature directories + session transcripts. | `memory.backend: "qmd"` + `memory.qmd.paths: [".docs/", ...]` |
-| **Active memory** | Proactive memory search before each reply (`recent` scope, `balanced` prompting) | `activeMemory.{queryMode,promptStyle}` |
-| **Dreaming** | Nightly cron (03:00 UTC) promotes daily-notes → `MEMORY.md` | `plugins["memory-core"].dreaming.enabled: true` + cron enabled |
-| Compaction | Context (not memory) compaction on approaching model limits. Uses Sonnet as the summarization model. | `agents.defaults.compaction.model` |
-| Honcho (Phase B) | Cross-agent session sharing, parent-observer relationships | Not yet |
+| Builtin (fallback) | Per-agent SQLite (FTS5 + vector), chunked memory files | Always on as QMD's fallback |
+| **QMD** | Local search backend. Indexes `.docs/`, feature directories, and session transcripts. BM25 + vector + reranking. | `memory.backend: "qmd"` + `memory.qmd.paths: [...]` |
+| **Active memory** | Proactive memory search before each reply (`recent` scope, `balanced` prompting) | `plugins["active-memory"]` |
+| **Dreaming** | Nightly promotion of daily-notes → `MEMORY.md` per agent | `plugins["memory-core"].dreaming.enabled: true` + `cron.enabled: true` |
+| **Honcho** | Cross-session memory + user/agent modeling + multi-agent observers (parent sees children) | `plugins["openclaw-honcho"]` pointed at `http://localhost:8000` (gateway is on host net; honcho-api published on loopback) |
+| Compaction | Context (not memory) compaction on approaching model limits. Uses the same brain LLM as agents (`ollama/qwen-coder-next-256k`). | `agents.defaults.compaction.model` |
 
-**Docs as memory.** QMD indexes `/workspace/repo/.docs/` recursively, plus each project's `src/features/**` directories. When an agent asks "what does feature X do," it's searching the literal specification. When an agent writes a doc, it's writing durable memory. The promotion pipeline from daily notes → `MEMORY.md` captures cross-session learnings (user preferences, recurring patterns, gotchas) on top of the doc-grounded base.
+**Docs as memory.** QMD indexes `/workspace/repo/.docs/` recursively, plus each project's `src/features/**` directories. When an agent asks "what does feature X do," it's searching the literal specification. When an agent writes a doc, it's writing durable memory. The dreaming pipeline (daily notes → `MEMORY.md`) captures cross-session learnings on top of the doc-grounded base.
+
+**Honcho as cross-agent memory.** Honcho persists every conversation turn to its own Postgres + pgvector store. It maintains a profile per user across sessions and channels, and registers parents as observers in spawned sub-agent sessions. Agents get tools like `honcho_context`, `honcho_search_messages`, `honcho_search_conclusions`, and `honcho_ask` for cross-session recall. The Honcho stack is **required** — `plugins.slots.memory` is bound to `openclaw-honcho`, so the gateway waits for `honcho-api` healthcheck before starting. If Honcho is unreachable at gateway start, the openclaw-honcho plugin caches the rejected promise and every `honcho_*` call returns the cached failure until the gateway restarts.
+
+**Honcho deployment.** Five sibling compose services in `infrastructure/compose/openclaw/compose.yml`: `honcho-db` (pgvector pinned to v3.0.6 image), `honcho-redis` (queue), `honcho-migrate` (one-shot Alembic), `honcho-api` (FastAPI), `honcho-deriver` (background worker). Postgres data lives in the named volume `honcho-db-data`. Only `honcho-api` is exposed off the bridge — published on `127.0.0.1:8000` for the host-networked gateway.
+
+**Honcho LLM routing.** Honcho's own LLM calls (deriver, summary, dialectic, dream) all route through the `custom` provider, which Honcho's `clients.py` instantiates as `AsyncOpenAI(base_url=..., api_key=...)`. `OPENAI_COMPATIBLE_BASE_URL` is set on each Honcho service to `http://host.docker.internal:11434/v1` (host-machine's Ollama via the bridge's host-gateway). Models target `qwen-coder-32k`. Embeddings use the `openrouter` provider (same env vars; Honcho hardcodes the embedding model name to `openai/text-embedding-3-small`, which we've aliased on host-machine to `bge-m3-8k` via `ollama cp`). Vector dimensions are 1024 (not the OpenAI-default 1536) because bge-m3 is 1024-dim. Full TOML in `infrastructure/compose/openclaw/honcho-config.toml`.
 
 ## Auth Model
 
 | Credential | Purpose | Required |
 |------------|---------|----------|
-| `ANTHROPIC_API_KEY` | Agent reasoning — all four agents | Yes |
-| `OPENAI_API_KEY` | Memory search embeddings | Yes |
+| `OLLAMA_API_KEY` | Activates OpenClaw's bundled Ollama provider plugin (any non-empty placeholder works for self-hosted Ollama) | Yes |
 | `OPENCLAW_AUTH_TOKEN` | Browser → gateway auth (pairing) | Yes |
-| GitHub App (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `github-app-key` file) | Git-sync sidecar — mints installation tokens to clone + pull the repo. Requires Contents:Read + Metadata:Read. Image pulls don't use this (GHCR packages are public). | Yes |
+| `HONCHO_DB_PASSWORD` | Postgres password for the honcho-db service | Optional (defaults to `honcho`; the DB is internal to the compose project, not exposed off-host) |
+| GitHub App (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `github-app-key` file) | Git-sync sidecar auth — mints installation tokens for repo pulls | Yes |
 
-No OAuth token, no Claude Code CLI. The API key is the primary reasoning credential.
+No cloud LLM API keys. Honcho's LLM env vars (`LLM_OPENAI_COMPATIBLE_API_KEY`, `LLM_OPENAI_COMPATIBLE_BASE_URL`) are wired in `compose.yml` from `OLLAMA_API_KEY` + a literal endpoint string — they don't need separate top-level secrets.
 
 ## Pairing Flow
 
-The Web UI requires a browser secure context (HTTPS or `localhost`) for device crypto. On the tailnet, Tailscale serves HTTPS for the gateway hostname (`tailscale serve`), which qualifies as a secure context. When connecting from host-machine itself, `http://localhost:3001` also works.
+The Web UI requires a browser secure context (HTTPS or `localhost`) for device crypto. Locally the gateway is reachable at `http://localhost:3001` (localhost qualifies as secure). On the deployed tailnet host, browser access is via `http://host-machine:3001` from any tailnet member (Tailscale itself supplies the secure transport).
 
 1. Browser: open the gateway URL
 2. Enter `OPENCLAW_AUTH_TOKEN` as the Gateway Token → "pairing required"
 3. Terminal: `task openclaw:pair` — approves the pending device via `openclaw devices approve <id>` inside the container
 4. Browser re-clicks Connect → authenticated session
 
-## Skills + agents
+## Per-agent workspaces
 
-- Agents: `orchestrator`, `devops`, `worker`, `tester`.
-- Skills live under `projects/openclaw/app/skills/` (synced into the gateway via the git-sync sidecar).
-- The devops skill (`devops.md`) drives sandbox lifecycle via `task env:*`.
+Each agent has its own workspace at `/workspace/.openclaw/workspaces/<agent>/` (inside the gateway container, on the `workspace` named volume). The workspace mixes two file types with very different lifecycles:
+
+| Type | Files | Origin | Persistence |
+|------|-------|--------|-------------|
+| **Persona** | `SOUL.md`, `AGENTS.md`, `IDENTITY.md` | Versioned in git at `projects/openclaw/app/workspaces/<agent>/` | Re-seeded from git on every gateway boot |
+| **Memory** | `memory/YYYY-MM-DD.md`, `MEMORY.md`, `DREAMS.md` | Written by the agent at runtime | Survives container restarts in the Docker volume; not in git |
+
+The entrypoint copies persona files from the synced repo into the runtime workspace on boot but **never touches** memory files — agent state survives restarts. Backup of memory files is addressed by Phase B (Honcho persists conversations to Postgres).
+
+Per-agent skill allowlists are configured via `agents.list[].skills`. Today every agent gets only the `repo-tasks` shared skill; per-agent capability skills (e.g., GitNexus for worker/tester) will be added in Phase 3.
+
+## Skills
+
+- Skill folders live under `projects/openclaw/app/skills/` and follow the AgentSkills convention — each skill is a directory containing `SKILL.md`.
+- Currently shipped: `repo-tasks/` (task-over-raw-command rule, available to all four agents).
+- Skills are synced into the gateway via the git-sync sidecar and exposed through `skills.load.extraDirs: ["./skills"]`.
+
+## MCP servers
+
+OpenClaw mounts external tool servers via `mcp.servers` in `openclaw.json`.
+
+| Server | Tools | Used by |
+|--------|-------|---------|
+| `gitnexus` | `gitnexus_query`, `gitnexus_context`, `gitnexus_impact`, `gitnexus_detect_changes`, `gitnexus_rename`, `gitnexus_cypher`, group/cross-repo tools (16 total) | Worker + tester (referenced in their AGENTS.md). Orchestrator/devops have access but no reason to use them. |
+
+GitNexus indexes the repo via `gitnexus analyze` — the index lives at `~/.gitnexus/` (or `/workspace/.gitnexus/` inside the gateway, gitignored). The gateway image installs the `gitnexus` CLI globally. **First-run indexing is on-demand**, not at container start — agents (or operators) can call `gitnexus analyze` once before searching. Re-indexing on every commit is a future improvement.
+
+## Local Claude Code integration (operator's laptop)
+
+GitNexus is also wired into Claude Code on the operator's laptop:
+- **MCP server** registered via `claude mcp add gitnexus -- npx -y gitnexus@latest mcp`
+- **6 skill files** dropped at `.claude/skills/gitnexus/` (committed to the repo) — `Exploring`, `Debugging`, `Impact Analysis`, `Refactoring`, `CLI`, `Guide`
+- Local index at `.gitnexus/` (gitignored) — refresh with `npx gitnexus analyze --skip-agents-md`
 
 ## Directory Layout
 
@@ -157,19 +187,20 @@ projects/openclaw/
 ├── README.md                      ← human quickstart
 ├── Taskfile.yml                   ← up/down/logs/pair/shell tasks
 ├── app/
-│   ├── openclaw.json              ← gateway config (4 agents, QMD, active memory, dreaming)
-│   ├── SOUL.md                    ← agent identity (evolves over time)
-│   ├── HEARTBEAT.md               ← safety-net monitor (evolves)
-│   └── skills/                    ← role prompts and shared rules
-│       ├── repo-tasks.md          ← task-over-raw-command rule (shared)
-│       ├── orchestrator.md
-│       ├── devops.md
-│       ├── worker.md
-│       └── tester.md
+│   ├── openclaw.json              ← gateway config (4 agents, per-agent workspaces, QMD, Honcho plugin, GitNexus MCP)
+│   ├── workspaces/                ← persona files (SOUL/AGENTS/IDENTITY), seeded into runtime on boot
+│   │   ├── orchestrator/{SOUL,AGENTS,IDENTITY}.md
+│   │   ├── devops/{SOUL,AGENTS,IDENTITY}.md
+│   │   ├── worker/{SOUL,AGENTS,IDENTITY}.md
+│   │   └── tester/{SOUL,AGENTS,IDENTITY}.md
+│   └── skills/                    ← AgentSkills directories (one per skill)
+│       └── repo-tasks/SKILL.md    ← task-over-raw-command rule (shared)
 └── dockerfiles/
-    ├── prod.Dockerfile            ← gateway image (base + QMD)
+    ├── prod.Dockerfile            ← gateway image (base + QMD + Honcho plugin + GitNexus CLI)
     ├── git-sync.Dockerfile        ← alpine/git + curl + openssl sidecar
-    └── entrypoint.sh              ← requires ANTHROPIC_API_KEY + OPENAI_API_KEY
+    ├── entrypoint.sh              ← seeds personas, installs Honcho plugin, registers GitNexus MCP
+    ├── git-credential-helper.sh   ← reads installation token written by git-sync sidecar
+    └── gh-wrapper.sh              ← shadows /usr/bin/gh; reads same installation token for `gh` calls
 ```
 
 ## Relationship to Other Projects
@@ -182,14 +213,12 @@ projects/openclaw/
 
 ## Known Uncertainties
 
-- **Sub-agent spawn to named agent.** Whether OpenClaw's sub-agent spawn primitive can target a specific agent from `agents.list` (the `dev` persona, for example) is unverified. If it can, orchestrator spawns dev as a child session and gets Honcho's free observer relationships (Phase B). If it can't, delegation uses the A2A tool instead — architecture is unchanged, just the invocation shape.
-- **Skill file format.** The skill frontmatter format is based on Claude Code conventions. OpenClaw may have a slightly different shape; we'll correct if load errors surface.
-- **Per-agent skill allowlists.** Currently every agent sees every skill. Per-agent filtering (`agents.list[].skills`) is a future refinement.
+- **WebUI agent selector.** The WebUI exposes per-agent chat surfaces — the user picks who to talk to before sending. To be smoke-tested as part of Phase 1 verification.
 
-## What's Next (Phase B)
+## What's Next
 
-- Self-hosted Honcho release (new compose service, Postgres-backed)
-- `plugins.entries["openclaw-honcho"]` wired to the self-hosted URL
-- Observer relationships verified end-to-end (orchestrator sees dev's tool use)
-- Embedding provider swap to local Ollama (once DGX Spark is online)
-- Model provider swap to local vLLM (Phase C)
+- Verify Honcho observer relationships end-to-end (orchestrator sees worker's tool use)
+- Auto-trigger `gitnexus analyze` after each git-sync pull (currently on-demand)
+- Per-agent MCP server gating once OpenClaw exposes that as first-class config
+- Channel integrations: Slack/Telegram bots per agent for the "real teammate" UX
+- Pre-warm `qwen-coder-32k` on host-machine at boot so Honcho's first deriver call doesn't time out on cold-load (~12 s for the 26 GB model)

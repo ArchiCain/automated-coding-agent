@@ -1,51 +1,38 @@
 # CLAUDE.md
 
-## Active work — local-LLM migration in progress
+## Current shape
 
-This repo is mid-transition. Two parallel changes are in flight; a new
-session should expect the user to want to talk about either or both.
+`projects/openclaw/` is a four-agent OpenClaw deployment. Each agent
+(orchestrator 🎯, devops 🛠, worker ⚙️, tester 🧪) has its own
+workspace under `/workspace/.openclaw/workspaces/<id>/` containing
+`SOUL.md` (voice), `AGENTS.md` (rules + tools), `IDENTITY.md` (display
+metadata). All four reason via the same self-hosted Ollama topology:
 
-### 1. Cloud APIs → self-hosted two-machine LLM stack
-
-Current `projects/openclaw/app/openclaw.json` reasons via Anthropic + uses
-OpenAI for embeddings. Target stack:
-
-| Role | Machine | Model | Status |
+| Role | Machine | Model | Endpoint |
 |---|---|---|---|
-| Brain (primary coding LLM) | `graphics-machine` (Windows + RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active per token, Q4_K_M, 48 GB), 256K context baked in via Modelfile. Endpoint: `http://graphics-machine:11434`. | **Verified 2026-04-26** — `/api/generate` returned coherent code from laptop over tailnet at ~3.85 tok/s output. |
-| Memory (embeddings) | `host-machine` (Mac mini, Ubuntu) | `bge-m3-8k` — derivative of `bge-m3` (BAAI bge-m3, 566M params, F16). Endpoint: `http://host-machine:11434`. | **Verified 2026-04-26** — `/api/embeddings` returned a 1024-dim vector from laptop over tailnet. |
-| Fallback LLM (optional, when graphics-machine offline) | `host-machine` | `qwen-coder-32k` — derivative of `qwen2.5-coder:32b-instruct-q6_K` (Qwen2.5-Coder 32B, Q6_K, ~27 GB), 32K context. CPU-only on Mac mini (no GPU offload). | Installed and listed. **Open question:** wire as multi-provider failover, or hard-fail when graphics-machine offline? |
+| Agent brain | `graphics-machine` (Windows + RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | `http://graphics-machine:11434` |
+| Memory embeddings | `host-machine` (Mac mini, Ubuntu) | `bge-m3-8k` — derivative of `bge-m3` (BAAI, 1024-dim, 8K ctx) | `http://host-machine:11434` |
+| Honcho derivation/summary/dialectic | `host-machine` | `qwen-coder-32k` — derivative of `qwen2.5-coder:32b-instruct-q6_K`, 32K ctx, CPU-only | `http://host-machine:11434/v1` |
+
+Memory is layered: **QMD** for local BM25/vector search over `.docs/`
+and session transcripts, **Honcho** (self-hosted Postgres+Redis+API+
+deriver) for cross-session memory and cross-agent learning via auto-
+extracted conclusions, plus a builtin SQLite fallback. The Honcho
+stack runs as five compose services in `infrastructure/compose/openclaw/`.
+
+Cloud APIs are not used. The only env-based credential for the agent
+runtime is `OLLAMA_API_KEY` (a non-empty placeholder OpenClaw requires
+to activate the bundled Ollama provider plugin). Honcho's own LLM
+calls route through `OPENAI_COMPATIBLE_BASE_URL` to host-machine's
+Ollama; embeddings use the same endpoint via Ollama's OpenAI-compat
+shim, with `bge-m3-8k` aliased on host-machine as
+`openai/text-embedding-3-small` (the model name Honcho hardcodes).
 
 References:
-- `ideas/openclaw-local-llm-hybrid.md` — architecture rationale, hardware inventory, model selection
-- `ideas/graphics-machine-setup.md` — handoff doc for the agent setting up graphics-machine on the Windows side
+- `projects/openclaw/.docs/overview.md` — agent personas, memory stack, Honcho config
 - `infrastructure/.docs/ecosystem.md` — ecosystem map (host roles, deploy flow)
-
-### 2. Current OpenClaw → polished OpenClaw migration
-
-The user has a polished OpenClaw implementation in a **separate repo**
-that will be migrated **into** this repo, completely replacing
-`projects/openclaw/`. The two changes interact: after the polished
-OpenClaw lands, its provider config gets adapted to call the local-LLM
-endpoints instead of cloud APIs.
-
-If the user says **"here's my polished openclaw project that I want to
-migrate into this project"** (or similar), they mean: import the
-contents of their other repo into `projects/openclaw/` and adapt for
-the local-LLM topology. Migration playbook + open questions:
-`ideas/migration-plan-polished-openclaw.md`. Read it before proposing
-how to do the import.
-
-### What survives the migration unchanged
-
-- `infrastructure/compose/` — dev + openclaw + sandbox compose stacks
-- `.github/workflows/deploy-dev.yml` — auto-deploy on push to dev
-- `scripts/{deploy,env-check,gh-setup}.sh` — deploy + bootstrap tooling
-- Root `.env`-driven GH Actions secret/var workflow (`task gh:setup`)
-- `host-machine` / `graphics-machine` host-role naming throughout docs
-
-The polished OpenClaw will have to fit into the existing
-infrastructure shape, not the other way around.
+- `infrastructure/.docs/hosts.md` — concrete per-host inventory (specs, installed Ollama models)
+- `ideas/openclaw-local-llm-hybrid.md` — design rationale + hardware inventory (history)
 
 ## Division of labor
 

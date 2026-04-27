@@ -1,0 +1,104 @@
+# Honcho config overrides for our deployment.
+#
+# Mounted at /app/config.toml inside the honcho-{api,deriver,migrate}
+# containers. Loaded by Honcho's TomlConfigSettingsSource. Environment
+# variables set on each container in compose.yml take precedence over this
+# file — that's how OPENAI_COMPATIBLE_BASE_URL/_API_KEY get set without
+# committing them here.
+#
+# Why every LLM-using feature has to be set: Honcho v3.0.6 defaults
+# several features to Google Gemini and Anthropic. honcho-api crashes at
+# import time with `ValueError: Missing client for ...: <provider>` if
+# any active feature points at a provider whose API key is unset. Our
+# environment carries no cloud API keys — only the OpenAI-compat shim
+# pointing at host-machine's Ollama — so every section below must be
+# coerced to provider "custom" (Honcho's name for an OpenAI-compatible
+# endpoint configured via OPENAI_COMPATIBLE_BASE_URL).
+
+[app]
+# Honcho computes vector embeddings for stored messages. We keep this on
+# so honcho_search_messages works for cross-session memory.
+EMBED_MESSAGES = true
+
+[llm]
+# Honcho's embedding_client.py recognizes provider "openrouter" as the
+# OpenAI-compatible custom-endpoint path. It reads OPENAI_COMPATIBLE_API_KEY
+# + OPENAI_COMPATIBLE_BASE_URL (set in compose.yml) and hardcodes the
+# embedding model name to "openai/text-embedding-3-small". host-machine's
+# Ollama has that name aliased to bge-m3-8k via:
+#   ollama cp bge-m3-8k openai/text-embedding-3-small:latest
+# so the request resolves to bge-m3 weights without any code changes.
+EMBEDDING_PROVIDER = "openrouter"
+
+[vector_store]
+# bge-m3 emits 1024-dim vectors. The default (1536) is for OpenAI's
+# text-embedding-3-small; pgvector inserts crash on dimension mismatch.
+# This is a one-shot commitment — changing it later requires dropping
+# Honcho's pgvector tables and re-embedding everything.
+DIMENSIONS = 1024
+
+# ----------------------------------------------------------------------------
+# All Honcho LLM features below route through the "custom" provider, which
+# Honcho's clients.py instantiates as `AsyncOpenAI(base_url=..., api_key=...)`.
+# Model strings are passed through verbatim to Ollama, which resolves them
+# against locally pulled tags. qwen-coder-32k is host-machine's CPU-served
+# 32B coder — overkill for derivation/summary but it's what we have, and
+# the deriver runs in the background where latency doesn't matter.
+# ----------------------------------------------------------------------------
+
+[deriver]
+PROVIDER = "custom"
+MODEL = "qwen-coder-32k"
+
+[summary]
+PROVIDER = "custom"
+MODEL = "qwen-coder-32k"
+
+# DialecticSettings requires ALL FIVE levels (minimal, low, medium, high, max)
+# when any [dialectic.levels.*] section is present — pydantic doesn't merge
+# our overrides with the defaults, it replaces the entire `levels` dict.
+# Each level needs PROVIDER + MODEL + THINKING_BUDGET_TOKENS + MAX_TOOL_ITERATIONS
+# at minimum. THINKING_BUDGET_TOKENS = 0 because qwen-coder has no thinking mode.
+
+[dialectic.levels.minimal]
+PROVIDER = "custom"
+MODEL = "qwen-coder-32k"
+THINKING_BUDGET_TOKENS = 0
+MAX_TOOL_ITERATIONS = 1
+MAX_OUTPUT_TOKENS = 250
+
+[dialectic.levels.low]
+PROVIDER = "custom"
+MODEL = "qwen-coder-32k"
+THINKING_BUDGET_TOKENS = 0
+MAX_TOOL_ITERATIONS = 5
+
+[dialectic.levels.medium]
+PROVIDER = "custom"
+MODEL = "qwen-coder-32k"
+THINKING_BUDGET_TOKENS = 0
+MAX_TOOL_ITERATIONS = 2
+
+[dialectic.levels.high]
+PROVIDER = "custom"
+MODEL = "qwen-coder-32k"
+THINKING_BUDGET_TOKENS = 0
+MAX_TOOL_ITERATIONS = 4
+
+[dialectic.levels.max]
+PROVIDER = "custom"
+MODEL = "qwen-coder-32k"
+THINKING_BUDGET_TOKENS = 0
+MAX_TOOL_ITERATIONS = 10
+
+# Dreaming is a heavyweight pattern-finding pass over message history. We
+# keep it disabled but still set the provider so import-time client lookup
+# succeeds — Honcho's client resolver is config-driven, not enabled-driven.
+[dream]
+ENABLED = false
+PROVIDER = "custom"
+MODEL = "qwen-coder-32k"
+THINKING_BUDGET_TOKENS = 0
+MAX_TOOL_ITERATIONS = 1
+DEDUCTION_MODEL = "qwen-coder-32k"
+INDUCTION_MODEL = "qwen-coder-32k"

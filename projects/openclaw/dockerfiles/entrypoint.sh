@@ -4,11 +4,12 @@ set -e
 # =============================================================================
 # OpenClaw entrypoint
 #
-# All four agents (orchestrator, devops, worker, tester) reason via Ollama on
-# graphics-machine (qwen-coder-next-256k) and embed via Ollama on host-machine
-# (bge-m3-8k). Both endpoints are configured in openclaw.json. The gateway
-# only needs OLLAMA_API_KEY set so the bundled provider plugin activates;
-# any non-empty value works for self-hosted Ollama.
+# Four agents (orchestrator, devops, worker, tester) reason via a self-hosted
+# Ollama at http://graphics-machine:11434 (model qwen-coder-next-256k). Memory
+# search uses bge-m3-8k via the Ollama running on host-machine. Endpoints are
+# pinned in app/openclaw.json — the only env-based credential is
+# OLLAMA_API_KEY, a non-empty placeholder OpenClaw requires to activate the
+# bundled Ollama provider plugin.
 #
 # Config and skills are sourced from the synced repo at /workspace/repo if
 # available (updated continuously by the git-sync sidecar), falling back to
@@ -17,8 +18,8 @@ set -e
 # restart without an image rebuild.
 # =============================================================================
 
-if [ -z "$OLLAMA_API_KEY" ]; then
-  echo "ERROR: OLLAMA_API_KEY is not set. The Ollama provider plugin needs a non-empty value (use 'ollama-local' for self-hosted)." >&2
+if [ -z "${OLLAMA_API_KEY:-}" ]; then
+  echo "ERROR: OLLAMA_API_KEY is not set (any non-empty placeholder works for self-hosted Ollama)." >&2
   exit 1
 fi
 
@@ -89,24 +90,30 @@ if [ -d /workspace/repo/.git ]; then
   fi
 fi
 
+# ---------- Wipe gateway config backups so the synced repo always wins ----------
+# The gateway maintains rolling backups (`openclaw.json.bak`, `.last-good`,
+# `.clobbered.<ts>`) and on startup will *auto-restore* from `.last-good` if it
+# considers our seeded config to be "missing meta". On the first deploy of a
+# new shape (per-agent skills allowlist, plugin entries, mcp.servers) it
+# silently reverted to a previous boot's clobbered state, dropping our intent.
+#
+# Strategy: wipe every backup before we copy. The seeded openclaw.json from
+# the synced repo is the single source of truth; if the gateway mutates it,
+# we'll re-seed the next boot. Backups buy nothing here — git is the backup.
+echo "Wiping stale openclaw.json backups under $OPENCLAW_STATE_DIR..."
+rm -f "$OPENCLAW_STATE_DIR"/openclaw.json.bak* \
+      "$OPENCLAW_STATE_DIR"/openclaw.json.last-good \
+      "$OPENCLAW_STATE_DIR"/openclaw.json.clobbered.*
+
 # ---------- Seed openclaw.json from the synced repo, falling back to /app ----------
 
-SEED_SRC="$REPO_APP_DIR/openclaw.json"
-if [ -f "$SEED_SRC" ]; then
-  echo "Using openclaw.json from synced repo: $SEED_SRC"
+if [ -f "$REPO_APP_DIR/openclaw.json" ]; then
+  echo "Using openclaw.json from synced repo: $REPO_APP_DIR/openclaw.json"
+  cp "$REPO_APP_DIR/openclaw.json" "$OPENCLAW_STATE_DIR/openclaw.json"
 else
   echo "Using openclaw.json from image baseline: /app/openclaw.json"
-  SEED_SRC="/app/openclaw.json"
+  cp /app/openclaw.json "$OPENCLAW_STATE_DIR/openclaw.json"
 fi
-# Drop any auto-restore artifacts the gateway uses to revert "unsanctioned"
-# external edits. Without this, our synced openclaw.json gets replaced from
-# .last-good / .bak on the next gateway boot ("missing-meta-vs-last-good"),
-# silently undoing repo-tracked config changes.
-cp "$SEED_SRC" "$OPENCLAW_STATE_DIR/openclaw.json"
-cp "$SEED_SRC" "$OPENCLAW_STATE_DIR/openclaw.json.last-good"
-rm -f "$OPENCLAW_STATE_DIR"/openclaw.json.bak \
-      "$OPENCLAW_STATE_DIR"/openclaw.json.bak.* \
-      "$OPENCLAW_STATE_DIR"/openclaw.json.clobbered.*
 
 # ---------- Skills: prefer synced repo, fallback to /app/skills ----------
 # `skills.load.extraDirs: ["./skills"]` resolves relative to the gateway's
@@ -120,6 +127,111 @@ elif [ -d /app/skills ]; then
   ln -s /app/skills "$OPENCLAW_STATE_DIR/skills"
   echo "Skills symlinked from image baseline."
 fi
+
+# ---------- Per-agent persona seeding ----------
+# Each agent has its own workspace at /workspace/.openclaw/workspaces/<id>/
+# containing personality (SOUL.md, AGENTS.md, IDENTITY.md) plus the agent's
+# own memory (memory/, MEMORY.md, DREAMS.md).
+#
+# Personality files come from git (versioned, reviewable in PRs). Memory
+# files are runtime state in the Docker volume. On boot we sync the
+# personality from the repo to the runtime workspace, but never touch
+# memory files — agent state survives restarts.
+#
+# Sources, in order of preference:
+#   1. /workspace/repo/projects/openclaw/app/workspaces/<id>/  (synced repo)
+#   2. /app/workspaces/<id>/                                    (image baseline)
+
+REPO_WORKSPACES_DIR="$REPO_APP_DIR/workspaces"
+IMAGE_WORKSPACES_DIR="/app/workspaces"
+
+if [ -d "$REPO_WORKSPACES_DIR" ]; then
+  PERSONA_SOURCE_DIR="$REPO_WORKSPACES_DIR"
+  echo "Persona source: synced repo ($PERSONA_SOURCE_DIR)"
+elif [ -d "$IMAGE_WORKSPACES_DIR" ]; then
+  PERSONA_SOURCE_DIR="$IMAGE_WORKSPACES_DIR"
+  echo "Persona source: image baseline ($PERSONA_SOURCE_DIR)"
+else
+  PERSONA_SOURCE_DIR=""
+  echo "WARNING: No workspaces/ directory found. Agents will boot with no persona files." >&2
+fi
+
+if [ -n "$PERSONA_SOURCE_DIR" ]; then
+  for AGENT_ID in orchestrator devops worker tester; do
+    SRC_DIR="$PERSONA_SOURCE_DIR/$AGENT_ID"
+    DEST_DIR="$OPENCLAW_STATE_DIR/workspaces/$AGENT_ID"
+
+    if [ ! -d "$SRC_DIR" ]; then
+      echo "  $AGENT_ID: no source dir at $SRC_DIR — skipping" >&2
+      continue
+    fi
+
+    mkdir -p "$DEST_DIR"
+
+    # Copy ONLY persona files — never overwrite agent memory or daily notes.
+    for FILE in SOUL.md AGENTS.md IDENTITY.md USER.md TOOLS.md HEARTBEAT.md BOOT.md; do
+      if [ -f "$SRC_DIR/$FILE" ]; then
+        cp "$SRC_DIR/$FILE" "$DEST_DIR/$FILE"
+      fi
+    done
+
+    # Ensure the memory subdir exists so the agent has somewhere to write.
+    mkdir -p "$DEST_DIR/memory"
+
+    echo "  $AGENT_ID: persona seeded → $DEST_DIR"
+  done
+fi
+
+# ---------- Cleanup: stale bootstrap files at /workspace/repo root -----------
+# Earlier boots had agents.list[].workspace stripped to "/workspace/repo".
+# The gateway's bootstrap ritual then created vanilla AGENTS.md, SOUL.md,
+# etc. at the repo root, polluting `git status -sb` with untracked files
+# and (worse) potentially being read as the active persona.
+#
+# These files don't belong in /workspace/repo — agent state lives under
+# /workspace/.openclaw/workspaces/<id>/. Remove them if present and untracked.
+if [ -d /workspace/repo ]; then
+  for FILE in AGENTS.md SOUL.md IDENTITY.md USER.md TOOLS.md HEARTBEAT.md BOOT.md MEMORY.md; do
+    F="/workspace/repo/$FILE"
+    if [ -f "$F" ] && ! git -C /workspace/repo ls-files --error-unmatch "$FILE" >/dev/null 2>&1; then
+      echo "  cleanup: removing stale bootstrap file /workspace/repo/$FILE"
+      rm -f "$F"
+    fi
+  done
+fi
+
+# ---------- Pinned install: Honcho memory plugin ----------
+# `RUN openclaw plugins install ...` in the Dockerfile silently no-ops at
+# build time (gateway state dirs not yet initialized). Runtime install works.
+# We pin a specific version and force-install on every boot so deploys can't
+# silently drift to whatever ClawHub had last time the volume was wiped.
+HONCHO_PLUGIN_VERSION="1.3.3"
+INSTALLED_VERSION=$(cat /home/node/.openclaw/extensions/openclaw-honcho/package.json 2>/dev/null \
+  | grep -E '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+
+if [ "$INSTALLED_VERSION" = "$HONCHO_PLUGIN_VERSION" ]; then
+  echo "Honcho plugin v${HONCHO_PLUGIN_VERSION} already installed — skipping."
+else
+  if [ -n "$INSTALLED_VERSION" ]; then
+    echo "Honcho plugin: installed=${INSTALLED_VERSION}, desired=${HONCHO_PLUGIN_VERSION} — reinstalling."
+  else
+    echo "Installing @honcho-ai/openclaw-honcho@${HONCHO_PLUGIN_VERSION}..."
+  fi
+  if openclaw plugins install --force "@honcho-ai/openclaw-honcho@${HONCHO_PLUGIN_VERSION}" 2>&1 | sed 's/^/  /'; then
+    echo "Honcho plugin v${HONCHO_PLUGIN_VERSION} installed."
+  else
+    echo "WARNING: Honcho plugin install failed — gateway will boot without it." >&2
+  fi
+fi
+
+# ---------- Idempotent register: GitNexus MCP server ----------
+# `mcp.servers.gitnexus` in our committed openclaw.json gets stripped by the
+# gateway's config validator (the server isn't "registered" via the official
+# `openclaw mcp set` path). Register it via CLI here so the gateway accepts
+# it as a known tool surface. Idempotent — re-running just overwrites.
+echo "Registering GitNexus MCP server..."
+openclaw mcp set gitnexus '{"command":"npx","args":["-y","gitnexus@latest","mcp"]}' 2>&1 | sed 's/^/  /' \
+  || echo "WARNING: GitNexus MCP register failed — worker/tester won't have gitnexus_* tools." >&2
 
 # ---------- Gateway auth ----------
 

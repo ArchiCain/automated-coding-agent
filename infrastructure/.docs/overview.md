@@ -2,7 +2,9 @@
 
 This directory holds the compose stacks the repo ships to the tailnet
 host. See `ecosystem.md` in this same directory for the full picture
-(diagrams, host roles, deploy flow, bootstrap steps).
+(diagrams, host roles, deploy flow, bootstrap steps), and `hosts.md`
+for the concrete inventory of each tailnet host (specs, installed
+Ollama models, listen addresses).
 
 ## Directory structure
 
@@ -10,7 +12,8 @@ host. See `ecosystem.md` in this same directory for the full picture
 infrastructure/
 ├── .docs/
 │   ├── overview.md    # This file
-│   └── ecosystem.md   # The top-level map
+│   ├── ecosystem.md   # The top-level map (roles, diagrams, deploy flow)
+│   └── hosts.md       # Per-host inventory (specs, Ollama models, ports)
 └── compose/
     ├── .docs/overview.md
     ├── dev/           # Long-lived application stack (frontend, backend, keycloak, postgres)

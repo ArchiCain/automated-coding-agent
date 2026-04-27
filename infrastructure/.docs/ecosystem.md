@@ -14,7 +14,8 @@ deploy target, and how a task flows through OpenClaw to a PR.
 | **graphics-machine** (intermittent Ubuntu, tailnet, GPU) | Serves the primary coding LLM via Ollama | Out of scope for this repo — configured out-of-band |
 
 Tailscale assigns the actual hostnames for host-machine and graphics-machine;
-docs refer to them by role.
+docs refer to them by role. Concrete per-host specs (CPU, RAM, Ollama
+version, installed models, listen addresses) live in `hosts.md`.
 
 ## System at a glance
 
@@ -29,15 +30,16 @@ flowchart LR
     LAPTOP["Dev laptop<br/>Claude Code"]
 
     subgraph HOST["host-machine (always-on, CPU)"]
-      OCG["OpenClaw gateway<br/>:3001"]
+      OCG["OpenClaw gateway<br/>host:3001"]
       GS["git-sync sidecar<br/>clones + polls dev"]
+      HONCHO["Honcho stack<br/>db + redis + api + deriver<br/>api on 127.0.0.1:8000"]
       APP["dev compose stack<br/>frontend:3000<br/>backend:8080<br/>keycloak:8081<br/>postgres (internal)"]
       SB["sandboxes<br/>env-* compose projects"]
-      OLC["Ollama :11434<br/>bge-m3 (embeds)<br/>qwen-coder-32k (fallback)"]
+      OLC["Ollama :11434<br/>bge-m3-8k (embeds)<br/>qwen-coder-32k (Honcho LLM)"]
     end
 
     subgraph GPU["graphics-machine (intermittent, GPU)"]
-      OLG["Ollama :11434<br/>qwen-coder-72b (primary)"]
+      OLG["Ollama :11434<br/>qwen-coder-next-256k (agent brain)"]
     end
   end
 
@@ -46,9 +48,10 @@ flowchart LR
   CI -- "build + push images" --> GH
   CI -- "tailscale join + ssh deploy" --> HOST
   GS -- "pull dev" --> GH
-  OCG -- "LLM primary" --> OLG
-  OCG -- "LLM fallback" --> OLC
+  OCG -- "agent brain" --> OLG
   OCG -- "memory embed" --> OLC
+  OCG -- "memory tools" --> HONCHO
+  HONCHO -- "deriver/summary/dialectic" --> OLC
   OCG -- "docker socket" --> SB
   OCG -. "manages app stack" .-> APP
 ```
@@ -155,12 +158,13 @@ else on each deploy.
 ### On the laptop — one-off
 
 1. Populate `.env` at the repo root using `.env.template` as the guide.
-   Eight required values: `TS_AUTHKEY`, `DEPLOY_HOST`,
-   `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENCLAW_AUTH_TOKEN`,
-   `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, and
-   `GITHUB_APP_PRIVATE_KEY_PATH`. Two optional overrides
-   (`DEPLOY_USER` defaults to `ubuntu`; `DOCKER_SOCKET_GID` defaults to
-   `999`).
+   Seven required values: `TS_AUTHKEY`, `DEPLOY_HOST`,
+   `OLLAMA_API_KEY` (any non-empty placeholder; real endpoints are
+   pinned in `projects/openclaw/app/openclaw.json`),
+   `OPENCLAW_AUTH_TOKEN`, `GITHUB_APP_ID`,
+   `GITHUB_APP_INSTALLATION_ID`, and `GITHUB_APP_PRIVATE_KEY_PATH`.
+   Two optional overrides (`DEPLOY_USER` defaults to `ubuntu`;
+   `DOCKER_SOCKET_GID` defaults to `999`).
 2. `task setup:check` — fails loudly if anything's missing or still at
    a placeholder.
 3. `task gh:setup` — shows a preview (character counts, no values
@@ -203,9 +207,11 @@ packages after step 8.
 
 ### graphics-machine
 
-Out-of-band — Ollama installed as a systemd service, models pulled,
-tailnet-joined. See `ideas/openclaw-local-llm-hybrid.md` for the
-running notes.
+Out-of-band — Ollama installed natively on Windows, models pulled,
+tailnet-joined. Concrete current-state inventory: `hosts.md`. Design
+rationale + running notes from when it was set up:
+`ideas/openclaw-local-llm-hybrid.md` and
+`ideas/graphics-machine-setup.md`.
 
 ## What lives where in docs
 
@@ -222,7 +228,8 @@ running notes.
 
 infrastructure/.docs/
 ├── overview.md                           # Index for this directory
-└── ecosystem.md                          # ← You are here
+├── ecosystem.md                          # ← You are here
+└── hosts.md                              # Per-host inventory (specs, Ollama, ports)
 
 infrastructure/compose/.docs/
 └── overview.md                           # Compose stack layout, ports, sandboxes

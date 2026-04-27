@@ -10,18 +10,17 @@ OpenClaw itself is **edited via Claude Code** in the user's laptop CLI — skill
 
 Prerequisites: the rest of the compose stack comes up with `task up` from the repo root. OpenClaw shares the same compose runtime.
 
-1. **Set env vars** in `infrastructure/compose/openclaw/.env` (start from the template):
+1. **Set env vars** in the root `.env` (start from `.env.template` at the repo root):
    ```
-   OLLAMA_API_KEY=ollama-local        # placeholder; activates the Ollama plugin
+   OLLAMA_API_KEY=ollama-local       # any non-empty placeholder
    OPENCLAW_AUTH_TOKEN=<any strong random string>
    GITHUB_APP_ID=
    GITHUB_APP_INSTALLATION_ID=
-   # Place your GitHub App private key at the path referenced by the compose file.
+   GITHUB_APP_PRIVATE_KEY_PATH=.github-app-private-key.pem
    ```
-
-   Model endpoints are baked into `app/openclaw.json` — chat goes to
-   `http://graphics-machine:11434` (qwen-coder-next-256k), embeddings to
-   `http://host-machine:11434` (bge-m3-8k). No cloud API keys are used.
+   The agent brain (`graphics-machine` Ollama) and embedding model
+   (`host-machine` Ollama) endpoints are pinned in
+   `app/openclaw.json` — they don't need API keys.
 
 2. **Build and start** from the repo root:
    ```
@@ -51,6 +50,6 @@ Prerequisites: the rest of the compose stack comes up with `task up` from the re
 | `task openclaw:down`     | Stop everything, preserve the workspace volume |
 | `task openclaw:down:clean` | Stop and wipe the workspace volume (forces fresh clone) |
 
-## Deploy to host-machine
+## Tailnet host deploy
 
-Same compose project; `compose.prod.yml` overlays GHCR image references built by CI. The `.github/workflows/deploy-dev.yml` workflow builds images, joins the tailnet, rsyncs compose files onto host-machine, and runs `docker compose pull && up -d`. Reached over the tailnet at `http://<host-machine>:3001`. Full flow: `infrastructure/.docs/ecosystem.md`.
+On `host-machine`, the same compose project runs from images on GHCR — pushed and deployed automatically by `.github/workflows/deploy-dev.yml` on every push to `dev`. Browser access from any tailnet member at `http://host-machine:3001`.
