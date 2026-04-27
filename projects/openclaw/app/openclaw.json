@@ -147,6 +147,7 @@
       "active-memory": {
         "enabled": false,
         "config": {
+          "enabled": false,
           "agents": ["orchestrator", "devops", "worker", "tester"],
           "allowedChatTypes": ["direct"],
           "queryMode": "recent",
