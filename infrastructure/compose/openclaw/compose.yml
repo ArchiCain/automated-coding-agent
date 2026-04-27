@@ -2,13 +2,14 @@
 #
 # Two services: gateway, git-sync. One named volume: workspace (shared
 # between both so the sidecar's clone and token file are visible to the
-# gateway). Uses compose's default bridge network for the project —
-# gateway and git-sync coordinate only through the shared /workspace
-# volume, never over the network.
+# gateway).
 #
-# Host port mapping (phase 1 port-based URL model):
-#   gateway (Control UI + websocket) -> http://localhost:3001
-#     - container listens on :18789 (EXPOSE in prod.Dockerfile)
+# Network model:
+#   The gateway uses `network_mode: host` so it inherits host-machine's
+#   tailnet routes. Without this, the container can't resolve or reach
+#   `graphics-machine` (the box hosting the brain LLM) over the tailnet.
+#   The gateway listens on host:3001 directly (per gateway.port in
+#   openclaw.json); the bridge `ports:` mapping is unused under host net.
 #
 # The gateway bind-mounts the host docker socket so the devops agent can
 # run `docker compose` + `task` directly (phase 4 sandbox provisioning).
@@ -18,8 +19,7 @@ services:
     build:
       context: ../../../projects/openclaw
       dockerfile: dockerfiles/prod.Dockerfile
-    ports:
-      - "3001:18789"
+    network_mode: host
     depends_on:
       - git-sync
     environment:

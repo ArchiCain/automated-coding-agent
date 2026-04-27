@@ -1,7 +1,7 @@
 {
   "gateway": {
     "mode": "local",
-    "port": 18789,
+    "port": 3001,
     "bind": "lan",
     "controlUi": {
       "allowedOrigins": []
