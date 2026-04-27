@@ -26,6 +26,10 @@ services:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-ollama-local}
       OPENCLAW_AUTH_TOKEN: ${OPENCLAW_AUTH_TOKEN}
       OPENCLAW_ALLOWED_ORIGINS: ${OPENCLAW_ALLOWED_ORIGINS:-http://localhost:3001}
+      # Bonjour/mDNS LAN discovery has no path through the docker bridge and
+      # crashes the gateway with CIAO ANNOUNCEMENT CANCELLED unhandled
+      # rejections. Container access is via tailnet hostname, not LAN mDNS.
+      OPENCLAW_DISABLE_BONJOUR: "1"
       OPENCLAW_WAIT_FOR_REPO: "1"
       OPENCLAW_GIT_BRANCH: ${OPENCLAW_GIT_BRANCH:-dev}
       OPENCLAW_GIT_APP_SLUG: ${OPENCLAW_GIT_APP_SLUG:-scain-openclaw}

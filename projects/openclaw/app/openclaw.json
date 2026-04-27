@@ -136,9 +136,6 @@
   },
   "plugins": {
     "entries": {
-      "bonjour": {
-        "enabled": false
-      },
       "memory-core": {
         "enabled": true,
         "config": {
