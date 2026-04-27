@@ -36,10 +36,17 @@ IMAGE_TAG=<sha> docker compose \
   pull && up -d
 ```
 
-## Port model
+## Port model and access URLs
 
-On host-machine, services listen on these ports for traffic arriving
-over the tailnet:
+On host-machine, services listen on these ports. **The right hostname
+depends on where the caller is standing**:
+
+| Vantage | Hostname |
+|---------|----------|
+| Operator's laptop, on the tailnet | `host-machine` (or `host-machine.heron-bearded.ts.net` for HTTPS via Tailscale Serve) |
+| Inside the OpenClaw gateway container (tester/worker) | `host.docker.internal` |
+| On host-machine itself (SSH'd in for debugging) | `localhost` |
+| Service-to-service within the same compose project | the compose service name (`backend:8080`, `postgres:5432`) |
 
 | Service | Port |
 |---------|------|
@@ -51,10 +58,13 @@ over the tailnet:
 | Sandbox `env-{id}` backend | `{base+1}` |
 | Sandbox `env-{id}` Keycloak | `{base+2}` |
 
-Where `{base}` = `20000 + (cksum(SANDBOX_ID) % 1000) * 10`, bumped by 10 on
-collision. `scripts/sandbox-deploy.sh` prints the allocated triple on
-create. Reach services via the tailnet hostname — e.g.
-`http://<host-machine>:3000`.
+Where `{base}` = `20000 + (cksum(SANDBOX_ID) % 1000) * 10`, bumped by 10
+on collision. `scripts/sandbox-deploy.sh` prints the allocated triple on
+create.
+
+When telling the user a URL, **always use the `host-machine` form** —
+never `localhost`. The user's laptop is on the tailnet; `localhost` from
+their seat is the laptop itself, not host-machine.
 
 ## Bringing a stack up
 
@@ -140,12 +150,17 @@ push.
 `.env.template` files are tracked (`.gitignore` whitelists them).
 `.env` files are not. Copy the template, populate on the host, never commit.
 
-The OpenClaw `.env` includes the Anthropic + OpenAI API keys, GitHub App
-installation ID, and the host path to the App private-key PEM. Loss or
-exposure requires regenerating those credentials.
+The OpenClaw `.env` carries `OLLAMA_API_KEY` (a non-empty placeholder
+required to activate the bundled Ollama provider plugin — endpoints
+themselves are pinned in `projects/openclaw/app/openclaw.json`),
+`OPENCLAW_AUTH_TOKEN`, GitHub App installation ID, and the host path
+to the App private-key PEM. The Honcho substack picks up
+`HONCHO_DB_PASSWORD` (optional, defaults to `honcho`). No cloud LLM
+API keys are required.
 
 ## Related docs
 
 - `infrastructure/.docs/ecosystem.md` — deploy flow, host roles, diagrams
-- `projects/openclaw/app/skills/devops.md` — how the devops agent uses `task env:*`
+- `infrastructure/.docs/hosts.md` — concrete per-host inventory (specs, Ollama models, ports)
+- `projects/openclaw/app/workspaces/devops/AGENTS.md` — how the devops agent uses `task env:*`
 - `projects/{project}/dockerfiles/` — service Dockerfiles that compose builds

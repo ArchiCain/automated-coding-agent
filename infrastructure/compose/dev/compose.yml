@@ -4,11 +4,21 @@
 # default bridge network for the project — service-to-service DNS is
 # provided automatically by compose (e.g. backend -> postgres:5432).
 #
-# Host port mapping (phase 1 port-based URL model):
-#   frontend -> http://localhost:3000
-#   backend  -> http://localhost:8080
-#   keycloak -> http://localhost:8081
+# Where to reach the dev app from the operator's laptop (over the tailnet):
+#   frontend -> http://host-machine:3000   (or https://host-machine.heron-bearded.ts.net)
+#   backend  -> http://host-machine:8080
+#   keycloak -> http://host-machine:8081
 #   postgres -> internal only (not published)
+#
+# Where to reach the dev app from inside the OpenClaw gateway container
+# (e.g. tester driving Playwright, worker hitting an API):
+#   frontend -> http://host.docker.internal:3000
+#   backend  -> http://host.docker.internal:8080
+#   keycloak -> http://host.docker.internal:8081
+#
+# `localhost` is only the right host when running on host-machine itself
+# (e.g. SSH'd in to debug). Never tell the user a localhost URL — they're
+# on the laptop, not on host-machine.
 
 services:
   postgres:

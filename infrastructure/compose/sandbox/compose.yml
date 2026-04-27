@@ -8,6 +8,13 @@
 # deploy script. The allocator picks a non-overlapping triple from
 # 20000-29990 and exports it before calling `docker compose up -d`.
 #
+# Where to reach a sandbox from the operator's laptop (over the tailnet):
+#   frontend -> http://host-machine:${SANDBOX_BASE_PORT_FRONTEND}
+#   backend  -> http://host-machine:${SANDBOX_BASE_PORT_BACKEND}
+#   keycloak -> http://host-machine:${SANDBOX_BASE_PORT_KEYCLOAK}
+# `task env:create -- <id>` prints the assigned triple. From inside the
+# gateway container (tester/worker), substitute `host.docker.internal`.
+#
 # Required environment variables (set inline by `scripts/sandbox-deploy.sh`,
 # or via `compose/sandbox/.env` for manual debugging):
 #   SANDBOX_ID                   — lowercase alphanumeric + hyphen, 1-41 chars

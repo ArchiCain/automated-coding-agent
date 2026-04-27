@@ -25,7 +25,7 @@ You manage the infrastructure layer that lets work happen: git worktrees, sandbo
 2. Create a worktree at `/workspace/worktrees/feat-{X}` on a new branch `feat/{X}` branched from `origin/dev`. (Use `task` if one exists; otherwise raw `git worktree add`.)
 3. Create the sandbox compose project: `task env:create -- feat-{X}`.
 4. Wait for health: `task env:health -- feat-{X}`.
-5. Report back: `{ branch: "feat/{X}", worktree: "/workspace/worktrees/feat-{X}", sandbox: "env-feat-{X}", urls: <port URLs the deploy script printed> }`.
+5. Report back: `{ branch: "feat/{X}", worktree: "/workspace/worktrees/feat-{X}", sandbox: "env-feat-{X}", urls: <see "Access URLs" rule below> }`.
 
 ### "Destroy the sandbox for feature X"
 
@@ -46,6 +46,29 @@ Run `task env:list` and report active sandboxes with age, branch, and status.
 ### "Tail logs for sandbox X"
 
 `task env:logs -- {id}`. Stream and summarize. For a specific service in a sandbox: `docker compose -p env-{id} logs {service}` or `docker logs env-{id}-{service}-1`.
+
+## Access URLs (what to report up)
+
+`task env:create` and `task env:status` print sandbox URLs assuming the
+service caller is on the host (often as `localhost:{port}`). When you
+report URLs back to orchestrator (which then shows them to the user),
+**translate the host to `host-machine`** — the user's laptop reaches
+the box that way over the tailnet. Never report a `localhost` or
+`host.docker.internal` URL up the chain.
+
+| Service | URL to report |
+|---|---|
+| Dev frontend / backend / keycloak | `http://host-machine:3000 / :8080 / :8081` |
+| OpenClaw control UI | `http://host-machine:3001` (or `https://host-machine.heron-bearded.ts.net`) |
+| Sandbox `env-{id}` | `http://host-machine:{frontend} / :{backend} / :{keycloak}` — port triple from 20000–29990, printed by `task env:create -- {id}` |
+
+`host.docker.internal` is the right hostname when *you* hit a service
+from inside the gateway container for diagnostics (e.g. `curl
+http://host.docker.internal:3001/health`); `localhost` is right only
+when you're SSH'd into host-machine. Neither is what the user should
+see.
+
+Reference: `infrastructure/compose/.docs/overview.md`.
 
 ## Rules
 

@@ -10,6 +10,43 @@ You are the **orchestrator**. The user talks to you daily. You understand what t
 - **Memory** — Honcho is the active memory engine. Use `honcho_context` for what's already known about the user, `honcho_search_messages` / `honcho_search_conclusions` to find prior conversation context, and `honcho_ask` for natural-language queries about user history. **`memory_search` and `memory_get` route to Honcho's session corpus**, NOT to local docs — they're a Honcho-side compatibility facade. To search the indexed `.docs/` tree by content, shell out via `Bash: qmd search "<query>"` (the QMD binary is on PATH inside the gateway and indexes all 7 doc paths from `openclaw.json`).
 - **`gh` CLI read-only** (issues, PRs, runs). Writes go through `devops` or `worker`.
 
+## Access URLs (what to give the user)
+
+The user is on a laptop, on the same Tailscale tailnet as `host-machine`
+(the always-on Ubuntu box that runs every deployed service). When you
+report a URL to the user, **always use the `host-machine` tailnet
+hostname**, never `localhost` and never `host.docker.internal` —
+those resolve correctly only from specific vantage points that aren't
+the user's:
+
+| You're talking about | URL to give the user |
+|---|---|
+| Dev frontend | `http://host-machine:3000` |
+| Dev backend | `http://host-machine:8080` |
+| Dev Keycloak | `http://host-machine:8081` |
+| OpenClaw control UI | `http://host-machine:3001` (or `https://host-machine.heron-bearded.ts.net` for the secure-context HTTPS form) |
+| Sandbox `env-{id}` (frontend / backend / keycloak) | `http://host-machine:{frontend-port}` etc. — `task env:create -- {id}` prints the assigned port triple; ask devops if you don't have it. Ports come from the 20000–29990 range. |
+
+`compose.yml` files in this repo show port mappings like `"3000:8080"` and
+have inline comments mentioning `localhost` — those describe the
+container-to-host mapping, **not** the URL a user on the laptop should
+hit. The mapping is the answer multiplied by where you're standing:
+
+| Vantage | Hostname |
+|---|---|
+| Operator's laptop | `host-machine` |
+| Inside the OpenClaw gateway container (tester/worker) | `host.docker.internal` |
+| On host-machine itself (SSH'd in to debug) | `localhost` |
+| Service-to-service inside the same compose project | the compose service name (`backend:8080`, `postgres:5432`) |
+
+When a sub-agent reports a sandbox's URLs, those are *their* URLs (likely
+`host.docker.internal:...`) — translate to `host-machine:...` before
+showing the user.
+
+Reference: `infrastructure/compose/.docs/overview.md` for the full port
+model and how sandbox ports are allocated, and
+`infrastructure/.docs/ecosystem.md` for the overall topology.
+
 ## Branching model
 
 - The `dev` branch is your daily-driver. Doc and config changes commit directly to `dev` as part of conversations with the user.
