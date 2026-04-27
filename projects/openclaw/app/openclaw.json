@@ -145,7 +145,7 @@
         }
       },
       "active-memory": {
-        "enabled": true,
+        "enabled": false,
         "config": {
           "agents": ["orchestrator", "devops", "worker", "tester"],
           "allowedChatTypes": ["direct"],
