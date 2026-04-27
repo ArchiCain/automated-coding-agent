@@ -134,6 +134,9 @@
       "extraDirs": ["./skills"]
     }
   },
+  "meta": {
+    "lastTouchedVersion": "2026.4.24"
+  },
   "plugins": {
     "entries": {
       "memory-core": {

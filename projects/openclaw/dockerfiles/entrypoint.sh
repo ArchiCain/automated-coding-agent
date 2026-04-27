@@ -91,13 +91,22 @@ fi
 
 # ---------- Seed openclaw.json from the synced repo, falling back to /app ----------
 
-if [ -f "$REPO_APP_DIR/openclaw.json" ]; then
-  echo "Using openclaw.json from synced repo: $REPO_APP_DIR/openclaw.json"
-  cp "$REPO_APP_DIR/openclaw.json" "$OPENCLAW_STATE_DIR/openclaw.json"
+SEED_SRC="$REPO_APP_DIR/openclaw.json"
+if [ -f "$SEED_SRC" ]; then
+  echo "Using openclaw.json from synced repo: $SEED_SRC"
 else
   echo "Using openclaw.json from image baseline: /app/openclaw.json"
-  cp /app/openclaw.json "$OPENCLAW_STATE_DIR/openclaw.json"
+  SEED_SRC="/app/openclaw.json"
 fi
+# Drop any auto-restore artifacts the gateway uses to revert "unsanctioned"
+# external edits. Without this, our synced openclaw.json gets replaced from
+# .last-good / .bak on the next gateway boot ("missing-meta-vs-last-good"),
+# silently undoing repo-tracked config changes.
+cp "$SEED_SRC" "$OPENCLAW_STATE_DIR/openclaw.json"
+cp "$SEED_SRC" "$OPENCLAW_STATE_DIR/openclaw.json.last-good"
+rm -f "$OPENCLAW_STATE_DIR"/openclaw.json.bak \
+      "$OPENCLAW_STATE_DIR"/openclaw.json.bak.* \
+      "$OPENCLAW_STATE_DIR"/openclaw.json.clobbered.*
 
 # ---------- Skills: prefer synced repo, fallback to /app/skills ----------
 # `skills.load.extraDirs: ["./skills"]` resolves relative to the gateway's
