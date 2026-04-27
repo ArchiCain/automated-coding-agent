@@ -16,9 +16,20 @@
 # endpoint configured via OPENAI_COMPATIBLE_BASE_URL).
 
 [app]
-# Honcho computes vector embeddings for stored messages. We keep this on
-# so honcho_search_messages works for cross-session memory.
-EMBED_MESSAGES = true
+# Honcho's SQLAlchemy models hardcode `Vector(1536)` in src/models.py
+# (`documents.embedding` and `message_embeddings.embedding`). The
+# `[vector_store].DIMENSIONS = 1024` setting and our pgvector ALTER
+# only affect the DB column type — the ORM still validates at the
+# application layer and rejects 1024-dim vectors with
+#   ValueError: expected 1536 dimensions, not 1024
+# before they reach the DB. Until upstream Honcho honors DIMENSIONS in
+# the model definitions (or we fork it), we have to disable embedding
+# storage. We lose `honcho_search_messages` (vector search of chat
+# history); the deriver-driven cross-agent learning path
+# (`honcho_search_conclusions`, `honcho_ask`) still works because
+# conclusions are stored as text and queried via SQL/text matching,
+# not embeddings.
+EMBED_MESSAGES = false
 
 [llm]
 # Honcho's embedding_client.py recognizes provider "openrouter" as the

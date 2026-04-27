@@ -246,8 +246,14 @@ fi
 # gateway's config validator (the server isn't "registered" via the official
 # `openclaw mcp set` path). Register it via CLI here so the gateway accepts
 # it as a known tool surface. Idempotent — re-running just overwrites.
+#
+# We invoke the image-baked `gitnexus` binary directly (installed globally
+# via `npm install -g gitnexus` in prod.Dockerfile). The earlier
+# `npx -y gitnexus@latest mcp` form fetched from the npm registry on every
+# gateway boot and reliably timed out at 30s, blocking startup for half a
+# minute and leaving worker/tester without gitnexus tools.
 echo "Registering GitNexus MCP server..."
-openclaw mcp set gitnexus '{"command":"npx","args":["-y","gitnexus@latest","mcp"]}' 2>&1 | sed 's/^/  /' \
+openclaw mcp set gitnexus '{"command":"gitnexus","args":["mcp"]}' 2>&1 | sed 's/^/  /' \
   || echo "WARNING: GitNexus MCP register failed — worker/tester won't have gitnexus_* tools." >&2
 
 # ---------- Gateway auth ----------
