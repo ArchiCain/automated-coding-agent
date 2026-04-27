@@ -50,7 +50,7 @@
   "agents": {
     "defaults": {
       "llm": {
-        "idleTimeoutSeconds": 600
+        "idleTimeoutSeconds": 0
       },
       "subagents": {
         "allowAgents": ["orchestrator", "devops", "worker", "tester"],
@@ -192,8 +192,8 @@
   "mcp": {
     "servers": {
       "gitnexus": {
-        "command": "npx",
-        "args": ["-y", "gitnexus@latest", "mcp"]
+        "command": "gitnexus",
+        "args": ["mcp"]
       }
     }
   }
