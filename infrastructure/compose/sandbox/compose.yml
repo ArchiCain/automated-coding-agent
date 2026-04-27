@@ -81,8 +81,12 @@ services:
       - "${SANDBOX_BASE_PORT_FRONTEND}:8080"
     depends_on:
       - backend
+    # See dev/compose.yml for the full explanation. Same trap, same fix:
+    # absolute `/srv/aca/...` so the host docker daemon finds the file
+    # regardless of whether compose was invoked from inside the gateway
+    # (where the project dir is `/workspace/repo/...`) or on the host.
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /srv/aca/infrastructure/compose/sandbox/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   keycloak:
     image: keycloak:${IMAGE_TAG:-${SANDBOX_ID}}

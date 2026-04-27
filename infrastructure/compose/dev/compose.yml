@@ -69,8 +69,16 @@ services:
       - "3000:8080"
     depends_on:
       - backend
+    # Absolute path on purpose. When `docker compose` is invoked from
+    # inside the OpenClaw gateway container (e.g. devops running
+    # `task env:create`), `./nginx.conf` would resolve relative to the
+    # compose-file project dir IN THE GATEWAY'S VIEW
+    # (`/workspace/repo/...`), which the host's docker daemon can't see.
+    # `/srv/aca` is bind-mounted into the gateway at the same path as
+    # on the host, so absolute `/srv/aca/...nginx.conf` resolves
+    # identically in both views and the host daemon can mount it.
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /srv/aca/infrastructure/compose/dev/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   keycloak:
     build:
