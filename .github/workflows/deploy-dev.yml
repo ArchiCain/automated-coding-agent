@@ -129,4 +129,5 @@ jobs:
           bash scripts/deploy.sh \
             --host "${{ inputs.host || vars.DEPLOY_HOST }}" \
             --image-tag "${{ inputs.image_tag || github.sha }}" \
-            --config-dir /tmp/config
+            --config-dir /tmp/config \
+            --services openclaw

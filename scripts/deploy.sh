@@ -99,11 +99,23 @@ if [ "$DRY_RUN" -eq 0 ]; then
   done
 fi
 
+# Tailscale already authenticates the peer at the network layer, and the
+# ephemeral GH runner has no prior known_hosts. Skip strict host-key
+# checking and don't pollute its (volatile) known_hosts file.
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null -o LogLevel=ERROR"
+
+# -----------------------------------------------------------------------------
+# 0. Bootstrap /srv/aca on the host. /srv is root-owned by default; the
+#    rsync below needs the deploy user to own /srv/aca itself. Idempotent.
+# -----------------------------------------------------------------------------
+echo "==> Bootstrapping /srv/aca on ${HOST}"
+run "ssh ${SSH_OPTS} ${USER_NAME}@${HOST} 'sudo install -d -m 0755 -o ${USER_NAME} -g ${USER_NAME} /srv/aca && install -d -m 0700 /srv/aca/secrets'"
+
 # -----------------------------------------------------------------------------
 # 1. Ship compose config to the host.
 # -----------------------------------------------------------------------------
 echo "==> Syncing compose config to ${HOST}"
-run "rsync -a --delete ${REPO_ROOT}/infrastructure/compose/ ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/"
+run "rsync -a --delete -e 'ssh ${SSH_OPTS}' ${REPO_ROOT}/infrastructure/compose/ ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/"
 
 # -----------------------------------------------------------------------------
 # 2. Ship rendered openclaw.env + PEM if --config-dir was passed.
@@ -118,9 +130,8 @@ if [ -n "$CONFIG_DIR" ]; then
       exit 5
     fi
   done
-  run "ssh ${USER_NAME}@${HOST} 'install -d -m 0700 /srv/aca/secrets'"
-  run "rsync -a ${CONFIG_DIR}/openclaw.env ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/openclaw/.env"
-  run "rsync -a --chmod=0600 ${CONFIG_DIR}/github-app.pem ${USER_NAME}@${HOST}:/srv/aca/secrets/github-app.pem"
+  run "rsync -a -e 'ssh ${SSH_OPTS}' ${CONFIG_DIR}/openclaw.env ${USER_NAME}@${HOST}:/srv/aca/infrastructure/compose/openclaw/.env"
+  run "rsync -a --chmod=0600 -e 'ssh ${SSH_OPTS}' ${CONFIG_DIR}/github-app.pem ${USER_NAME}@${HOST}:/srv/aca/secrets/github-app.pem"
 fi
 
 # -----------------------------------------------------------------------------
@@ -141,10 +152,10 @@ for project in "${PROJECTS[@]}"; do
   compose_cmd="IMAGE_TAG=${IMAGE_TAG} docker compose -f ${base}/compose.yml -f ${base}/compose.prod.yml"
 
   echo "==> Pulling ${project} images on ${HOST} (tag=${IMAGE_TAG})"
-  run "ssh ${USER_NAME}@${HOST} '${compose_cmd} pull'"
+  run "ssh ${SSH_OPTS} ${USER_NAME}@${HOST} '${compose_cmd} pull'"
 
   echo "==> Bringing ${project} up on ${HOST}"
-  run "ssh ${USER_NAME}@${HOST} '${compose_cmd} up -d'"
+  run "ssh ${SSH_OPTS} ${USER_NAME}@${HOST} '${compose_cmd} up -d'"
 done
 
 if [ "$DRY_RUN" -eq 1 ]; then
