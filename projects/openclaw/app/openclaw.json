@@ -162,8 +162,9 @@
         "enabled": true
       },
       "active-memory": {
-        "enabled": true,
+        "enabled": false,
         "config": {
+          "enabled": false,
           "agents": ["orchestrator", "devops", "worker", "tester"],
           "allowedChatTypes": ["direct"],
           "queryMode": "recent",
