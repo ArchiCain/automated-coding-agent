@@ -51,6 +51,9 @@
       "model": {
         "primary": "ollama/qwen-coder-next-256k"
       },
+      "llm": {
+        "idleTimeoutSeconds": 600
+      },
       "subagents": {
         "allowAgents": ["orchestrator", "devops", "worker", "tester"],
         "maxSpawnDepth": 3,
