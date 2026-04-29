@@ -8,7 +8,6 @@ You write code to match a specification, verify it runs, coordinate with `tester
 - **Shell** for running build, test, and task commands.
 - **Git**: commit and push to your `feat/{X}` branch. Never push to `dev` or `main`.
 - **`gh` CLI**: open draft PRs from `feat/{X}` to `dev`. Promote to "ready for review" when tests pass.
-- **GitNexus MCP** (`gitnexus_*` tools) — code intelligence over the indexed repo. Use `gitnexus_query` for hybrid search, `gitnexus_context` for symbol overviews, `gitnexus_impact` for blast-radius analysis before risky changes, `gitnexus_detect_changes` to see what your edits affect. Avoid `gitnexus_rename` — use normal Edit operations for in-feature renames; reserve coordinated multi-file rename only for refactors that span the whole codebase.
 - **Read-only on all of `.docs/`**, with one narrow write exception below.
 
 ## Doc write scope (narrow)
@@ -29,7 +28,7 @@ You MAY NOT edit:
 ## Implementation flow
 
 1. Read `.docs/features/{X}/spec.md` and `contracts.md` as ground truth.
-2. Read relevant existing code to understand conventions. Use `gitnexus_query` / `gitnexus_context` for code intelligence (the indexed code graph), `Bash: qmd search "<query>"` for prose search over `.docs/`, and `honcho_search_conclusions` if you need prior decisions captured during earlier sessions on this feature. Note: `memory_search`/`memory_get` route to Honcho's session corpus, not local files — use `qmd search` for that.
+2. Read relevant existing code to understand conventions. Use `Bash: qmd search "<query>"` for prose search over `.docs/`, and `honcho_search_conclusions` if you need prior decisions captured during earlier sessions on this feature. Note: `memory_search`/`memory_get` route to Honcho's session corpus, not local files — use `qmd search` for that.
 3. Plan the smallest implementation slice that satisfies the spec.
 4. Write code. Commit frequently with clear messages explaining WHY each change.
 5. **Deploy to the sandbox.** Run `task env:deploy NAME={id} WORKTREE={worktree-path}` (or the equivalent for your feature's layer — frontend-only features may use a build + ingress check instead). "The build passes locally" is not a deploy. If a sandbox was created for this feature, it must receive your code.

@@ -69,11 +69,6 @@ RUN set -eux; \
 # QMD memory search backend
 RUN npm install -g @tobilu/qmd
 
-# GitNexus — code intelligence MCP server for worker + tester agents.
-# Installed globally so `gitnexus mcp` is on PATH for the OpenClaw MCP runner.
-# Indexing the repo (`gitnexus analyze`) is run on-demand, not at image build.
-RUN npm install -g gitnexus
-
 # Note: @honcho-ai/openclaw-honcho is installed at container start by the
 # entrypoint, NOT here. `openclaw plugins install` silently no-ops at Docker
 # build time (gateway state dirs not initialized yet); runtime works fine.

@@ -13,7 +13,6 @@ Static code review is a fallback when a sandbox is unavailable, not a substitute
 - **Browser tool** (`browser` plugin) for interactive testing: navigate, click, type, evaluate, snapshot, screenshot, cookies.
 - **HTTP client** (`curl`) for API assertions.
 - **`docker compose` read-only** to inspect sandbox containers.
-- **GitNexus MCP** (`gitnexus_*`) — `gitnexus_query` / `gitnexus_context` to find source under test, `gitnexus_impact` to scope coverage gaps. Never `gitnexus_rename` (you don't write app code).
 
 ## You own tests end-to-end
 

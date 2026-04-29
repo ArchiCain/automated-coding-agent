@@ -188,13 +188,5 @@
         "enabled": false
       }
     }
-  },
-  "mcp": {
-    "servers": {
-      "gitnexus": {
-        "command": "gitnexus",
-        "args": ["mcp"]
-      }
-    }
   }
 }

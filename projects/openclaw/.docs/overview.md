@@ -154,7 +154,7 @@ Each agent has its own workspace at `/workspace/.openclaw/workspaces/<agent>/` (
 
 The entrypoint copies persona files from the synced repo into the runtime workspace on boot but **never touches** memory files — agent state survives restarts. Backup of memory files is addressed by Phase B (Honcho persists conversations to Postgres).
 
-Per-agent skill allowlists are configured via `agents.list[].skills`. Today every agent gets only the `repo-tasks` shared skill; per-agent capability skills (e.g., GitNexus for worker/tester) will be added in Phase 3.
+Per-agent skill allowlists are configured via `agents.list[].skills`. Today every agent gets only the `repo-tasks` shared skill; per-agent capability skills can be added later as needed.
 
 ## Skills
 
@@ -164,20 +164,7 @@ Per-agent skill allowlists are configured via `agents.list[].skills`. Today ever
 
 ## MCP servers
 
-OpenClaw mounts external tool servers via `mcp.servers` in `openclaw.json`.
-
-| Server | Tools | Used by |
-|--------|-------|---------|
-| `gitnexus` | `gitnexus_query`, `gitnexus_context`, `gitnexus_impact`, `gitnexus_detect_changes`, `gitnexus_rename`, `gitnexus_cypher`, group/cross-repo tools (16 total) | Worker + tester (referenced in their AGENTS.md). Orchestrator/devops have access but no reason to use them. |
-
-GitNexus indexes the repo via `gitnexus analyze` — the index lives at `~/.gitnexus/` (or `/workspace/.gitnexus/` inside the gateway, gitignored). The gateway image installs the `gitnexus` CLI globally. **First-run indexing is on-demand**, not at container start — agents (or operators) can call `gitnexus analyze` once before searching. Re-indexing on every commit is a future improvement.
-
-## Local Claude Code integration (operator's laptop)
-
-GitNexus is also wired into Claude Code on the operator's laptop:
-- **MCP server** registered via `claude mcp add gitnexus -- npx -y gitnexus@latest mcp`
-- **6 skill files** dropped at `.claude/skills/gitnexus/` (committed to the repo) — `Exploring`, `Debugging`, `Impact Analysis`, `Refactoring`, `CLI`, `Guide`
-- Local index at `.gitnexus/` (gitignored) — refresh with `npx gitnexus analyze --skip-agents-md`
+None currently configured. OpenClaw mounts external tool servers via `mcp.servers` in `openclaw.json` when needed.
 
 ## Directory Layout
 
@@ -187,7 +174,7 @@ projects/openclaw/
 ├── README.md                      ← human quickstart
 ├── Taskfile.yml                   ← up/down/logs/pair/shell tasks
 ├── app/
-│   ├── openclaw.json              ← gateway config (4 agents, per-agent workspaces, QMD, Honcho plugin, GitNexus MCP)
+│   ├── openclaw.json              ← gateway config (4 agents, per-agent workspaces, QMD, Honcho plugin)
 │   ├── workspaces/                ← persona files (SOUL/AGENTS/IDENTITY), seeded into runtime on boot
 │   │   ├── orchestrator/{SOUL,AGENTS,IDENTITY}.md
 │   │   ├── devops/{SOUL,AGENTS,IDENTITY}.md
@@ -196,9 +183,9 @@ projects/openclaw/
 │   └── skills/                    ← AgentSkills directories (one per skill)
 │       └── repo-tasks/SKILL.md    ← task-over-raw-command rule (shared)
 └── dockerfiles/
-    ├── prod.Dockerfile            ← gateway image (base + QMD + Honcho plugin + GitNexus CLI)
+    ├── prod.Dockerfile            ← gateway image (base + QMD + Honcho plugin)
     ├── git-sync.Dockerfile        ← alpine/git + curl + openssl sidecar
-    ├── entrypoint.sh              ← seeds personas, installs Honcho plugin, registers GitNexus MCP
+    ├── entrypoint.sh              ← seeds personas, installs Honcho plugin
     ├── git-credential-helper.sh   ← reads installation token written by git-sync sidecar
     └── gh-wrapper.sh              ← shadows /usr/bin/gh; reads same installation token for `gh` calls
 ```
@@ -218,7 +205,6 @@ projects/openclaw/
 ## What's Next
 
 - Verify Honcho observer relationships end-to-end (orchestrator sees worker's tool use)
-- Auto-trigger `gitnexus analyze` after each git-sync pull (currently on-demand)
 - Per-agent MCP server gating once OpenClaw exposes that as first-class config
 - Channel integrations: Slack/Telegram bots per agent for the "real teammate" UX
 - Pre-warm `qwen-coder-32k` on host-machine at boot so Honcho's first deriver call doesn't time out on cold-load (~12 s for the 26 GB model)
