@@ -1,5 +1,69 @@
 # CLAUDE.md
 
+## Pick up here next session
+
+The user is mid-stride on a planned expansion of OpenClaw. The two machines were powered down for a household move; **first thing to verify on resume is that both `graphics-machine` and `host-machine` are reachable on the tailnet and Ollama responds on each** (`curl http://graphics-machine:11434/api/tags`, same on host-machine). If anything is missing, that's the first work — see `infrastructure/.docs/hosts.md` for the per-host inventory.
+
+Once both machines are healthy, the agreed work for the next session is three things:
+
+### 1. Add a Tier-2 fast model on `host-machine`
+
+Today, host-machine runs only embeddings (`bge-m3`) and the Honcho deriver (`qwen2.5-coder:32b-instruct-q6_K` — oversized and CPU-slow for what Honcho's deriver actually does). The plan is to add a **second small instruct model** alongside the existing two — call it the **Tier-2** model — for fast routing, classification, JSON extraction, and Honcho's deriver workload.
+
+Target model: **`gemma4:e4b`** (Gemma 4 E4B, ~4.5B effective params, 128K ctx, native structured JSON output, Apache 2.0). Pulled via Ollama on host-machine. Reasoning for picking this specific model is captured in [`ideas/model-tiering-decision.md`](#) — write that doc as part of the work if it doesn't exist; the bullet points are below in "Decision rationale."
+
+Concrete tasks:
+- Pull `gemma4:e4b` on host-machine (`ollama pull gemma4:e4b`).
+- Decide and document an alias the way the existing models are aliased (e.g. `gemma4-e4b-128k`). Update `infrastructure/.docs/hosts.md` to list the new model.
+- Add a Tier-2 endpoint env var (likely `OLLAMA_TIER2_BASE_URL` + `OLLAMA_TIER2_MODEL`) to OpenClaw's gateway env. The brain endpoint stays exactly as is.
+- Repoint Honcho's deriver from `qwen-coder-32k` to the new Tier-2 alias by changing the `OPENAI_COMPATIBLE_BASE_URL` model name in `infrastructure/compose/openclaw/`. Keep `qwen-coder-32k` installed as a fallback for the moment — don't delete it.
+- Update `projects/openclaw/.docs/overview.md` with the new three-tier topology (brain + Tier-2 + embeddings).
+- Rebuild the gateway image (`task openclaw:build`) and recreate (`task openclaw:restart`).
+- **Verify** by sending a smoke-test message to the orchestrator and confirming the deriver runs against the new model (check Honcho logs).
+
+### 2. Skeleton for the email agent
+
+User wants a generic skeleton — **do not over-implement**. He'll iterate on it himself.
+
+Create `/workspace/.openclaw/workspaces/email/` with the same three files every existing workspace has:
+- `SOUL.md` — voice/persona, generic for now ("helps the user triage email, surface what's important, never miss a thread that matters")
+- `AGENTS.md` — rules + tools, with placeholder tool list (note that an IMAP/Gmail MCP server will be needed but is **not in scope for this session** — leave a TODO)
+- `IDENTITY.md` — display metadata (name, emoji, color)
+
+Pick an emoji that doesn't clash with the existing four (🎯🛠⚙️🧪). 📬 or 📨 are obvious choices.
+
+Wire the agent into the OpenClaw config (the same place the existing four agents are registered) and verify the orchestrator can see it. **Skills are deliberately empty for now** — user will write `triage_inbox`, `extract_action_items`, `draft_reply` himself, with the first two routed to Tier-2 and the third to the brain. Just leave a `skills/` directory with a README placeholder noting that routing convention.
+
+Also create a Honcho workspace for cross-session email facts (per-user-mentioned-people, recurring senders, etc.) and a QMD index stub. Don't ingest any real email data yet — that's the user's task.
+
+### 3. Skeleton for the backpacking agent
+
+Same shape as the email agent. `/workspace/.openclaw/workspaces/backpacking/`. Generic SOUL/AGENTS/IDENTITY. Note in `AGENTS.md` that this agent will eventually need a maps MCP server (Caltopo / Gaia / similar) and an inventory store, but **neither is in scope for this session**. Empty `skills/` with a README.
+
+Pick an emoji — 🎒 is the obvious choice.
+
+Honcho workspace + QMD index stub, same as email.
+
+### Decision rationale (so you don't second-guess)
+
+These decisions came from a deep research pass and a model-attributes crash course. **Don't re-litigate them** unless something has materially changed (new Gemma 4 Coder release, Ollama tool-parser fixes for Gemma 4, new Qwen release). Briefly:
+
+- **Brain stays on `qwen3-coder-next:80b-a3b`** because it's RL-trained on agentic tool loops — the SWE-bench Verified gap to Gemma 4 26B-A4B is huge (74.2% vs 17.4%), and Ollama's Gemma 4 tool-call parser had documented bugs as of v0.20.1 that broke Claude-Code-style harnesses. No upside to swapping.
+- **Tier-2 is `gemma4:e4b`** because Honcho's deriver is a short, frequent, JSON-emitting summarization workload — the 32B coder model on Mac mini CPU is wildly oversized for this and runs at ~5 tok/s. Gemma 4 E4B will hit 30-60 tok/s on the same box, has native structured JSON output, and Apache 2.0. The same model also serves as a general fast-path for any agent skill that needs cheap classification or routing.
+- **MoE is the load-bearing architectural choice** for the brain on this hardware (RTX 2080 Ti, 11 GB VRAM, 96 GB RAM). Qwen3-Next-80B has 3B active params per token; experts page from system RAM. A 30B-class dense model would be unusable on this box. Any future brain swap must also be MoE.
+- **Two-tier topology, not consolidation.** Brain and Tier-2 are different workloads (long agentic loops vs short summarization bursts). Don't try to make one model do both.
+- **Memory: extend, don't rebuild.** QMD (BM25/vector RAG layer) and Honcho (cross-session structured-memory layer) already cover what new agents need. New agents get new Honcho workspaces and new QMD indexes — no new memory infrastructure.
+- **Routing happens at the skill level**, not the agent level. An agent might call Tier-2 for classification and the brain for synthesis within the same task. OpenClaw skills should be able to target a model endpoint explicitly.
+
+### What's explicitly out of scope this session
+
+- Implementing actual email or backpacking skills (user will iterate).
+- Adding the Gmail/IMAP MCP server.
+- Adding the maps MCP server.
+- Removing the `qwen2.5-coder:32b` deriver model from host-machine (keep it as fallback for now).
+- Touching the brain on graphics-machine.
+- Anything under `projects/the-dev-team/` (frozen, see Division of Labor below).
+
 ## Current shape
 
 `projects/openclaw/` is a four-agent OpenClaw deployment. Each agent
@@ -10,9 +74,10 @@ metadata). All four reason via the same self-hosted Ollama topology:
 
 | Role | Machine | Model | Endpoint |
 |---|---|---|---|
-| Agent brain | `graphics-machine` (Windows + RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | `http://graphics-machine:11434` |
-| Memory embeddings | `host-machine` (Mac mini, Ubuntu) | `bge-m3-8k` — derivative of `bge-m3` (BAAI, 1024-dim, 8K ctx) | `http://host-machine:11434` |
-| Honcho derivation/summary/dialectic | `host-machine` | `qwen-coder-32k` — derivative of `qwen2.5-coder:32b-instruct-q6_K`, 32K ctx, CPU-only | `http://host-machine:11434/v1` |
+| Tier-1 agent brain | `graphics-machine` (Windows + RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | `http://graphics-machine:11434` |
+| Tier-2 fast model *(planned, not yet deployed)* | `host-machine` (Mac mini, Ubuntu) | `gemma4:e4b` (Gemma 4 E4B, ~4.5B effective, 128K ctx, native JSON, Apache 2.0) — for triage, classification, JSON extraction, Honcho deriver | `http://host-machine:11434` |
+| Memory embeddings | `host-machine` | `bge-m3-8k` — derivative of `bge-m3` (BAAI, 1024-dim, 8K ctx) | `http://host-machine:11434` |
+| Honcho derivation/summary/dialectic | `host-machine` | currently `qwen-coder-32k` — `qwen2.5-coder:32b-instruct-q6_K`, 32K ctx, CPU-only. **Planned to repoint to Tier-2 (`gemma4:e4b`)** — keep `qwen-coder-32k` installed as fallback. | `http://host-machine:11434/v1` |
 
 Memory is layered: **QMD** for local BM25/vector search over `.docs/`
 and session transcripts, **Honcho** (self-hosted Postgres+Redis+API+
