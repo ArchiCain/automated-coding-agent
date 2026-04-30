@@ -2,9 +2,24 @@
 
 ## Pick up here next session
 
-The user is mid-stride on a planned expansion of OpenClaw. The two machines were powered down for a household move; **first thing to verify on resume is that both `graphics-machine` and `host-machine` are reachable on the tailnet and Ollama responds on each** (`curl http://graphics-machine:11434/api/tags`, same on host-machine). If anything is missing, that's the first work — see `infrastructure/.docs/hosts.md` for the per-host inventory.
+The user is mid-stride on a planned expansion of OpenClaw. **Both machines were powered down for a household move AND will be rebuilt before they come back online** — this isn't just a "boot them up and verify" situation. See step 0 below.
 
-Once both machines are healthy, the agreed work for the next session is three things:
+Once both machines are healthy on the tailnet and Ollama responds on each (`curl http://graphics-machine:11434/api/tags`, same on host-machine), the agreed work for the next session is three things:
+
+### 0. Rebuild both machines on Ubuntu
+
+This happens on the user's hardware before any repo work. Claude Code's role is to **help the user verify the result and re-deploy OpenClaw** once the OSes are back up — not to drive the OS installs themselves.
+
+- **`host-machine` (Mac mini)** — full reformat to Ubuntu. The Mac mini was already running Ubuntu, but the user wants a clean rebuild while everything is offline.
+- **`graphics-machine` (gaming PC, RTX 2080 Ti, 96 GB RAM)** — moving off Windows to Ubuntu. Ubuntu lives on an **external OWC Envoy Pro FX 2TB Thunderbolt 3 / USB 3.2 SSD** (~2800 MB/s over TB3, ~1000 MB/s over USB 3.2 Gen 2 fallback). Windows stays on the internal drive untouched. BIOS boot order: external first, internal Windows second — fall-through dual-boot. Plug the drive in → Ubuntu; unplug → Windows for gaming.
+- The graphics-machine swap is the bigger change. Things the next session should verify, in order:
+  - Tailscale joined the tailnet under the same `graphics-machine` MagicDNS name (otherwise the gateway env vars and `infrastructure/compose/openclaw/*.yml` references break).
+  - NVIDIA driver installed and `nvidia-smi` reports the RTX 2080 Ti. Ubuntu 24.04 + `nvidia-driver-535` (or whatever the current LTS-supported branch is) + CUDA 12.x is the known-good combo for Turing.
+  - Ollama installed via the official Linux script, exposed on `0.0.0.0:11434` (the systemd unit's `OLLAMA_HOST` env var — not the default `127.0.0.1`), with Tailscale ACLs allowing host-machine and the user's laptop.
+  - `frob/qwen3-coder-next:80b-a3b-q4_K_M` re-pulled and aliased back to `qwen-coder-next-256k` via `ollama cp`. ~50GB pull — let the user kick this off; just verify when done.
+  - Same Ollama setup on host-machine, plus `bge-m3` re-pulled and aliased as both `bge-m3-8k` and `openai/text-embedding-3-small` (Honcho hardcodes the latter name).
+- **Update `infrastructure/.docs/hosts.md`** to reflect the OS swap and the external-drive boot story for graphics-machine. The Windows-era entry is now history.
+- Once both endpoints respond, redeploy the OpenClaw stack via `task openclaw:up` from the user's laptop. The compose project itself targets host-machine via the GitHub Actions deploy, so a push to `dev` triggers the redeploy — but on a fresh Ubuntu install the first deploy may need manual hand-holding (Docker installed, `host-machine` passwordless SSH for the deploy workflow, GitHub App PEM file restored to the right path).
 
 ### 1. Add a Tier-2 fast model on `host-machine`
 
@@ -74,7 +89,7 @@ metadata). All four reason via the same self-hosted Ollama topology:
 
 | Role | Machine | Model | Endpoint |
 |---|---|---|---|
-| Tier-1 agent brain | `graphics-machine` (Windows + RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | `http://graphics-machine:11434` |
+| Tier-1 agent brain | `graphics-machine` (Ubuntu on external OWC Envoy Pro FX 2TB TB3 SSD, dual-boot fall-through to internal Windows for gaming; RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | `http://graphics-machine:11434` |
 | Tier-2 fast model *(planned, not yet deployed)* | `host-machine` (Mac mini, Ubuntu) | `gemma4:e4b` (Gemma 4 E4B, ~4.5B effective, 128K ctx, native JSON, Apache 2.0) — for triage, classification, JSON extraction, Honcho deriver | `http://host-machine:11434` |
 | Memory embeddings | `host-machine` | `bge-m3-8k` — derivative of `bge-m3` (BAAI, 1024-dim, 8K ctx) | `http://host-machine:11434` |
 | Honcho derivation/summary/dialectic | `host-machine` | currently `qwen-coder-32k` — `qwen2.5-coder:32b-instruct-q6_K`, 32K ctx, CPU-only. **Planned to repoint to Tier-2 (`gemma4:e4b`)** — keep `qwen-coder-32k` installed as fallback. | `http://host-machine:11434/v1` |
