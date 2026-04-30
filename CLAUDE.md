@@ -4,7 +4,7 @@
 
 The user is mid-stride on a planned expansion of OpenClaw. **Both machines were powered down for a household move AND will be rebuilt before they come back online** — this isn't just a "boot them up and verify" situation. See step 0 below.
 
-Once both machines are healthy on the tailnet and Ollama responds on each (`curl http://graphics-machine:11434/api/tags`, same on host-machine), the agreed work for the next session is three things:
+Once both machines are healthy on the tailnet and Ollama responds on each (`curl http://graphics-machine:11434/api/tags`, same on host-machine), the agreed work for the next session is four things:
 
 ### 0. Rebuild both machines on Ubuntu
 
@@ -21,9 +21,31 @@ This happens on the user's hardware before any repo work. Claude Code's role is 
 - **Update `infrastructure/.docs/hosts.md`** to reflect the OS swap and the external-drive boot story for graphics-machine. The Windows-era entry is now history.
 - Once both endpoints respond, redeploy the OpenClaw stack via `task openclaw:up` from the user's laptop. The compose project itself targets host-machine via the GitHub Actions deploy, so a push to `dev` triggers the redeploy — but on a fresh Ubuntu install the first deploy may need manual hand-holding (Docker installed, `host-machine` passwordless SSH for the deploy workflow, GitHub App PEM file restored to the right path).
 
-### 1. Add a Tier-2 fast model on `host-machine`
+### 1. Wire OpenAI Codex (ChatGPT subscription) as the agent brain
 
-Today, host-machine runs only embeddings (`bge-m3`) and the Honcho deriver (`qwen2.5-coder:32b-instruct-q6_K` — oversized and CPU-slow for what Honcho's deriver actually does). The plan is to add a **second small instruct model** alongside the existing two — call it the **Tier-2** model — for fast routing, classification, JSON extraction, and Honcho's deriver workload.
+This is the highest-leverage change in the batch. Moves the four core agents (orchestrator, devops, worker, tester) off local Qwen3-Coder-Next as their primary and onto **`openai-codex/gpt-5.5`** via OAuth from the user's existing **ChatGPT Pro 5× subscription** ($100/mo tier). The local Qwen3-Coder-Next install stays as the resilience fallback.
+
+OpenClaw ships first-class subscription auth — no proxy, no `~/.codex` scraping. Reference: `.claude/skills/openclaw/reference/llms-full.txt:74473-74691` (or live at `docs.openclaw.ai/providers/openai`).
+
+User's stated philosophy (capture verbatim so future-you doesn't drift): **"route all of the real thinking to OpenAI and use the local LLMs for embeddings, async tasks that run in the background, and as small worker agents that get stuff done if need be. My primary focus will be using OpenAI and I'll select to use local models sparingly. If I start running into limits then I'll make changes or up my subscription."** Don't pre-optimize for Pro 5× rate limits — wire it OpenAI-first as described and let the user observe real usage before tuning.
+
+Concrete tasks:
+- Run OAuth onboarding from inside the gateway container (it's headless on host-machine, so use device-code flow):
+  ```
+  openclaw onboard --auth-choice openai-codex --device-code
+  ```
+  Or if the gateway is already running and just needs auth added:
+  ```
+  openclaw models auth login --provider openai-codex --device-code
+  ```
+- In `projects/openclaw/app/openclaw.json`, add an `openai-codex` provider entry under `models.providers`, set `agents.defaults.model.primary` to `openai-codex/gpt-5.5`, and configure each of the four core agents with `openai-codex/gpt-5.5` primary and `ollama/qwen-coder-next-256k` as the single fallback. Keep the `ollama` provider block exactly as it is — it's now the fallback, not the primary.
+- Default runtime context cap is 272k (out of native 1M). Don't override unless an actual context-overflow case shows up — OpenClaw's docs say 272k has better latency/quality than 1M.
+- Update `projects/openclaw/.docs/overview.md` model topology section to reflect OpenAI Codex as the primary brain and Qwen3-Coder-Next as the local resilience fallback.
+- Verify with a smoke test: send a message to orchestrator, confirm the response shows `openai-codex/gpt-5.5` in the session metadata or chat `/status`. Then deliberately exercise fallback (revoke the token, or block the OpenAI endpoint at the firewall) and confirm fallback to local Qwen3-Coder-Next works.
+
+### 2. Add a Tier-2 fast model on `host-machine`
+
+Today, host-machine runs only embeddings (`bge-m3`) and the Honcho deriver (`qwen2.5-coder:32b-instruct-q6_K` — oversized and CPU-slow for what Honcho's deriver actually does). The plan is to add a **second small instruct model** alongside the existing two — call it the **Tier-2** model — for fast routing, classification, JSON extraction, and Honcho's deriver workload. Tier-2 is for **async background work and trivial classification** — it's not in the agent reasoning hot path (that's OpenAI Codex per Step 1).
 
 Target model: **`gemma4:e4b`** (Gemma 4 E4B, ~4.5B effective params, 128K ctx, native structured JSON output, Apache 2.0). Pulled via Ollama on host-machine. Reasoning for picking this specific model is captured in [`ideas/model-tiering-decision.md`](#) — write that doc as part of the work if it doesn't exist; the bullet points are below in "Decision rationale."
 
@@ -36,7 +58,7 @@ Concrete tasks:
 - Rebuild the gateway image (`task openclaw:build`) and recreate (`task openclaw:restart`).
 - **Verify** by sending a smoke-test message to the orchestrator and confirming the deriver runs against the new model (check Honcho logs).
 
-### 2. Skeleton for the email agent
+### 3. Skeleton for the email agent
 
 User wants a generic skeleton — **do not over-implement**. He'll iterate on it himself.
 
@@ -47,11 +69,11 @@ Create `/workspace/.openclaw/workspaces/email/` with the same three files every 
 
 Pick an emoji that doesn't clash with the existing four (🎯🛠⚙️🧪). 📬 or 📨 are obvious choices.
 
-Wire the agent into the OpenClaw config (the same place the existing four agents are registered) and verify the orchestrator can see it. **Skills are deliberately empty for now** — user will write `triage_inbox`, `extract_action_items`, `draft_reply` himself, with the first two routed to Tier-2 and the third to the brain. Just leave a `skills/` directory with a README placeholder noting that routing convention.
+Wire the agent into the OpenClaw config (the same place the existing four agents are registered) and verify the orchestrator can see it. **Skills are deliberately empty for now** — user will write `triage_inbox`, `extract_action_items`, `draft_reply` himself, with the first two routed to Tier-2 (Gemma 4 E4B on host-machine) and the third to the OpenAI Codex brain. Just leave a `skills/` directory with a README placeholder noting that routing convention.
 
 Also create a Honcho workspace for cross-session email facts (per-user-mentioned-people, recurring senders, etc.) and a QMD index stub. Don't ingest any real email data yet — that's the user's task.
 
-### 3. Skeleton for the backpacking agent
+### 4. Skeleton for the backpacking agent
 
 Same shape as the email agent. `/workspace/.openclaw/workspaces/backpacking/`. Generic SOUL/AGENTS/IDENTITY. Note in `AGENTS.md` that this agent will eventually need a maps MCP server (Caltopo / Gaia / similar) and an inventory store, but **neither is in scope for this session**. Empty `skills/` with a README.
 
@@ -63,7 +85,8 @@ Honcho workspace + QMD index stub, same as email.
 
 These decisions came from a deep research pass and a model-attributes crash course. **Don't re-litigate them** unless something has materially changed (new Gemma 4 Coder release, Ollama tool-parser fixes for Gemma 4, new Qwen release). Briefly:
 
-- **Brain stays on `qwen3-coder-next:80b-a3b`** because it's RL-trained on agentic tool loops — the SWE-bench Verified gap to Gemma 4 26B-A4B is huge (74.2% vs 17.4%), and Ollama's Gemma 4 tool-call parser had documented bugs as of v0.20.1 that broke Claude-Code-style harnesses. No upside to swapping.
+- **Brain becomes `openai-codex/gpt-5.5`** via the user's ChatGPT Pro 5× subscription, OAuth'd through OpenClaw's first-class `openai-codex` provider. Frontier coding capability + best-in-class tool-call reliability + no per-token billing on the subscription path. **Qwen3-Coder-Next 80B-A3B stays installed on graphics-machine as the local resilience fallback** — it's still the strongest local agentic-coding model and was the right Tier-1 pick before OpenClaw shipped subscription auth. The MoE-on-modest-hardware property (3B active / 80B total, paging from 96 GB RAM) is what lets the fallback exist on this box at all.
+- **OpenAI-first by deliberate choice.** All four core agents (orchestrator, devops, worker, tester) get OpenAI Codex as primary. Local models are reserved for embeddings (`bge-m3`), async background work (Honcho deriver on Gemma 4 E4B), and small classification/router skills inside the new agents. Don't push devops/tester onto local primary "to save quota" — the user's explicit position is OpenAI-first, observe real usage, escalate the subscription if quota becomes a real problem.
 - **Tier-2 is `gemma4:e4b`** because Honcho's deriver is a short, frequent, JSON-emitting summarization workload — the 32B coder model on Mac mini CPU is wildly oversized for this and runs at ~5 tok/s. Gemma 4 E4B will hit 30-60 tok/s on the same box, has native structured JSON output, and Apache 2.0. The same model also serves as a general fast-path for any agent skill that needs cheap classification or routing.
 - **MoE is the load-bearing architectural choice** for the brain on this hardware (RTX 2080 Ti, 11 GB VRAM, 96 GB RAM). Qwen3-Next-80B has 3B active params per token; experts page from system RAM. A 30B-class dense model would be unusable on this box. Any future brain swap must also be MoE.
 - **Two-tier topology, not consolidation.** Brain and Tier-2 are different workloads (long agentic loops vs short summarization bursts). Don't try to make one model do both.
@@ -76,7 +99,8 @@ These decisions came from a deep research pass and a model-attributes crash cour
 - Adding the Gmail/IMAP MCP server.
 - Adding the maps MCP server.
 - Removing the `qwen2.5-coder:32b` deriver model from host-machine (keep it as fallback for now).
-- Touching the brain on graphics-machine.
+- Removing the `qwen3-coder-next:80b-a3b` install from graphics-machine — it stays as the local resilience fallback brain.
+- Per-skill model routing inside email/backpacking agents (the skeletons just note the routing convention; user will wire skill-level overrides himself when implementing).
 - Anything under `projects/the-dev-team/` (frozen, see Division of Labor below).
 
 ## Current shape
@@ -85,11 +109,14 @@ These decisions came from a deep research pass and a model-attributes crash cour
 (orchestrator 🎯, devops 🛠, worker ⚙️, tester 🧪) has its own
 workspace under `/workspace/.openclaw/workspaces/<id>/` containing
 `SOUL.md` (voice), `AGENTS.md` (rules + tools), `IDENTITY.md` (display
-metadata). All four reason via the same self-hosted Ollama topology:
+metadata). The planned model topology routes all four agents' reasoning
+to OpenAI Codex via the user's ChatGPT Pro 5× subscription, with the
+self-hosted Ollama stack as resilience fallback + supporting roles:
 
 | Role | Machine | Model | Endpoint |
 |---|---|---|---|
-| Tier-1 agent brain | `graphics-machine` (Ubuntu on external OWC Envoy Pro FX 2TB TB3 SSD, dual-boot fall-through to internal Windows for gaming; RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | `http://graphics-machine:11434` |
+| Tier-1 agent brain (planned primary) | (OpenAI cloud, OAuth via user's ChatGPT Pro 5×) | `openai-codex/gpt-5.5` — Codex subscription route, 1M native context capped at 272k runtime for latency/quality | OpenAI Responses API; OAuth tokens managed by OpenClaw's `openai-codex` provider |
+| Tier-1 local fallback (resilience) | `graphics-machine` (Ubuntu on external OWC Envoy Pro FX 2TB TB3 SSD, dual-boot fall-through to internal Windows for gaming; RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | `http://graphics-machine:11434` |
 | Tier-2 fast model *(planned, not yet deployed)* | `host-machine` (Mac mini, Ubuntu) | `gemma4:e4b` (Gemma 4 E4B, ~4.5B effective, 128K ctx, native JSON, Apache 2.0) — for triage, classification, JSON extraction, Honcho deriver | `http://host-machine:11434` |
 | Memory embeddings | `host-machine` | `bge-m3-8k` — derivative of `bge-m3` (BAAI, 1024-dim, 8K ctx) | `http://host-machine:11434` |
 | Honcho derivation/summary/dialectic | `host-machine` | currently `qwen-coder-32k` — `qwen2.5-coder:32b-instruct-q6_K`, 32K ctx, CPU-only. **Planned to repoint to Tier-2 (`gemma4:e4b`)** — keep `qwen-coder-32k` installed as fallback. | `http://host-machine:11434/v1` |
