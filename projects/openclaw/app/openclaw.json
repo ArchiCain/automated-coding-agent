@@ -44,16 +44,43 @@
             "maxTokens": 32768
           }
         ]
+      },
+      "ollama-host": {
+        "apiKey": "ollama-local",
+        "baseUrl": "http://host-machine:11434",
+        "api": "ollama",
+        "models": [
+          {
+            "id": "gemma4-e4b-128k",
+            "name": "gemma4-e4b-128k",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 131072,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen-coder-32k",
+            "name": "qwen-coder-32k",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          }
+        ]
       }
     }
   },
   "agents": {
     "defaults": {
-      "llm": {
-        "idleTimeoutSeconds": 0
+      "model": {
+        "primary": "openai-codex/gpt-5.5",
+        "fallbacks": ["ollama/qwen-coder-next-256k"]
       },
       "subagents": {
-        "allowAgents": ["orchestrator", "devops", "worker", "tester"],
+        "allowAgents": [],
+        "requireAgentId": true,
         "maxSpawnDepth": 3,
         "maxChildrenPerAgent": 20,
         "maxConcurrent": 20,
@@ -71,48 +98,158 @@
           "baseUrl": "http://host-machine:11434/v1",
           "apiKey": "ollama-local"
         }
+      },
+      "imageGenerationModel": {
+        "primary": "openai/gpt-image-2"
+      },
+      "videoGenerationModel": {
+        "primary": "openai/sora-2"
       }
     },
     "list": [
       {
-        "id": "orchestrator",
+        "id": "dev-main",
         "default": true,
-        "model": "ollama/qwen-coder-next-256k",
-        "workspace": "/workspace/.openclaw/workspaces/orchestrator",
-        "agentDir": "/workspace/.openclaw/agents/orchestrator/agent",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
+        "workspace": "/workspace/.openclaw/workspaces/dev-main",
+        "agentDir": "/workspace/.openclaw/agents/dev-main/agent",
         "skills": ["repo-tasks"],
+        "subagents": {
+          "allowAgents": ["devops", "worker", "tester"]
+        },
         "identity": {
           "emoji": "🎯"
         }
       },
       {
         "id": "devops",
-        "model": "ollama/qwen-coder-next-256k",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
         "workspace": "/workspace/.openclaw/workspaces/devops",
         "agentDir": "/workspace/.openclaw/agents/devops/agent",
         "skills": ["repo-tasks"],
+        "subagents": {
+          "allowAgents": []
+        },
         "identity": {
           "emoji": "🛠"
         }
       },
       {
         "id": "worker",
-        "model": "ollama/qwen-coder-next-256k",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
         "workspace": "/workspace/.openclaw/workspaces/worker",
         "agentDir": "/workspace/.openclaw/agents/worker/agent",
         "skills": ["repo-tasks"],
+        "subagents": {
+          "allowAgents": ["tester"]
+        },
         "identity": {
           "emoji": "⚙️"
         }
       },
       {
         "id": "tester",
-        "model": "ollama/qwen-coder-next-256k",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
         "workspace": "/workspace/.openclaw/workspaces/tester",
         "agentDir": "/workspace/.openclaw/agents/tester/agent",
         "skills": ["repo-tasks"],
+        "subagents": {
+          "allowAgents": []
+        },
         "identity": {
           "emoji": "🧪"
+        }
+      },
+      {
+        "id": "email-main",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
+        "workspace": "/workspace/.openclaw/workspaces/email-main",
+        "agentDir": "/workspace/.openclaw/agents/email-main/agent",
+        "skills": [],
+        "subagents": {
+          "allowAgents": []
+        },
+        "identity": {
+          "emoji": "📬"
+        }
+      },
+      {
+        "id": "backpacking-main",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
+        "workspace": "/workspace/.openclaw/workspaces/backpacking-main",
+        "agentDir": "/workspace/.openclaw/agents/backpacking-main/agent",
+        "skills": [],
+        "subagents": {
+          "allowAgents": []
+        },
+        "identity": {
+          "emoji": "🎒"
+        }
+      },
+      {
+        "id": "dnd-main",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
+        "workspace": "/workspace/.openclaw/workspaces/dnd-main",
+        "agentDir": "/workspace/.openclaw/agents/dnd-main/agent",
+        "skills": [],
+        "subagents": {
+          "allowAgents": ["dnd-dm", "dnd-chargen"]
+        },
+        "identity": {
+          "emoji": "🐉"
+        }
+      },
+      {
+        "id": "dnd-dm",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
+        "workspace": "/workspace/.openclaw/workspaces/dnd-dm",
+        "agentDir": "/workspace/.openclaw/agents/dnd-dm/agent",
+        "skills": [],
+        "subagents": {
+          "allowAgents": []
+        },
+        "identity": {
+          "emoji": "🎲"
+        }
+      },
+      {
+        "id": "dnd-chargen",
+        "model": {
+          "primary": "openai-codex/gpt-5.5",
+          "fallbacks": ["ollama/qwen-coder-next-256k"]
+        },
+        "workspace": "/workspace/.openclaw/workspaces/dnd-chargen",
+        "agentDir": "/workspace/.openclaw/agents/dnd-chargen/agent",
+        "skills": [],
+        "subagents": {
+          "allowAgents": []
+        },
+        "identity": {
+          "emoji": "🧙"
         }
       }
     ]
@@ -165,7 +302,7 @@
         "enabled": false,
         "config": {
           "enabled": false,
-          "agents": ["orchestrator", "devops", "worker", "tester"],
+          "agents": ["dev-main", "devops", "worker", "tester"],
           "allowedChatTypes": ["direct"],
           "queryMode": "recent",
           "promptStyle": "balanced",
@@ -188,5 +325,34 @@
         "enabled": false
       }
     }
-  }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "defaultAccount": "dev-main-bot",
+      "dmPolicy": "allowlist",
+      "groupPolicy": "allowlist",
+      "allowFrom": ["8758890439"],
+      "accounts": {
+        "dev-main-bot": {
+          "botToken": { "source": "env", "provider": "default", "id": "TELEGRAM_BOT_TOKEN_DEV_MAIN" }
+        },
+        "dnd-main-bot": {
+          "botToken": { "source": "env", "provider": "default", "id": "TELEGRAM_BOT_TOKEN_DND_MAIN" }
+        },
+        "email-main-bot": {
+          "botToken": { "source": "env", "provider": "default", "id": "TELEGRAM_BOT_TOKEN_EMAIL_MAIN" }
+        },
+        "backpacking-main-bot": {
+          "botToken": { "source": "env", "provider": "default", "id": "TELEGRAM_BOT_TOKEN_BACKPACKING_MAIN" }
+        }
+      }
+    }
+  },
+  "bindings": [
+    { "match": { "channel": "telegram", "accountId": "dev-main-bot" },         "agentId": "dev-main" },
+    { "match": { "channel": "telegram", "accountId": "dnd-main-bot" },         "agentId": "dnd-main" },
+    { "match": { "channel": "telegram", "accountId": "email-main-bot" },       "agentId": "email-main" },
+    { "match": { "channel": "telegram", "accountId": "backpacking-main-bot" }, "agentId": "backpacking-main" }
+  ]
 }

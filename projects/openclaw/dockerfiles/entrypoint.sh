@@ -4,12 +4,25 @@ set -e
 # =============================================================================
 # OpenClaw entrypoint
 #
-# Four agents (orchestrator, devops, worker, tester) reason via a self-hosted
-# Ollama at http://graphics-machine:11434 (model qwen-coder-next-256k). Memory
-# search uses bge-m3-8k via the Ollama running on host-machine. Endpoints are
-# pinned in app/openclaw.json — the only env-based credential is
+# Nine agents reason on openai-codex/gpt-5.5 via OpenClaw's first-class
+# openai-codex provider (OAuth via the user's ChatGPT Pro 5× subscription),
+# with the self-hosted Qwen3-Coder-Next on graphics-machine
+# (http://graphics-machine:11434, model qwen-coder-next-256k) as the single
+# resilience fallback. Memory search and Honcho's deriver run against the
+# Ollama on host-machine (bge-m3-8k for embeddings; gemma4-e4b-128k for the
+# deriver). Endpoints are pinned in app/openclaw.json. The Codex OAuth
+# profile is managed by OpenClaw itself; the only env-based credential is
 # OLLAMA_API_KEY, a non-empty placeholder OpenClaw requires to activate the
-# bundled Ollama provider plugin.
+# bundled Ollama provider plugin (used for the fallback + Tier-2 paths).
+#
+# The agent roster runs in multi-orchestrator mode — one user-facing lead
+# per vertical, specialists locked behind per-agent subagent allowlists.
+# See ideas/agent-hierarchy.md for the rationale.
+#
+# Software development vertical: orchestrator (lead) + devops + worker + tester
+# Email vertical: email (single-agent + skills, skeleton)
+# Backpacking vertical: backpacking (single-agent + skills, skeleton)
+# D&D vertical: dnd (lead) + dnd-dm + dnd-chargen (skeletons)
 #
 # Config and skills are sourced from the synced repo at /workspace/repo if
 # available (updated continuously by the git-sync sidecar), falling back to
@@ -134,9 +147,25 @@ fi
 # personality from the repo to the runtime workspace, but never touch
 # memory files — agent state survives restarts.
 #
+# Source layout is verticalized — agents grouped by domain so adding more
+# specialists doesn't bloat a flat list:
+#
+#   workspaces/development/{orchestrator,devops,worker,tester}/
+#   workspaces/dnd/{dnd,dnd-dm,dnd-chargen}/
+#   workspaces/email/email/
+#   workspaces/backpacking/backpacking/
+#
+# We discover agents by walking for SOUL.md and using the leaf dir name as
+# the agent id. The runtime workspace at /workspace/.openclaw/workspaces/<id>/
+# stays flat regardless — only the source tree is verticalized.
+#
+# After discovery we reconcile against openclaw.json's agents.list[].id and
+# hard-fail on agents declared in config but missing a SOUL.md (catches
+# typos and forgotten dirs before they become silent boot-time skips).
+#
 # Sources, in order of preference:
-#   1. /workspace/repo/projects/openclaw/app/workspaces/<id>/  (synced repo)
-#   2. /app/workspaces/<id>/                                    (image baseline)
+#   1. /workspace/repo/projects/openclaw/app/workspaces/  (synced repo)
+#   2. /app/workspaces/                                    (image baseline)
 
 REPO_WORKSPACES_DIR="$REPO_APP_DIR/workspaces"
 IMAGE_WORKSPACES_DIR="/app/workspaces"
@@ -153,14 +182,58 @@ else
 fi
 
 if [ -n "$PERSONA_SOURCE_DIR" ]; then
-  for AGENT_ID in orchestrator devops worker tester; do
-    SRC_DIR="$PERSONA_SOURCE_DIR/$AGENT_ID"
-    DEST_DIR="$OPENCLAW_STATE_DIR/workspaces/$AGENT_ID"
+  # Discover agents: every SOUL.md is one agent; its parent dir name is the id.
+  DISCOVERED_TMP=$(mktemp)
+  find "$PERSONA_SOURCE_DIR" -name SOUL.md -type f 2>/dev/null \
+    | while read -r SOUL_PATH; do
+        AGENT_DIR=$(dirname "$SOUL_PATH")
+        AGENT_ID=$(basename "$AGENT_DIR")
+        echo "$AGENT_ID|$AGENT_DIR"
+      done \
+    | sort > "$DISCOVERED_TMP"
 
-    if [ ! -d "$SRC_DIR" ]; then
-      echo "  $AGENT_ID: no source dir at $SRC_DIR — skipping" >&2
-      continue
+  # Reconcile against openclaw.json's agents.list[].id. Read from the source
+  # openclaw.json (synced repo or image baseline) — at this point the live
+  # workspace copy has been wiped and not yet reseeded. In dev mode the
+  # image-baked /app/openclaw.json is bind-mount-overlaid by openclaw.dev.json,
+  # so /app/openclaw.json reflects whatever the operator regenerated.
+  SOURCE_OPENCLAW_JSON=""
+  if [ -f "$REPO_APP_DIR/openclaw.json" ]; then
+    SOURCE_OPENCLAW_JSON="$REPO_APP_DIR/openclaw.json"
+  elif [ -f /app/openclaw.json ]; then
+    SOURCE_OPENCLAW_JSON="/app/openclaw.json"
+  fi
+
+  if [ -n "$SOURCE_OPENCLAW_JSON" ] && command -v jq >/dev/null 2>&1; then
+    EXPECTED_IDS=$(jq -r '.agents.list[].id' "$SOURCE_OPENCLAW_JSON" 2>/dev/null | sort)
+    DISCOVERED_IDS=$(cut -d'|' -f1 "$DISCOVERED_TMP" | sort -u)
+
+    if [ -n "$EXPECTED_IDS" ]; then
+      MISSING=$(comm -23 <(echo "$EXPECTED_IDS") <(echo "$DISCOVERED_IDS"))
+      EXTRA=$(comm -13 <(echo "$EXPECTED_IDS") <(echo "$DISCOVERED_IDS"))
+
+      if [ -n "$MISSING" ]; then
+        echo "ERROR: agents in openclaw.json with no SOUL.md under $PERSONA_SOURCE_DIR:" >&2
+        echo "$MISSING" | sed 's/^/    /' >&2
+        echo "  Each agent in agents.list[] must have a directory containing" >&2
+        echo "  SOUL.md somewhere in the workspaces tree. Add the missing dir(s)" >&2
+        echo "  (under any vertical) or remove the agent from openclaw.json." >&2
+        rm -f "$DISCOVERED_TMP"
+        exit 1
+      fi
+
+      if [ -n "$EXTRA" ]; then
+        echo "WARNING: SOUL.md found for agent ids not in openclaw.json:" >&2
+        echo "$EXTRA" | sed 's/^/    /' >&2
+        echo "  These will be seeded but won't be loaded by OpenClaw." >&2
+      fi
     fi
+  fi
+
+  # Seed each discovered agent.
+  while IFS='|' read -r AGENT_ID SRC_DIR; do
+    [ -z "$AGENT_ID" ] && continue
+    DEST_DIR="$OPENCLAW_STATE_DIR/workspaces/$AGENT_ID"
 
     mkdir -p "$DEST_DIR"
 
@@ -174,8 +247,12 @@ if [ -n "$PERSONA_SOURCE_DIR" ]; then
     # Ensure the memory subdir exists so the agent has somewhere to write.
     mkdir -p "$DEST_DIR/memory"
 
-    echo "  $AGENT_ID: persona seeded → $DEST_DIR"
-  done
+    # Show the vertical/agent path so the verticalized layout is visible.
+    REL_SRC="${SRC_DIR#$PERSONA_SOURCE_DIR/}"
+    echo "  $AGENT_ID: persona seeded → $DEST_DIR (from $REL_SRC)"
+  done < "$DISCOVERED_TMP"
+
+  rm -f "$DISCOVERED_TMP"
 fi
 
 # ---------- Cleanup: stale bootstrap files at /workspace/repo root -----------

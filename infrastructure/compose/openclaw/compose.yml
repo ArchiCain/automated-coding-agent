@@ -57,6 +57,21 @@ services:
       OPENCLAW_GIT_BRANCH: ${OPENCLAW_GIT_BRANCH:-dev}
       OPENCLAW_GIT_APP_SLUG: ${OPENCLAW_GIT_APP_SLUG:-scain-openclaw}
       GITHUB_APP_ID: ${GITHUB_APP_ID}
+      # Tier-2 fast model on host-machine (Gemma 4 E4B). Not referenced by
+      # the current openclaw.json (which hardcodes the host-machine ollama
+      # endpoint under models.providers.ollama-host) — kept here as the
+      # canonical pointer if/when openclaw.json switches to env-templated
+      # provider config or a skill needs the values at runtime.
+      OLLAMA_TIER2_BASE_URL: ${OLLAMA_TIER2_BASE_URL:-http://host-machine:11434}
+      OLLAMA_TIER2_MODEL: ${OLLAMA_TIER2_MODEL:-gemma4-e4b-128k}
+      # Telegram bot tokens — one per main agent. Resolved by the gateway
+      # via SecretRef pointing at these env var names (see channels.telegram
+      # .accounts.<id>.botToken in openclaw.json). Empty values disable that
+      # bot at boot — schema validation surfaces empty refs as a clear error.
+      TELEGRAM_BOT_TOKEN_DEV_MAIN: ${TELEGRAM_BOT_TOKEN_DEV_MAIN}
+      TELEGRAM_BOT_TOKEN_DND_MAIN: ${TELEGRAM_BOT_TOKEN_DND_MAIN}
+      TELEGRAM_BOT_TOKEN_EMAIL_MAIN: ${TELEGRAM_BOT_TOKEN_EMAIL_MAIN}
+      TELEGRAM_BOT_TOKEN_BACKPACKING_MAIN: ${TELEGRAM_BOT_TOKEN_BACKPACKING_MAIN}
     # The gateway runs as `node` (uid 1000); it needs to open the host's
     # docker socket. On host-machine (Ubuntu) the socket is root:docker 660,
     # so DOCKER_SOCKET_GID should be the docker group gid:
@@ -100,7 +115,11 @@ services:
       GITHUB_APP_PRIVATE_KEY_PATH: /etc/github-app/private-key.pem
     volumes:
       - workspace:/workspace
-      - ${GITHUB_APP_PRIVATE_KEY_HOST_PATH}:/etc/github-app/private-key.pem:ro
+      # Fallback default lets `docker compose config` validate the file even on
+      # dev hosts where this env var isn't set (e.g. when bringing up the dev
+      # overlay via compose.dev.yml, where git-sync is profile-excluded anyway).
+      # In prod the env var is always set, so the fallback never engages.
+      - ${GITHUB_APP_PRIVATE_KEY_HOST_PATH:-./git-sync.sh}:/etc/github-app/private-key.pem:ro
       - ./git-sync.sh:/usr/local/bin/git-sync.sh:ro
 
   # ---------------------------------------------------------------------------

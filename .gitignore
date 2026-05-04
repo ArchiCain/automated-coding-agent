@@ -2,6 +2,11 @@
 *.pem
 .github-app-private-key.pem
 
+# Generated at `task openclaw:up:local` time from the prod openclaw.json
+# (model endpoints rewritten to host.docker.internal). Don't commit — the
+# prod config is the source of truth; the dev variant is derived.
+infrastructure/compose/openclaw/openclaw.dev.json
+
 # mkcert-generated dev certs (no longer actively used; kept for safety)
 .certs/
 

@@ -1,5 +1,9 @@
 version: '3'
 
+vars:
+  # Compose file pair for local dev mode: base + dev override.
+  DEV_COMPOSE: "-f infrastructure/compose/openclaw/compose.yml -f infrastructure/compose/openclaw/compose.dev.yml"
+
 tasks:
   up:
     desc: Start OpenClaw stack (gateway + git-sync sidecar)
@@ -40,6 +44,32 @@ tasks:
     desc: Open a bash shell in the gateway container
     cmds:
       - docker compose -f infrastructure/compose/openclaw/compose.yml exec gateway bash
+
+  # ----------------------------------------------------------------------------
+  # OpenAI Codex OAuth (the brain). End-to-end: login + per-agent propagation
+  # + gateway restart. See scripts/openclaw-auth-codex.sh for the full why.
+  #
+  # Pro 5× subscription notes:
+  #   - Exposes one model: openai-codex/gpt-5.5 (no mini variant).
+  #   - Effective context: ~195k (cap appears tighter than the documented
+  #     272k default; observed via `openclaw models list`).
+  #   - Embeddings are not included; we use local bge-m3 for those.
+  #
+  # The OAuth callback at http://localhost:1455 doesn't reach the gateway's
+  # listener from a remote browser, so the wizard expects URL-paste:
+  # browser fails to load the callback page → copy the URL from the address
+  # bar → paste at the wizard's prompt. The script walks you through it.
+  # ----------------------------------------------------------------------------
+
+  auth:codex:
+    desc: "[prod] Run OpenAI Codex OAuth, propagate to all 9 agents, restart gateway"
+    cmds:
+      - bash scripts/openclaw-auth-codex.sh prod
+
+  auth:propagate:
+    desc: "[prod] Propagate existing OAuth profile to all per-agent dirs (no new OAuth)"
+    cmds:
+      - bash scripts/openclaw-auth-codex.sh prod --propagate-only
 
   health:
     desc: Check the gateway's /health endpoint
@@ -125,3 +155,114 @@ tasks:
           echo "Make sure the browser tab is open with the Gateway Token entered."
           exit 1
         '
+
+  # ----------------------------------------------------------------------------
+  # Local dev mode tasks. Combine compose.yml with compose.dev.yml to run the
+  # full stack against the laptop's native macOS Ollama (or a local Linux Ollama)
+  # via host.docker.internal:11434. Git-sync is excluded; the gateway reads
+  # persona files and skills directly from the local working tree via bind
+  # mounts, so edits go live on the next `task openclaw:restart:local`.
+  #
+  # Prereqs (one-time):
+  #   1. Install Ollama natively on the host (NOT in Docker — Docker Desktop
+  #      has no Metal/GPU access on macOS, so model speed would crater).
+  #   2. Pull the models openclaw.json references:
+  #        ollama pull bge-m3 && ollama cp bge-m3 bge-m3-8k:latest
+  #        ollama cp bge-m3-8k openai/text-embedding-3-small:latest
+  #        ollama pull gemma4:e4b && ollama cp gemma4:e4b gemma4-e4b-128k:latest
+  #        ollama pull frob/qwen3-coder-next:80b-a3b-q4_K_M
+  #        ollama cp frob/qwen3-coder-next:80b-a3b-q4_K_M qwen-coder-next-256k:latest
+  #      The brain (openai-codex/gpt-5.5) reaches OpenAI directly — no local
+  #      pull needed for that path.
+  #   3. Establish the OpenClaw OAuth profile for the brain (one-time):
+  #        task openclaw:up:local
+  #        task openclaw:auth:codex:local
+  #      That task wraps the wizard, propagates auth-profiles.json to each
+  #      per-agent dir, and restarts the gateway. Without the propagation
+  #      step every agent fails with "No API key found for provider
+  #      openai-codex" — see scripts/openclaw-auth-codex.sh for the why.
+  # ----------------------------------------------------------------------------
+
+  up:local:
+    desc: "Start OpenClaw locally — laptop's native Ollama serves all models (DEV MODE)"
+    cmds:
+      - |
+        # Generate the dev openclaw.json from the prod source by rewriting
+        # tailnet hostnames to host.docker.internal. Regenerated on every up:local
+        # so prod is the single source of truth — never edit openclaw.dev.json
+        # by hand (it's git-ignored).
+        sed -e 's|http://graphics-machine:11434|http://host.docker.internal:11434|g' \
+            -e 's|http://host-machine:11434|http://host.docker.internal:11434|g' \
+            -e 's|http://localhost:8000|http://honcho-api:8000|g' \
+            projects/openclaw/app/openclaw.json \
+            > infrastructure/compose/openclaw/openclaw.dev.json
+        echo "Regenerated infrastructure/compose/openclaw/openclaw.dev.json from prod openclaw.json"
+      - docker compose {{.DEV_COMPOSE}} --env-file .env up -d
+      - echo ""
+      - echo "Local dev stack is up. Browse to http://localhost:3001 and pair with 'task openclaw:pair'."
+
+  down:local:
+    desc: "Stop the local dev stack (preserves the workspace + Honcho volumes)"
+    cmds:
+      - docker compose {{.DEV_COMPOSE}} down
+
+  down:local:clean:
+    desc: "Stop the local dev stack AND wipe volumes (resets agent state + Honcho memory)"
+    cmds:
+      - docker compose {{.DEV_COMPOSE}} down -v
+
+  build:local:
+    desc: "Build OpenClaw images for local dev (rare — most edits don't need a rebuild)"
+    cmds:
+      - docker compose {{.DEV_COMPOSE}} build
+
+  logs:local:
+    desc: "Tail logs from the local dev stack"
+    cmds:
+      - docker compose {{.DEV_COMPOSE}} logs -f
+
+  ps:local:
+    desc: "Show local dev stack service status"
+    cmds:
+      - docker compose {{.DEV_COMPOSE}} ps
+
+  restart:local:
+    desc: "Restart the gateway in the local dev stack (picks up persona + skill edits)"
+    cmds:
+      - docker compose {{.DEV_COMPOSE}} restart gateway
+
+  shell:local:
+    desc: "Open a bash shell in the gateway container (dev stack)"
+    cmds:
+      - docker compose {{.DEV_COMPOSE}} exec gateway bash
+
+  auth:codex:local:
+    desc: "[dev] Run OpenAI Codex OAuth, propagate to all 9 agents, restart gateway"
+    cmds:
+      - bash scripts/openclaw-auth-codex.sh dev
+
+  auth:propagate:local:
+    desc: "[dev] Propagate existing OAuth profile to all per-agent dirs (no new OAuth)"
+    cmds:
+      - bash scripts/openclaw-auth-codex.sh dev --propagate-only
+
+  ollama:check:
+    desc: "Verify the host's native Ollama is reachable and has the models openclaw.json expects"
+    cmds:
+      - |
+        if ! curl -sf http://localhost:11434/api/tags > /dev/null; then
+          echo "ERROR: Ollama is not reachable at http://localhost:11434" >&2
+          echo "Install Ollama natively on the host (NOT in Docker) — see ollama.com" >&2
+          exit 1
+        fi
+        echo "Ollama reachable at http://localhost:11434"
+        echo ""
+        TAGS=$(curl -s http://localhost:11434/api/tags)
+        echo "Checking expected models..."
+        for MODEL in "bge-m3-8k" "openai/text-embedding-3-small" "gemma4-e4b-128k" "qwen-coder-next-256k"; do
+          if echo "$TAGS" | grep -q "\"$MODEL"; then
+            echo "  ✓ $MODEL"
+          else
+            echo "  ✗ $MODEL (missing — see Taskfile prereqs for the pull command)"
+          fi
+        done

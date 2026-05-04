@@ -52,53 +52,55 @@ DIMENSIONS = 1024
 # All Honcho LLM features below route through the "custom" provider, which
 # Honcho's clients.py instantiates as `AsyncOpenAI(base_url=..., api_key=...)`.
 # Model strings are passed through verbatim to Ollama, which resolves them
-# against locally pulled tags. qwen-coder-32k is host-machine's CPU-served
-# 32B coder — overkill for derivation/summary but it's what we have, and
-# the deriver runs in the background where latency doesn't matter.
+# against locally pulled tags. gemma4-e4b-128k is host-machine's Tier-2 model
+# — Gemma 4 E4B (~4.5B effective params, 128K ctx, native structured JSON
+# output, Apache 2.0). Right-sized for the deriver's short JSON-emitting
+# summarization workload; the prior qwen-coder-32k stays installed on
+# host-machine as a fallback (don't delete) but is not referenced here.
 # ----------------------------------------------------------------------------
 
 [deriver]
 PROVIDER = "custom"
-MODEL = "qwen-coder-32k"
+MODEL = "gemma4-e4b-128k"
 
 [summary]
 PROVIDER = "custom"
-MODEL = "qwen-coder-32k"
+MODEL = "gemma4-e4b-128k"
 
 # DialecticSettings requires ALL FIVE levels (minimal, low, medium, high, max)
 # when any [dialectic.levels.*] section is present — pydantic doesn't merge
 # our overrides with the defaults, it replaces the entire `levels` dict.
 # Each level needs PROVIDER + MODEL + THINKING_BUDGET_TOKENS + MAX_TOOL_ITERATIONS
-# at minimum. THINKING_BUDGET_TOKENS = 0 because qwen-coder has no thinking mode.
+# at minimum. THINKING_BUDGET_TOKENS = 0 because Gemma 4 E4B has no thinking mode.
 
 [dialectic.levels.minimal]
 PROVIDER = "custom"
-MODEL = "qwen-coder-32k"
+MODEL = "gemma4-e4b-128k"
 THINKING_BUDGET_TOKENS = 0
 MAX_TOOL_ITERATIONS = 1
 MAX_OUTPUT_TOKENS = 250
 
 [dialectic.levels.low]
 PROVIDER = "custom"
-MODEL = "qwen-coder-32k"
+MODEL = "gemma4-e4b-128k"
 THINKING_BUDGET_TOKENS = 0
 MAX_TOOL_ITERATIONS = 5
 
 [dialectic.levels.medium]
 PROVIDER = "custom"
-MODEL = "qwen-coder-32k"
+MODEL = "gemma4-e4b-128k"
 THINKING_BUDGET_TOKENS = 0
 MAX_TOOL_ITERATIONS = 2
 
 [dialectic.levels.high]
 PROVIDER = "custom"
-MODEL = "qwen-coder-32k"
+MODEL = "gemma4-e4b-128k"
 THINKING_BUDGET_TOKENS = 0
 MAX_TOOL_ITERATIONS = 4
 
 [dialectic.levels.max]
 PROVIDER = "custom"
-MODEL = "qwen-coder-32k"
+MODEL = "gemma4-e4b-128k"
 THINKING_BUDGET_TOKENS = 0
 MAX_TOOL_ITERATIONS = 10
 
@@ -107,13 +109,13 @@ MAX_TOOL_ITERATIONS = 10
 # succeeds — Honcho's client resolver is config-driven, not enabled-driven.
 # THINKING_BUDGET_TOKENS uses a `gt=0` validator on DreamSettings (unlike
 # DialecticLevelSettings, which accepts 0). Set to a positive value even
-# though qwen-coder has no thinking mode — the value is unused at runtime
+# though Gemma 4 E4B has no thinking mode — the value is unused at runtime
 # while ENABLED=false.
 [dream]
 ENABLED = false
 PROVIDER = "custom"
-MODEL = "qwen-coder-32k"
+MODEL = "gemma4-e4b-128k"
 THINKING_BUDGET_TOKENS = 1024
 MAX_TOOL_ITERATIONS = 1
-DEDUCTION_MODEL = "qwen-coder-32k"
-INDUCTION_MODEL = "qwen-coder-32k"
+DEDUCTION_MODEL = "gemma4-e4b-128k"
+INDUCTION_MODEL = "gemma4-e4b-128k"

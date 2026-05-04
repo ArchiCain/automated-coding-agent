@@ -2,7 +2,13 @@
 
 ## What This Is
 
-OpenClaw is the active agent runtime for this repo — a four-agent orchestration stack (orchestrator, devops, worker, tester) built on the `ghcr.io/openclaw/openclaw` gateway. Each agent is an OpenClaw persona with its own workspace, memory, and skill allowlist. A single human user drives documentation-driven development of `projects/application/` through conversation with the orchestrator, who delegates to specialists.
+OpenClaw is the active agent runtime for this repo — a multi-agent orchestration stack built on the `ghcr.io/openclaw/openclaw` gateway, running in **multi-orchestrator mode**: each domain has one user-facing lead, with private specialists below it where the work warrants splitting.
+
+- **Software development vertical** — `orchestrator` (lead) + `devops` + `worker` + `tester`. Drives documentation-driven development of `projects/application/`.
+- **Personal-life single-agent verticals** — `email` (inbox triage) and `backpacking` (trip prep). Skeleton today; gain capability when their upstream integrations land (IMAP/Gmail MCP for email; maps MCP + gear inventory for backpacking).
+- **D&D vertical** — `dnd` (player-side lead) + `dnd-dm` (co-DM specialist) + `dnd-chargen` (character creation specialist). Skeleton today; gains capability when the SRD vector index, dice/character tooling, and (eventually) the voice/at-the-table prototype land. See `ideas/dnd-5e-agents.md` for the phased plan.
+
+Each agent is an OpenClaw persona with its own workspace, memory, and skill allowlist. The user picks who to talk to via the WebUI's agent selector.
 
 **Scope.** OpenClaw edits `projects/application/` (the benchmark backend + frontend + keycloak realm). OpenClaw itself is edited by Claude Code in the user's CLI — this separation is intentional (see `CLAUDE.md` → Division of labor). The prior orchestrator `projects/the-dev-team/` is frozen reference material; no comparison runs are active.
 
@@ -43,9 +49,24 @@ Same compose project, deployed to `host-machine` (always-on Ubuntu on the tailne
 
 ## Agents
 
-All four agents reason via the same self-hosted Ollama on `graphics-machine` (model `qwen-coder-next-256k`, 256K ctx — see `infrastructure/.docs/hosts.md`). Memory search embeddings come from `bge-m3-8k` running on `host-machine`. Provider registration lives in `app/openclaw.json` under `models.providers.ollama`; the only env-based credential is `OLLAMA_API_KEY`, a non-empty placeholder that activates OpenClaw's bundled Ollama plugin.
+All six agents reason on **`openai-codex/gpt-5.5`** via OpenClaw's first-class `openai-codex` provider, authenticated through the user's ChatGPT Pro 5× subscription (OAuth). The self-hosted Qwen3-Coder-Next 80B-A3B on `graphics-machine` (`qwen-coder-next-256k`, 256K ctx — see `infrastructure/.docs/hosts.md`) is configured as the **single fallback** for resilience: if Codex is unreachable or auth fails, agents continue against the local brain. Both providers are registered in `app/openclaw.json` under `models.providers`; per-agent `model` blocks set `primary` to `openai-codex/gpt-5.5` and `fallbacks` to `["ollama/qwen-coder-next-256k"]`. Runtime context is capped at OpenClaw's default 272K (out of native 1M) for latency/quality.
+
+**Three-tier model topology:**
+
+| Tier | Endpoint | Model | Job |
+|---|---|---|---|
+| Brain (Tier-1) | OpenAI cloud (OAuth via ChatGPT Pro 5×) | `openai-codex/gpt-5.5` | All agents' reasoning |
+| Brain fallback (Tier-1 local) | `ollama/` → `http://graphics-machine:11434` | `qwen-coder-next-256k` (Qwen3-Next 80B MoE / 3B active) | Resilience only |
+| Tier-2 fast (planned) | `ollama-host/` → `http://host-machine:11434` | `gemma4-e4b-128k` (Gemma 4 E4B, 128K ctx, native JSON) | Honcho deriver + per-skill triage / classification / JSON extraction inside email and backpacking |
+| Embeddings | OpenAI-compat shim → `http://host-machine:11434/v1` | `bge-m3-8k` (1024-dim) | QMD vector search + Honcho memory |
+
+All nine agents inherit Tier-1 as their model default. Tier-2 is reached at the **skill** level via explicit `model:` overrides, not the agent default. Software agents (orchestrator, devops, worker, tester) rarely need Tier-2 in their hot path; the personal-life and D&D agents will pin classification, retrieval, and validation skills to Tier-2 explicitly when those skills are written. See `ideas/model-tiering-decision.md` for the full reasoning.
+
+Auth state for the OpenAI Codex OAuth profile is managed by OpenClaw itself (not via env vars); the only env-based credential remaining is `OLLAMA_API_KEY`, a non-empty placeholder that activates OpenClaw's bundled Ollama plugin for the fallback and Tier-2 paths.
 
 Each agent is a fully scoped OpenClaw persona — its own workspace, persona files (`SOUL.md`, `AGENTS.md`, `IDENTITY.md`), state directory, and session store. They are not the same agent wearing different role-prompt hats. The user picks which agent to talk to via the WebUI's agent selector.
+
+**Core software agents** (drive `projects/application/`):
 
 | Agent | Emoji | Role | Writes | Does not write |
 |-------|-------|------|--------|----------------|
@@ -54,11 +75,39 @@ Each agent is a fully scoped OpenClaw persona — its own workspace, persona fil
 | `worker` | ⚙️ | Implementation per spec; coordinates with tester; opens PRs | Source code, `.docs/features/{X}/{contracts,flows,decisions}.md` | `spec.md`, `test-plan.md`, any test file, docs outside active feature |
 | `tester` | 🧪 | Owns tests and test-plan.md; runs Playwright + API tests; reports findings | Test files, `.docs/features/{X}/test-plan.md` | Source code, other docs |
 
+**Personal-life agents** (single-agent verticals; skeletons until upstream integrations land):
+
+| Agent | Emoji | Role | Skeleton state | Blocked on |
+|-------|-------|------|----------------|------------|
+| `email` | 📬 | Inbox triage, action-item extraction, reply drafts | Persona files + empty `skills/` placeholder | IMAP/Gmail MCP server |
+| `backpacking` | 🎒 | Trip prep, gear inventory, route summaries | Persona files + empty `skills/` placeholder | Maps MCP server + gear inventory store |
+
+**D&D vertical** (lead + specialists; skeletons until SRD index and tooling land):
+
+| Agent | Emoji | Role | Skeleton state | Blocked on |
+|-------|-------|------|----------------|------------|
+| `dnd` | 🐉 | Player-side lead. Daily play support, rules lookups, decision recall, single-step sheet updates. | Persona files + empty `skills/` placeholder | 5e SRD vector index, dice roller, character sheet store |
+| `dnd-dm` | 🎲 | Co-DM specialist. Encounter design, NPC generation, initiative tracking, session recaps. Spawned by `dnd`. | Persona files + empty `skills/` placeholder | Same as `dnd` + encounter math + initiative state store |
+| `dnd-chargen` | 🧙 | Character creation specialist. Multi-step builds, retrains, level-up walkthroughs. Spawned by `dnd`. | Persona files + empty `skills/` placeholder | Same as `dnd` + character JSON schema |
+
+The personal-life leads (`email`, `backpacking`) and the domain leads (`orchestrator`, `dnd`) are all **peer personas** the user talks to directly. Specialists (`devops`, `worker`, `tester`, `dnd-dm`, `dnd-chargen`) are spawned by their lead via `sessions_spawn`; per-agent subagent allowlists enforce the delegation graph (see § Delegation graph below). See `ideas/agent-hierarchy.md` for the rationale.
+
 The test-writing separation is intentional — the worker cannot modify tests, so it cannot weaken them to make failures go away. If a test is genuinely wrong, the worker writes its argument in `decisions.md` and orchestrator routes the change to tester.
 
-## Delegation
+## Delegation graph
 
-Agents delegate to each other via OpenClaw's sub-agent spawn (`sessions_spawn` with explicit `agentId`). The cross-agent allowlist is set under `agents.defaults.subagents.allowAgents`, covering all four agents. Sub-agent runs announce their results back to the requester when complete.
+OpenClaw runs in **multi-orchestrator** mode — each domain has its own user-facing lead, with private specialists below it. Agents delegate via `sessions_spawn` with explicit `agentId`; sub-agent runs announce their results back to the requester when complete.
+
+The delegation allowlist is **not global** — `agents.defaults.subagents.allowAgents` is `[]` (deny by default), and each agent's permitted spawn targets are set explicitly under `agents.list[].subagents.allowAgents`. `requireAgentId: true` forces every spawn call to name its target.
+
+| Lead (user-facing) | Vertical | Can spawn |
+|---|---|---|
+| `orchestrator` 🎯 | Software development | `devops`, `worker`, `tester` |
+| `email` 📬 | Inbox triage | (no specialists; single-agent + skills) |
+| `backpacking` 🎒 | Trip prep | (no specialists; single-agent + skills) |
+| `dnd` 🐉 | D&D 5e play | `dnd-dm`, `dnd-chargen` |
+
+Specialists (`devops`, `worker`, `tester`, `dnd-dm`, `dnd-chargen`) appear in the WebUI selector today because OpenClaw doesn't yet expose a "subagent-only / hide from selector" flag — convention is *talk to the lead*, not directly to a specialist. The one peer-to-peer link is `worker → tester` (mandatory verification handoff per worker's AGENTS.md). Everything else is `lead → specialist` only. See `ideas/agent-hierarchy.md` for the rationale and the recipe for adding new verticals.
 
 **Sub-agent context constraint:** OpenClaw injects `AGENTS.md` + `TOOLS.md` into spawned sub-agents — but **not** `SOUL.md`, `IDENTITY.md`, or `USER.md`. Anything load-bearing about how an agent should *behave* (not just sound) belongs in `AGENTS.md`. SOUL.md is voice-only and won't fire in delegation scenarios.
 
@@ -113,7 +162,7 @@ Soft changes — skills, `openclaw.json`, `.docs/` — are picked up by the gate
 | **Active memory** | Proactive memory search before each reply (`recent` scope, `balanced` prompting) | `plugins["active-memory"]` |
 | **Dreaming** | Nightly promotion of daily-notes → `MEMORY.md` per agent | `plugins["memory-core"].dreaming.enabled: true` + `cron.enabled: true` |
 | **Honcho** | Cross-session memory + user/agent modeling + multi-agent observers (parent sees children) | `plugins["openclaw-honcho"]` pointed at `http://localhost:8000` (gateway is on host net; honcho-api published on loopback) |
-| Compaction | Context (not memory) compaction on approaching model limits. Uses the same brain LLM as agents (`ollama/qwen-coder-next-256k`). | `agents.defaults.compaction.model` |
+| Compaction | Context (not memory) compaction on approaching model limits. Pinned to local `ollama/qwen-coder-next-256k` on `graphics-machine` (async/background workload — kept on local even though the agent brain is now OpenAI Codex). | `agents.defaults.compaction.model` |
 
 **Docs as memory.** QMD indexes `/workspace/repo/.docs/` recursively, plus each project's `src/features/**` directories. When an agent asks "what does feature X do," it's searching the literal specification. When an agent writes a doc, it's writing durable memory. The dreaming pipeline (daily notes → `MEMORY.md`) captures cross-session learnings on top of the doc-grounded base.
 
@@ -121,18 +170,19 @@ Soft changes — skills, `openclaw.json`, `.docs/` — are picked up by the gate
 
 **Honcho deployment.** Five sibling compose services in `infrastructure/compose/openclaw/compose.yml`: `honcho-db` (pgvector pinned to v3.0.6 image), `honcho-redis` (queue), `honcho-migrate` (one-shot Alembic), `honcho-api` (FastAPI), `honcho-deriver` (background worker). Postgres data lives in the named volume `honcho-db-data`. Only `honcho-api` is exposed off the bridge — published on `127.0.0.1:8000` for the host-networked gateway.
 
-**Honcho LLM routing.** Honcho's own LLM calls (deriver, summary, dialectic, dream) all route through the `custom` provider, which Honcho's `clients.py` instantiates as `AsyncOpenAI(base_url=..., api_key=...)`. `OPENAI_COMPATIBLE_BASE_URL` is set on each Honcho service to `http://host.docker.internal:11434/v1` (host-machine's Ollama via the bridge's host-gateway). Models target `qwen-coder-32k`. Embeddings use the `openrouter` provider (same env vars; Honcho hardcodes the embedding model name to `openai/text-embedding-3-small`, which we've aliased on host-machine to `bge-m3-8k` via `ollama cp`). Vector dimensions are 1024 (not the OpenAI-default 1536) because bge-m3 is 1024-dim. Full TOML in `infrastructure/compose/openclaw/honcho-config.toml`.
+**Honcho LLM routing.** Honcho's own LLM calls (deriver, summary, dialectic, dream) all route through the `custom` provider, which Honcho's `clients.py` instantiates as `AsyncOpenAI(base_url=..., api_key=...)`. `OPENAI_COMPATIBLE_BASE_URL` is set on each Honcho service to `http://host.docker.internal:11434/v1` (host-machine's Ollama via the bridge's host-gateway). Models target `gemma4-e4b-128k` (the Tier-2 model — right-sized for the deriver's short JSON-emitting summarization workload). The prior `qwen-coder-32k` stays installed on host-machine as a fallback but is not referenced in `honcho-config.toml`. Embeddings use the `openrouter` provider (same env vars; Honcho hardcodes the embedding model name to `openai/text-embedding-3-small`, which we've aliased on host-machine to `bge-m3-8k` via `ollama cp`). Vector dimensions are 1024 (not the OpenAI-default 1536) because bge-m3 is 1024-dim. Full TOML in `infrastructure/compose/openclaw/honcho-config.toml`.
 
 ## Auth Model
 
 | Credential | Purpose | Required |
 |------------|---------|----------|
-| `OLLAMA_API_KEY` | Activates OpenClaw's bundled Ollama provider plugin (any non-empty placeholder works for self-hosted Ollama) | Yes |
+| OpenAI Codex OAuth profile | ChatGPT Pro 5× subscription auth for the `openai-codex/gpt-5.5` brain. Established once via `openclaw onboard --auth-choice openai-codex --device-code` (or `openclaw models auth login --provider openai-codex --device-code` for headless). OpenClaw stores the resulting tokens in its own auth store — not env-based. | Yes |
+| `OLLAMA_API_KEY` | Activates OpenClaw's bundled Ollama provider plugin (any non-empty placeholder works for self-hosted Ollama). Powers the fallback brain on `graphics-machine` and host-machine embeddings/Honcho. | Yes |
 | `OPENCLAW_AUTH_TOKEN` | Browser → gateway auth (pairing) | Yes |
 | `HONCHO_DB_PASSWORD` | Postgres password for the honcho-db service | Optional (defaults to `honcho`; the DB is internal to the compose project, not exposed off-host) |
 | GitHub App (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `github-app-key` file) | Git-sync sidecar auth — mints installation tokens for repo pulls | Yes |
 
-No cloud LLM API keys. Honcho's LLM env vars (`LLM_OPENAI_COMPATIBLE_API_KEY`, `LLM_OPENAI_COMPATIBLE_BASE_URL`) are wired in `compose.yml` from `OLLAMA_API_KEY` + a literal endpoint string — they don't need separate top-level secrets.
+No cloud LLM API keys — the OpenAI brain is reached through subscription OAuth, not a per-token API key. Honcho's LLM env vars (`LLM_OPENAI_COMPATIBLE_API_KEY`, `LLM_OPENAI_COMPATIBLE_BASE_URL`) are wired in `compose.yml` from `OLLAMA_API_KEY` + a literal endpoint string — they don't need separate top-level secrets.
 
 ## Pairing Flow
 
@@ -179,7 +229,12 @@ projects/openclaw/
 │   │   ├── orchestrator/{SOUL,AGENTS,IDENTITY}.md
 │   │   ├── devops/{SOUL,AGENTS,IDENTITY}.md
 │   │   ├── worker/{SOUL,AGENTS,IDENTITY}.md
-│   │   └── tester/{SOUL,AGENTS,IDENTITY}.md
+│   │   ├── tester/{SOUL,AGENTS,IDENTITY}.md
+│   │   ├── email/{SOUL,AGENTS,IDENTITY}.md + skills/README.md       ← skeleton; needs IMAP/Gmail MCP
+│   │   ├── backpacking/{SOUL,AGENTS,IDENTITY}.md + skills/README.md ← skeleton; needs maps MCP + inventory store
+│   │   ├── dnd/{SOUL,AGENTS,IDENTITY}.md + skills/README.md         ← skeleton; D&D player lead
+│   │   ├── dnd-dm/{SOUL,AGENTS,IDENTITY}.md + skills/README.md      ← skeleton; co-DM specialist
+│   │   └── dnd-chargen/{SOUL,AGENTS,IDENTITY}.md + skills/README.md ← skeleton; chargen specialist
 │   └── skills/                    ← AgentSkills directories (one per skill)
 │       └── repo-tasks/SKILL.md    ← task-over-raw-command rule (shared)
 └── dockerfiles/

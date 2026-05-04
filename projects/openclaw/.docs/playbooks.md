@@ -1,16 +1,20 @@
 # Agent playbooks
 
-Detailed workflows for orchestrator / devops / worker / tester. The
+Detailed workflows for `dev-main` / `devops` / `worker` / `tester`. The
 short rules + tool scopes live in each agent's
-`projects/openclaw/app/workspaces/<agent>/AGENTS.md`. When an agent
-hits a situation that isn't covered there, it should search this
+`projects/openclaw/app/workspaces/<vertical>/<agent>/AGENTS.md`. When an
+agent hits a situation that isn't covered there, it should search this
 file (`Bash: qmd search "<keyword>"` works) for the matching playbook.
+
+Note on naming: prose uses each agent's friendly **Name** ("Orchestrator,"
+"Devops") which matches what users see in chat. Technical IDs (`dev-main`,
+`devops`, etc.) appear in code, configs, and search hints.
 
 Search hints by agent:
 
-- orchestrator → "orchestrator playbook"
-- devops → "devops playbook"
-- tester → "tester playbook"
+- `dev-main` → "Orchestrator playbook"
+- `devops` → "Devops playbook"
+- `tester` → "Tester playbook"
 
 ---
 
@@ -195,3 +199,108 @@ Use form-fill when the feature under test includes the login page, logout button
 - A selector, endpoint, or fixture stabilizes on a specific value (record it).
 
 Update in the same PR that lands the test code.
+
+## Operator playbook: local dev mode
+
+For when the tailnet hosts (`host-machine`, `graphics-machine`) are unavailable or you want a tight iteration loop on a laptop with native Ollama. This is **dev mode**, not a production substitute — the laptop sleeps and goes offline; the always-on tailnet pattern is still the deployment target.
+
+### Prerequisites (one-time)
+
+1. **Install Ollama natively** on the host (NOT in Docker — Docker Desktop has no Metal/GPU access on macOS, so model speed would crater to CPU-only ~1-2 tok/s on the 80B model):
+
+   ```bash
+   # macOS:
+   brew install ollama
+   # or download from ollama.com
+
+   # Linux:
+   curl -fsSL https://ollama.com/install.sh | sh
+   ```
+
+2. **Pull the models** the agent config references. Same model names as production so the dev openclaw.json (regenerated from prod) doesn't have to know about local-only aliases:
+
+   ```bash
+   ollama pull bge-m3
+   ollama cp bge-m3 bge-m3-8k:latest
+   ollama cp bge-m3-8k openai/text-embedding-3-small:latest
+   ollama pull gemma4:e4b
+   ollama cp gemma4:e4b gemma4-e4b-128k:latest
+   ollama pull frob/qwen3-coder-next:80b-a3b-q4_K_M
+   ollama cp frob/qwen3-coder-next:80b-a3b-q4_K_M qwen-coder-next-256k:latest
+   ```
+
+   The brain (`openai-codex/gpt-5.5`) reaches OpenAI Codex via OAuth — no local pull needed. The qwen pull is large (~50 GB); kick it off and walk away.
+
+3. **Verify Ollama is ready:**
+
+   ```bash
+   task openclaw:ollama:check
+   ```
+
+   This pings `http://localhost:11434/api/tags` and confirms each expected model alias is present.
+
+4. **Establish the OpenClaw OAuth profile** for the brain — one-time:
+
+   ```bash
+   task openclaw:up:local
+   task openclaw:auth:codex:local
+   ```
+
+   `auth:codex:local` runs three things: the interactive `openclaw models auth login --provider openai-codex` wizard, a per-agent propagation step that copies `auth-profiles.json` into each of the 9 agent dirs (without it, every agent fails with `No API key found for provider openai-codex`), and a gateway restart to clear cached auth + Honcho `_ensureWorkspace()` rejections.
+
+   When the wizard menu appears, **pick "OpenAI Codex Browser Login"** (the first option, NOT device pairing — device pairing's CLI hides the actual code behind a placeholder string in this build).
+
+   The wizard prints a URL → open it in your laptop browser → sign in with the **Pro 5×** ChatGPT account → the browser will redirect to `http://localhost:1455/auth/callback?code=...` and **the page will fail to load (this is expected — the gateway listener inside the container can't be reached from a remote browser)**. Copy the entire URL from the address bar, paste it at the wizard's *"Paste the authorization code (or full redirect URL):"* prompt, hit Enter. The wizard parses the code, exchanges it for tokens, and the script does the propagation + restart automatically.
+
+   The propagated tokens live at `/workspace/.openclaw/agents/<id>/agent/auth-profiles.json` (workspace named volume) and persist across `down:local` / `up:local` cycles. They DO get wiped by `down:local:clean`. If you only need to redo the propagation (e.g. you onboarded via the Web UI directly), run `task openclaw:auth:propagate:local` — same script, skips the OAuth step.
+
+### About the ChatGPT Pro 5× subscription
+
+What the OAuth path exposes (verified via `openclaw models list` after onboarding):
+
+| Field | Value | Notes |
+|---|---|---|
+| Models available | `openai-codex/gpt-5.5` | One model only. No mini/lighter variant. |
+| Native context | 1,000,000 tokens | Per the catalog. |
+| Effective context cap | ~195k tokens | Pro 5× appears to apply a tighter runtime cap than the documented 272k default. |
+| Embeddings | Not included | ChatGPT subscriptions don't include embedding API calls — that's an OpenAI Platform billing surface. We use local `bge-m3` for embeddings. |
+
+Implications:
+- **You can't route lighter/cheaper calls to a smaller cloud model** under Pro 5× alone. If you want that, you'd need a separate OpenAI API key (the `openai/gpt-5.4-mini` provider path), not a different model on Codex OAuth.
+- **All thinking work goes through `openai-codex/gpt-5.5`.** Tier-2 (`gemma4-e4b-128k`, local) handles Honcho's deriver and per-skill classification; the brain does everything else.
+- **Quota is the variable to watch.** Pro 5× = 5× the standard Pro plan's GPT-5 usage. If you hit the cap, decisions to make: escalate the subscription, or temporarily route specialists to the local `qwen-coder-next-256k` fallback (which is already wired as the resilience fallback in `openclaw.json`).
+
+### Daily flow
+
+| Action | Task |
+|---|---|
+| Start the dev stack | `task openclaw:up:local` |
+| Tail logs | `task openclaw:logs:local` |
+| Pair the WebUI (browse `http://localhost:3001` first) | `task openclaw:pair` |
+| Restart gateway after editing persona/skill files | `task openclaw:restart:local` |
+| Open a shell in the gateway | `task openclaw:shell:local` |
+| Stop the stack (preserves volumes) | `task openclaw:down:local` |
+| Stop and wipe agent state + Honcho memory | `task openclaw:down:local:clean` |
+
+Persona files (`projects/openclaw/app/workspaces/<id>/{IDENTITY,SOUL,AGENTS}.md`) and skills (`projects/openclaw/app/skills/`) are **bind-mounted** from the local working tree. Edit them locally, then `task openclaw:restart:local` to pick up the changes — no image rebuild needed.
+
+`openclaw.json` is regenerated on every `up:local` from the prod source (with model endpoints rewritten to `host.docker.internal:11434`). Edit `projects/openclaw/app/openclaw.json` (the prod file), then `task openclaw:down:local && task openclaw:up:local` to regenerate and restart.
+
+### What's different from production
+
+| | Production (tailnet) | Local dev mode |
+|---|---|---|
+| Gateway networking | `network_mode: host` | bridge + port 3001 published |
+| Model endpoints | `graphics-machine:11434`, `host-machine:11434` | both → `host.docker.internal:11434` |
+| Source of openclaw.json | git-sync sidecar pulling from `origin/dev` | generated from prod file at `up:local` time |
+| Source of persona files / skills | git-sync sidecar | local working tree (bind-mount) |
+| git-sync sidecar | running | excluded via compose profile |
+| OAuth + memory volumes | persistent on host-machine | persistent in Docker Desktop's named volumes |
+
+### When to leave dev mode
+
+- The tailnet hosts come back online and you've validated the agent hierarchy locally.
+- You want to test the actual deploy flow (push to `dev` → CI → host-machine).
+- The laptop's resource pressure is hurting your iteration speed (sustained 80B inference + IDE + browser is real).
+
+To switch back to the tailnet target: `task openclaw:down:local` (or `down:local:clean` if you want to start fresh on the tailnet too), then deploy normally via the existing `task openclaw:up` against the tailnet host.

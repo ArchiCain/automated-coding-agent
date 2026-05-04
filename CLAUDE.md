@@ -2,144 +2,113 @@
 
 ## Pick up here next session
 
-The user is mid-stride on a planned expansion of OpenClaw. **Both machines were powered down for a household move AND will be rebuilt before they come back online** — this isn't just a "boot them up and verify" situation. See step 0 below.
+**Local dev mode is operational end-to-end.** Nine agents across four verticals chat via `openai-codex/gpt-5.5` (Pro 5× OAuth). Four Telegram bots route to the four lead agents (`dev-main`, `dnd-main`, `email-main`, `backpacking-main`). Image and video generation are enabled via the same OAuth (`openai/gpt-image-2`, `openai/sora-2`). The path from fresh laptop to working agent is two task targets (`openclaw:up:local`, `openclaw:auth:codex:local`); host-machine bring-up uses the same targets without `:local`.
 
-Once both machines are healthy on the tailnet and Ollama responds on each (`curl http://graphics-machine:11434/api/tags`, same on host-machine), the agreed work for the next session is four things:
+### Where to pick up
 
-### 0. Rebuild both machines on Ubuntu
+1. **Smoke test the agent hierarchy + channels.** Topology is proven for solo chat; multi-agent guarantees and per-channel routing aren't exercised end-to-end yet. Run the six-step sequence from `multi-agent-openclaw.md` plus the Telegram-routing check below:
+   - presence (`dev-main` says hi as itself, `devops` as itself, etc.)
+   - voice (each agent's SOUL.md actually shapes the response)
+   - permitted delegation (`dev-main` → `worker` succeeds)
+   - **forbidden delegation hard-fail** (`dev-main` → `dnd-dm` should be rejected by `subagents.allowAgents`, not silently succeed)
+   - brain fallback (cut Codex auth or simulate failure → falls through to local Qwen — note the thinking-mode incompatibility under "Known issues")
+   - memory (Honcho captures and retrieves a fact across sessions)
+   - **Telegram routing**: DM each bot, confirm the correct lead agent answers. First message has 10-30s cold-start latency — that's expected, not a bug.
+   - Steps 4, 5, and the Telegram check are the ones most often skipped. Don't skip them.
 
-This happens on the user's hardware before any repo work. Claude Code's role is to **help the user verify the result and re-deploy OpenClaw** once the OSes are back up — not to drive the OS installs themselves.
+2. **Build out the per-vertical features the skeletons are blocked on.** The leads exist and respond, but the verticals aren't useful yet:
+   - **Backpacking**: needs an inventory store (CSV in workspace works for MVP), a maps MCP, and a PDF skill (Chromium-headless wrapping markdown templates) for trip checklists.
+   - **D&D**: needs SRD vector index, dice roller, character JSON store. Image gen for character portraits is now turn-key (`/tool image_generate model=openai/gpt-image-2 ...`); the dnd-main agent just needs persona instructions teaching it when to call.
+   - **Email**: needs IMAP/Gmail MCP. Blocked until that's wired.
+   - **Software development**: already active; the open question is whether to ramp up by giving worker/tester real PRs against `projects/application/`.
 
-- **`host-machine` (Mac mini)** — full reformat to Ubuntu. The Mac mini was already running Ubuntu, but the user wants a clean rebuild while everything is offline.
-- **`graphics-machine` (gaming PC, RTX 2080 Ti, 96 GB RAM)** — moving off Windows to Ubuntu. Ubuntu lives on an **external OWC Envoy Pro FX 2TB Thunderbolt 3 / USB 3.2 SSD** (~2800 MB/s over TB3, ~1000 MB/s over USB 3.2 Gen 2 fallback). Windows stays on the internal drive untouched. BIOS boot order: external first, internal Windows second — fall-through dual-boot. Plug the drive in → Ubuntu; unplug → Windows for gaming.
-- The graphics-machine swap is the bigger change. Things the next session should verify, in order:
-  - Tailscale joined the tailnet under the same `graphics-machine` MagicDNS name (otherwise the gateway env vars and `infrastructure/compose/openclaw/*.yml` references break).
-  - NVIDIA driver installed and `nvidia-smi` reports the RTX 2080 Ti. Ubuntu 24.04 + `nvidia-driver-535` (or whatever the current LTS-supported branch is) + CUDA 12.x is the known-good combo for Turing.
-  - Ollama installed via the official Linux script, exposed on `0.0.0.0:11434` (the systemd unit's `OLLAMA_HOST` env var — not the default `127.0.0.1`), with Tailscale ACLs allowing host-machine and the user's laptop.
-  - `frob/qwen3-coder-next:80b-a3b-q4_K_M` re-pulled and aliased back to `qwen-coder-next-256k` via `ollama cp`. ~50GB pull — let the user kick this off; just verify when done.
-  - Same Ollama setup on host-machine, plus `bge-m3` re-pulled and aliased as both `bge-m3-8k` and `openai/text-embedding-3-small` (Honcho hardcodes the latter name).
-- **Update `infrastructure/.docs/hosts.md`** to reflect the OS swap and the external-drive boot story for graphics-machine. The Windows-era entry is now history.
-- Once both endpoints respond, redeploy the OpenClaw stack via `task openclaw:up` from the user's laptop. The compose project itself targets host-machine via the GitHub Actions deploy, so a push to `dev` triggers the redeploy — but on a fresh Ubuntu install the first deploy may need manual hand-holding (Docker installed, `host-machine` passwordless SSH for the deploy workflow, GitHub App PEM file restored to the right path).
+3. **Bring up `host-machine` (prod) when the household move settles.** The dev work front-loaded the gotchas; prod is the same path against the prod compose file:
+   - Tailscale + NVIDIA driver on `graphics-machine`, Ollama systemd (`OLLAMA_HOST=0.0.0.0:11434`) on both hosts, model pulls per `task openclaw:ollama:check`.
+   - First GitHub Actions deploy to a fresh Ubuntu install (hand-hold the initial run).
+   - **Telegram tokens need to be re-provisioned for prod.** The bots in `.env` are dev-only; create a fresh BotFather set or reuse the existing tokens (one bot can't be in two long-poll instances at once, so either move them or make new ones for prod).
+   - `task openclaw:auth:codex` (no `:local`) — same flow against prod compose.
 
-### 1. Wire OpenAI Codex (ChatGPT subscription) as the agent brain
+### What landed this session
 
-This is the highest-leverage change in the batch. Moves the four core agents (orchestrator, devops, worker, tester) off local Qwen3-Coder-Next as their primary and onto **`openai-codex/gpt-5.5`** via OAuth from the user's existing **ChatGPT Pro 5× subscription** ($100/mo tier). The local Qwen3-Coder-Next install stays as the resilience fallback.
+- **Local dev mode brought up end-to-end.** Nine agents, four Telegram bots, image+video gen, all five Honcho services healthy. First message from a Telegram bot to its lead agent works (cold-start ~30s, follow-ups much faster).
+- **Ollama install cleaned up.** Two installs were fighting for port 11434 (Homebrew 0.17.0 + Ollama.app 0.22.0). Removed brew, `.app` is sole owner. Native Mac install at `/Applications/Ollama.app/`. Models in `~/.ollama/models/`.
+- **Gemma 4 blocker resolved.** Root cause was Ollama version: `gemma4:e4b`'s manifest declares `requires 0.20.0`; brew's 0.17.0 rejected it. Pulled and aliased `gemma4-e4b-128k:latest` after upgrade.
+- **`openclaw.json` schema fixed for current OpenClaw.** Removed the obsolete `models.providers.openai-codex` block (built-in pi-ai catalog provider, no entry needed) and the legacy `agents.defaults.llm.idleTimeoutSeconds` block. Added `imageGenerationModel` + `videoGenerationModel` so image/video generation works through the existing Codex OAuth without a separate API key.
+- **Honcho URL rewrite for dev mode.** Prod gateway uses `network_mode: host` so `localhost:8000` reaches `honcho-api`; dev gateway uses bridge so `localhost` is the container loopback. `task openclaw:up:local` now sed-rewrites `localhost:8000` → `honcho-api:8000` when generating `openclaw.dev.json`.
+- **OAuth + per-agent propagation scripted.** `scripts/openclaw-auth-codex.sh` runs `openclaw models auth login --provider openai-codex` → copies `auth-profiles.json` to all 9 per-agent dirs (without that step every agent fails with `No API key found for provider openai-codex`) → restarts gateway. Exposed as `task openclaw:auth:codex(:local)` and `auth:propagate(:local)`. The wizard expects URL-paste: callback to `localhost:1455` doesn't reach the gateway from a remote browser, so you copy the redirect URL from the failed page and paste it back into the wizard.
+- **Workspaces verticalized.** Source layout is now `projects/openclaw/app/workspaces/<vertical>/<agent-id>/` — `development/`, `dnd/`, `email/`, `backpacking/`. Runtime workspace stays flat. The entrypoint discovers agents by walking for `SOUL.md` and reconciles against `agents.list[].id` (hard-fails on mismatch). New agents only require dropping a dir + adding the `agents.list[]` entry — no entrypoint edits.
+- **Lead agents renamed to `<vertical>-main`.** `orchestrator → dev-main`, `dnd → dnd-main`, `email → email-main`, `backpacking → backpacking-main`. Specialists keep flat names (`devops`, `dnd-dm`, etc.). Friendly Names in `IDENTITY.md` (what users see in chat) unchanged.
+- **Telegram bots wired.** Four bots (one per lead agent) configured via `channels.telegram.accounts.<id>` + `bindings[]` in `openclaw.json`. Tokens in `.env` (gitignored) referenced as `{ source, provider, id }` SecretRefs; passed through to the gateway container via `compose.yml` env block. `dmPolicy: "allowlist"` with the user's numeric ID at the top level of `channels.telegram` (not nested per account).
+- **New canonical reference doc.** `projects/openclaw/.docs/standards/workspaces-pattern.md` covers the verticalized layout, the discover-and-reconcile pattern, the new-vertical / new-agent / rename checklists, and the Telegram bot setup with copy-paste-ready snippets. Capture future conventions here, not in CLAUDE.md.
 
-OpenClaw ships first-class subscription auth — no proxy, no `~/.codex` scraping. Reference: `.claude/skills/openclaw/reference/llms-full.txt:74473-74691` (or live at `docs.openclaw.ai/providers/openai`).
+### Known issues (parked, not blocking dev mode)
 
-User's stated philosophy (capture verbatim so future-you doesn't drift): **"route all of the real thinking to OpenAI and use the local LLMs for embeddings, async tasks that run in the background, and as small worker agents that get stuff done if need be. My primary focus will be using OpenAI and I'll select to use local models sparingly. If I start running into limits then I'll make changes or up my subscription."** Don't pre-optimize for Pro 5× rate limits — wire it OpenAI-first as described and let the user observe real usage before tuning.
+- **`qwen-coder-next-256k` doesn't support thinking-mode.** When the brain falls back to local Qwen, the request includes thinking parameters and Qwen rejects with HTTP 400 `"qwen-coder-next-256k" does not support thinking`. Currently masked because the brain isn't failing. Needs either thinking disabled on the fallback model or request-shaping that strips thinking on fallback. Not blocking until we actually need the fallback.
+- **`down:local:clean` wipes per-agent auth.** The propagated `auth-profiles.json` files live in the `workspace` named volume; volume wipe = re-OAuth. Mitigation: just re-run `task openclaw:auth:codex:local`. Could be made more robust by setting `OPENCLAW_STATE_DIR=/workspace/.openclaw` in the gateway env so the wizard writes directly to the persistent volume, or by baking the propagate step into `entrypoint.sh` so it runs on every boot. Both are small.
+- **Per-agent `skills/` subdirs are inert.** Each agent dir has a `skills/` folder, but the entrypoint only seeds persona files (SOUL/AGENTS/IDENTITY/etc.) — not per-agent skills. The global `/app/skills/` symlink is what's actually loaded. If we ever want per-agent skill scoping, the entrypoint needs an extra step.
+- **Vision INPUT (uploading images for the agent to see) not exposed on Codex OAuth.** `openclaw models list` shows `Input: text` for `openai-codex/gpt-5.5`. Image GENERATION via `image_generate` works (it's a tool), but if you want to send the agent an image and have it discuss it, that's a different routing problem (route image-bearing turns to local Gemma 4, or add a separate OpenAI API-key path).
+- **Pro 5× quota behavior for image/video generation is undocumented.** Whether `openai/gpt-image-2` and `openai/sora-2` count against the same Pro 5× quota as text or are metered separately isn't clear from the docs. Worth watching usage as you generate.
+- **`~/.codex` bind-mount approach abandoned.** Earlier attempt to bypass OAuth by reading the laptop's Codex CLI tokens directly. Doesn't work — per docs, *"Onboarding no longer imports OAuth material from `~/.codex`. Sign in with browser OAuth (default) or the device-code flow above — OpenClaw manages the resulting credentials in its own agent auth store."* The bind-mount was removed from `compose.dev.yml`. Don't re-add it expecting it to work.
 
-Concrete tasks:
-- Run OAuth onboarding from inside the gateway container (it's headless on host-machine, so use device-code flow):
-  ```
-  openclaw onboard --auth-choice openai-codex --device-code
-  ```
-  Or if the gateway is already running and just needs auth added:
-  ```
-  openclaw models auth login --provider openai-codex --device-code
-  ```
-- In `projects/openclaw/app/openclaw.json`, add an `openai-codex` provider entry under `models.providers`, set `agents.defaults.model.primary` to `openai-codex/gpt-5.5`, and configure each of the four core agents with `openai-codex/gpt-5.5` primary and `ollama/qwen-coder-next-256k` as the single fallback. Keep the `ollama` provider block exactly as it is — it's now the fallback, not the primary.
-- Default runtime context cap is 272k (out of native 1M). Don't override unless an actual context-overflow case shows up — OpenClaw's docs say 272k has better latency/quality than 1M.
-- Update `projects/openclaw/.docs/overview.md` model topology section to reflect OpenAI Codex as the primary brain and Qwen3-Coder-Next as the local resilience fallback.
-- Verify with a smoke test: send a message to orchestrator, confirm the response shows `openai-codex/gpt-5.5` in the session metadata or chat `/status`. Then deliberately exercise fallback (revoke the token, or block the OpenAI endpoint at the firewall) and confirm fallback to local Qwen3-Coder-Next works.
+### Decisions not to re-litigate
 
-### 2. Add a Tier-2 fast model on `host-machine`
+(Carrying forward from prior sessions, still load-bearing.)
 
-Today, host-machine runs only embeddings (`bge-m3`) and the Honcho deriver (`qwen2.5-coder:32b-instruct-q6_K` — oversized and CPU-slow for what Honcho's deriver actually does). The plan is to add a **second small instruct model** alongside the existing two — call it the **Tier-2** model — for fast routing, classification, JSON extraction, and Honcho's deriver workload. Tier-2 is for **async background work and trivial classification** — it's not in the agent reasoning hot path (that's OpenAI Codex per Step 1).
+- **Multi-orchestrator (single gateway, lead-per-vertical) over multi-gateway** unless a hard-isolation trigger appears (e.g. real-time audio for the D&D voice prototype). See `ideas/agent-hierarchy.md`.
+- **Three-tier model topology** stays (brain + local fallback + Tier-2 + embeddings). Don't consolidate. See `ideas/model-tiering-decision.md`.
+- **No misleading aliases** when substituting models. If the planned model isn't available, change the config to use the real substitute name; don't alias the substitute under the planned name. Saved to memory.
+- **Compaction stays on local Qwen** — async background workload, fits the OpenAI-for-thinking-local-for-async philosophy.
+- **OpenAI-first by deliberate user choice.** Don't push specialists onto local primary "to save quota." User's stated position: observe real Pro 5× usage, escalate the subscription only if quota becomes a real problem.
 
-Target model: **`gemma4:e4b`** (Gemma 4 E4B, ~4.5B effective params, 128K ctx, native structured JSON output, Apache 2.0). Pulled via Ollama on host-machine. Reasoning for picking this specific model is captured in [`ideas/model-tiering-decision.md`](#) — write that doc as part of the work if it doesn't exist; the bullet points are below in "Decision rationale."
+### Working tree state
 
-Concrete tasks:
-- Pull `gemma4:e4b` on host-machine (`ollama pull gemma4:e4b`).
-- Decide and document an alias the way the existing models are aliased (e.g. `gemma4-e4b-128k`). Update `infrastructure/.docs/hosts.md` to list the new model.
-- Add a Tier-2 endpoint env var (likely `OLLAMA_TIER2_BASE_URL` + `OLLAMA_TIER2_MODEL`) to OpenClaw's gateway env. The brain endpoint stays exactly as is.
-- Repoint Honcho's deriver from `qwen-coder-32k` to the new Tier-2 alias by changing the `OPENAI_COMPATIBLE_BASE_URL` model name in `infrastructure/compose/openclaw/`. Keep `qwen-coder-32k` installed as a fallback for the moment — don't delete it.
-- Update `projects/openclaw/.docs/overview.md` with the new three-tier topology (brain + Tier-2 + embeddings).
-- Rebuild the gateway image (`task openclaw:build`) and recreate (`task openclaw:restart`).
-- **Verify** by sending a smoke-test message to the orchestrator and confirming the deriver runs against the new model (check Honcho logs).
-
-### 3. Skeleton for the email agent
-
-User wants a generic skeleton — **do not over-implement**. He'll iterate on it himself.
-
-Create `/workspace/.openclaw/workspaces/email/` with the same three files every existing workspace has:
-- `SOUL.md` — voice/persona, generic for now ("helps the user triage email, surface what's important, never miss a thread that matters")
-- `AGENTS.md` — rules + tools, with placeholder tool list (note that an IMAP/Gmail MCP server will be needed but is **not in scope for this session** — leave a TODO)
-- `IDENTITY.md` — display metadata (name, emoji, color)
-
-Pick an emoji that doesn't clash with the existing four (🎯🛠⚙️🧪). 📬 or 📨 are obvious choices.
-
-Wire the agent into the OpenClaw config (the same place the existing four agents are registered) and verify the orchestrator can see it. **Skills are deliberately empty for now** — user will write `triage_inbox`, `extract_action_items`, `draft_reply` himself, with the first two routed to Tier-2 (Gemma 4 E4B on host-machine) and the third to the OpenAI Codex brain. Just leave a `skills/` directory with a README placeholder noting that routing convention.
-
-Also create a Honcho workspace for cross-session email facts (per-user-mentioned-people, recurring senders, etc.) and a QMD index stub. Don't ingest any real email data yet — that's the user's task.
-
-### 4. Skeleton for the backpacking agent
-
-Same shape as the email agent. `/workspace/.openclaw/workspaces/backpacking/`. Generic SOUL/AGENTS/IDENTITY. Note in `AGENTS.md` that this agent will eventually need a maps MCP server (Caltopo / Gaia / similar) and an inventory store, but **neither is in scope for this session**. Empty `skills/` with a README.
-
-Pick an emoji — 🎒 is the obvious choice.
-
-Honcho workspace + QMD index stub, same as email.
-
-### Decision rationale (so you don't second-guess)
-
-These decisions came from a deep research pass and a model-attributes crash course. **Don't re-litigate them** unless something has materially changed (new Gemma 4 Coder release, Ollama tool-parser fixes for Gemma 4, new Qwen release). Briefly:
-
-- **Brain becomes `openai-codex/gpt-5.5`** via the user's ChatGPT Pro 5× subscription, OAuth'd through OpenClaw's first-class `openai-codex` provider. Frontier coding capability + best-in-class tool-call reliability + no per-token billing on the subscription path. **Qwen3-Coder-Next 80B-A3B stays installed on graphics-machine as the local resilience fallback** — it's still the strongest local agentic-coding model and was the right Tier-1 pick before OpenClaw shipped subscription auth. The MoE-on-modest-hardware property (3B active / 80B total, paging from 96 GB RAM) is what lets the fallback exist on this box at all.
-- **OpenAI-first by deliberate choice.** All four core agents (orchestrator, devops, worker, tester) get OpenAI Codex as primary. Local models are reserved for embeddings (`bge-m3`), async background work (Honcho deriver on Gemma 4 E4B), and small classification/router skills inside the new agents. Don't push devops/tester onto local primary "to save quota" — the user's explicit position is OpenAI-first, observe real usage, escalate the subscription if quota becomes a real problem.
-- **Tier-2 is `gemma4:e4b`** because Honcho's deriver is a short, frequent, JSON-emitting summarization workload — the 32B coder model on Mac mini CPU is wildly oversized for this and runs at ~5 tok/s. Gemma 4 E4B will hit 30-60 tok/s on the same box, has native structured JSON output, and Apache 2.0. The same model also serves as a general fast-path for any agent skill that needs cheap classification or routing.
-- **MoE is the load-bearing architectural choice** for the brain on this hardware (RTX 2080 Ti, 11 GB VRAM, 96 GB RAM). Qwen3-Next-80B has 3B active params per token; experts page from system RAM. A 30B-class dense model would be unusable on this box. Any future brain swap must also be MoE.
-- **Two-tier topology, not consolidation.** Brain and Tier-2 are different workloads (long agentic loops vs short summarization bursts). Don't try to make one model do both.
-- **Memory: extend, don't rebuild.** QMD (BM25/vector RAG layer) and Honcho (cross-session structured-memory layer) already cover what new agents need. New agents get new Honcho workspaces and new QMD indexes — no new memory infrastructure.
-- **Routing happens at the skill level**, not the agent level. An agent might call Tier-2 for classification and the brain for synthesis within the same task. OpenClaw skills should be able to target a model endpoint explicitly.
-
-### What's explicitly out of scope this session
-
-- Implementing actual email or backpacking skills (user will iterate).
-- Adding the Gmail/IMAP MCP server.
-- Adding the maps MCP server.
-- Removing the `qwen2.5-coder:32b` deriver model from host-machine (keep it as fallback for now).
-- Removing the `qwen3-coder-next:80b-a3b` install from graphics-machine — it stays as the local resilience fallback brain.
-- Per-skill model routing inside email/backpacking agents (the skeletons just note the routing convention; user will wire skill-level overrides himself when implementing).
-- Anything under `projects/the-dev-team/` (frozen, see Division of Labor below).
+`git log --oneline -10` shows recent commits. The dev-mode + OAuth + verticalization + Telegram + image-gen work landed as one commit on `dev`. Prior CLAUDE.md detailed step descriptions (Step 0 through Step 4 + the "Decision rationale" block) were collapsed once the work shipped — check git history for the original wording if you need it.
 
 ## Current shape
 
-`projects/openclaw/` is a four-agent OpenClaw deployment. Each agent
-(orchestrator 🎯, devops 🛠, worker ⚙️, tester 🧪) has its own
-workspace under `/workspace/.openclaw/workspaces/<id>/` containing
-`SOUL.md` (voice), `AGENTS.md` (rules + tools), `IDENTITY.md` (display
-metadata). The planned model topology routes all four agents' reasoning
-to OpenAI Codex via the user's ChatGPT Pro 5× subscription, with the
-self-hosted Ollama stack as resilience fallback + supporting roles:
+`projects/openclaw/` is a **nine-agent, four-vertical** OpenClaw deployment running in **multi-orchestrator mode** — each domain has a user-facing lead with private specialists below it where the work warrants splitting. Every agent has its own workspace under `/workspace/.openclaw/workspaces/<id>/` containing `SOUL.md` (voice), `AGENTS.md` (rules + tools), `IDENTITY.md` (display metadata).
 
-| Role | Machine | Model | Endpoint |
+**Verticals:**
+
+| Vertical | User-facing lead | Specialists | Status |
 |---|---|---|---|
-| Tier-1 agent brain (planned primary) | (OpenAI cloud, OAuth via user's ChatGPT Pro 5×) | `openai-codex/gpt-5.5` — Codex subscription route, 1M native context capped at 272k runtime for latency/quality | OpenAI Responses API; OAuth tokens managed by OpenClaw's `openai-codex` provider |
-| Tier-1 local fallback (resilience) | `graphics-machine` (Ubuntu on external OWC Envoy Pro FX 2TB TB3 SSD, dual-boot fall-through to internal Windows for gaming; RTX 2080 Ti, 96 GB RAM) | `qwen-coder-next-256k` — derivative of `frob/qwen3-coder-next:80b-a3b-q4_K_M` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | `http://graphics-machine:11434` |
-| Tier-2 fast model *(planned, not yet deployed)* | `host-machine` (Mac mini, Ubuntu) | `gemma4:e4b` (Gemma 4 E4B, ~4.5B effective, 128K ctx, native JSON, Apache 2.0) — for triage, classification, JSON extraction, Honcho deriver | `http://host-machine:11434` |
-| Memory embeddings | `host-machine` | `bge-m3-8k` — derivative of `bge-m3` (BAAI, 1024-dim, 8K ctx) | `http://host-machine:11434` |
-| Honcho derivation/summary/dialectic | `host-machine` | currently `qwen-coder-32k` — `qwen2.5-coder:32b-instruct-q6_K`, 32K ctx, CPU-only. **Planned to repoint to Tier-2 (`gemma4:e4b`)** — keep `qwen-coder-32k` installed as fallback. | `http://host-machine:11434/v1` |
+| Software development | `dev-main` 🎯 | `devops` 🛠, `worker` ⚙️, `tester` 🧪 | Active |
+| Email | `email-main` 📬 (single-agent + skills) | — | Skeleton; needs IMAP/Gmail MCP |
+| Backpacking | `backpacking-main` 🎒 (single-agent + skills) | — | Skeleton; needs maps MCP + inventory store |
+| D&D 5e | `dnd-main` 🐉 | `dnd-dm` 🎲, `dnd-chargen` 🧙 | Skeleton; needs SRD vector index, dice roller, character store |
 
-Memory is layered: **QMD** for local BM25/vector search over `.docs/`
-and session transcripts, **Honcho** (self-hosted Postgres+Redis+API+
-deriver) for cross-session memory and cross-agent learning via auto-
-extracted conclusions, plus a builtin SQLite fallback. The Honcho
-stack runs as five compose services in `infrastructure/compose/openclaw/`.
+Lead agents follow a `<vertical>-main` naming convention; specialists keep flat names. Source files live under `projects/openclaw/app/workspaces/<vertical>/<agent-id>/`; runtime workspace at `/workspace/.openclaw/workspaces/<id>/` stays flat. The entrypoint discovers agents by walking for `SOUL.md` and reconciles against `agents.list[].id` in `openclaw.json`. See `projects/openclaw/.docs/standards/workspaces-pattern.md` for the full convention and the new-vertical / new-agent checklist.
 
-Cloud APIs are not used. The only env-based credential for the agent
-runtime is `OLLAMA_API_KEY` (a non-empty placeholder OpenClaw requires
-to activate the bundled Ollama provider plugin). Honcho's own LLM
-calls route through `OPENAI_COMPATIBLE_BASE_URL` to host-machine's
-Ollama; embeddings use the same endpoint via Ollama's OpenAI-compat
-shim, with `bge-m3-8k` aliased on host-machine as
-`openai/text-embedding-3-small` (the model name Honcho hardcodes).
+Per-agent `subagents.allowAgents` enforces the delegation graph at config level (deny by default + `requireAgentId: true`). Today: `dev-main → [devops, worker, tester]`, `worker → [tester]` (mandatory verification handoff), `dnd-main → [dnd-dm, dnd-chargen]`, all other agents → `[]`. Decision record: `ideas/agent-hierarchy.md`. Portable pattern: `multi-agent-openclaw.md` (repo root).
+
+**Model topology — three tiers + embeddings:**
+
+| Role | Endpoint (prod) | Model | Notes |
+|---|---|---|---|
+| Brain (Tier-1) | OpenAI cloud, OAuth via ChatGPT Pro 5× | `openai-codex/gpt-5.5` | Primary for all agents. 1M native context; effective runtime cap ~195k under Pro 5× (observed via `openclaw models list`). Pro 5× exposes one model only — no mini variant. |
+| Brain fallback (Tier-1 local) | `http://graphics-machine:11434` | `qwen-coder-next-256k` (Qwen3-Next 80B MoE / 3B active, Q4_K_M, 256K ctx) | Resilience only. Known issue: rejects requests with thinking-mode parameters; needs config fix before fallback can actually serve traffic. |
+| Tier-2 fast | `http://host-machine:11434` | `gemma4-e4b-128k` (8B params, Q4_K_M, 128K ctx) | Honcho deriver + per-skill triage / classification / JSON extraction. Pulled and verified May 2026; aliased from `gemma4:e4b`. **Requires Ollama ≥ 0.20.0** (manifest declares it). |
+| Embeddings | `http://host-machine:11434` | `bge-m3-8k` (BAAI, 1024-dim, 8K ctx) | QMD vector search + Honcho memory. Honcho hardcodes `openai/text-embedding-3-small`; aliased on host-machine to `bge-m3-8k`. Embeddings are NOT included in ChatGPT subscriptions, so the local model is non-optional. |
+
+**Local dev mode** (the user's M1 laptop with native Ollama) collapses both Ollama endpoints to `host.docker.internal:11434`. Compose dev override + Taskfile `:local` targets handle this. Runbook: `projects/openclaw/.docs/playbooks.md` § "Operator playbook: local dev mode."
+
+**Memory** is layered: **QMD** for local BM25/vector search over `.docs/` and session transcripts, **Honcho** (self-hosted Postgres+Redis+API+deriver, five compose services) for cross-session memory + cross-agent learning, plus per-agent runtime-state files in JSON for authoritative current state. Episodic facts → Honcho; current state → workspace JSON files. Don't conflate.
+
+**Channels.** WebChat (built-in) + four Telegram bots, one per main agent: `dev-main-bot`, `dnd-main-bot`, `email-main-bot`, `backpacking-main-bot`. Multi-account via `channels.telegram.accounts.<id>` with `bindings[]` mapping each account to its agent. `dmPolicy: "allowlist"` with the user's numeric Telegram ID at the top level of `channels.telegram` gates DMs to a single owner. Bot tokens come from `.env` via SecretRefs (`{ source: "env", provider: "default", id: "TELEGRAM_BOT_TOKEN_*" }`); each token also needs a passthrough line in `compose.yml`'s gateway `environment:` block. Specialists (`devops`, `worker`, `tester`, `dnd-dm`, `dnd-chargen`) are reachable only via WebChat or via delegation from their lead.
+
+**Image + video generation.** Enabled via `agents.defaults.imageGenerationModel.primary = "openai/gpt-image-2"` and `videoGenerationModel.primary = "openai/sora-2"`. Both flow through the existing Codex OAuth (no separate API key). Any agent can call `image_generate` / `video_generate` tools; the `dnd-main` agent in particular is the obvious user for character art.
+
+**Auth.** OAuth profile for the brain is managed by OpenClaw itself (not env-based). The flow is wrapped by `task openclaw:auth:codex` (prod) / `task openclaw:auth:codex:local` (dev) — both call `scripts/openclaw-auth-codex.sh`, which runs the wizard, propagates `auth-profiles.json` from the main agentDir to each of the 9 per-agent dirs (without that step every agent fails with `No API key found for provider openai-codex`), then restarts the gateway. The wizard expects URL-paste: the OAuth callback at `localhost:1455` doesn't reach the gateway from a remote browser, so you sign in, copy the redirect URL from the failed-to-load page, and paste it back into the wizard. Env-based credentials in `.env`: `OLLAMA_API_KEY` (placeholder for the bundled Ollama provider plugin), `OPENCLAW_AUTH_TOKEN` (browser-to-gateway pairing), `GITHUB_APP_ID` + `GITHUB_APP_INSTALLATION_ID` (git-sync sidecar), and the four `TELEGRAM_BOT_TOKEN_*` vars. Honcho's LLM env vars (`LLM_OPENAI_COMPATIBLE_API_KEY`, `LLM_OPENAI_COMPATIBLE_BASE_URL`) are wired in compose from `OLLAMA_API_KEY` + a literal endpoint string.
 
 References:
-- `projects/openclaw/.docs/overview.md` — agent personas, memory stack, Honcho config
-- `infrastructure/.docs/ecosystem.md` — ecosystem map (host roles, deploy flow)
-- `infrastructure/.docs/hosts.md` — concrete per-host inventory (specs, installed Ollama models)
-- `ideas/openclaw-local-llm-hybrid.md` — design rationale + hardware inventory (history)
+- `projects/openclaw/.docs/overview.md` — full deployment topology
+- `projects/openclaw/.docs/playbooks.md` — agent + operator runbooks (incl. local dev mode + Pro 5× model surface)
+- `projects/openclaw/.docs/standards/workspaces-pattern.md` — canonical doc for adding verticals/agents + Telegram bot setup. Capture future conventions here, not in CLAUDE.md.
+- `infrastructure/.docs/hosts.md` — per-host inventory + post-move target state
+- `multi-agent-openclaw.md` (repo root) — portable architecture pattern (export artifact)
+- `scripts/openclaw-auth-codex.sh` — auth flow + propagation script (read the header comment)
+- `ideas/agent-hierarchy.md`, `ideas/model-tiering-decision.md`, `ideas/dnd-5e-agents.md` — decision records
+- `ideas/openclaw-local-llm-hybrid.md` — earlier history (single-tier local brain era)
 
 ## Division of labor
 
@@ -153,7 +122,7 @@ This repo has **two autonomous coding agents** plus a **frozen reference project
 
 **Rule of thumb when deciding where work lands:**
 
-- Is it a bug in the benchmark app (backend/frontend/keycloak/database)? → OpenClaw's queue. Open an issue or talk to the orchestrator at `http://<host-machine>:3001` (tailnet). Do not edit `projects/application/` directly from Claude Code unless it's a cross-cutting infra concern.
+- Is it a bug in the benchmark app (backend/frontend/keycloak/database)? → OpenClaw's queue. Open an issue or talk to `dev-main` at `http://<host-machine>:3001` (tailnet). Do not edit `projects/application/` directly from Claude Code unless it's a cross-cutting infra concern.
 - Is it a change to how OpenClaw itself thinks or acts (skills, agent instructions, docker image, task wiring)? → Claude Code. Edit `projects/openclaw/` directly in this session.
 - Is it infrastructure, CI/CD, or the deployment story? → Claude Code. Edit the relevant `infrastructure/`, `scripts/`, or `.github/` file.
 - Is it anywhere under `projects/the-dev-team/`? → Don't.

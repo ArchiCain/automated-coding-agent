@@ -1,0 +1,89 @@
+# Local dev override for the OpenClaw stack.
+#
+# Combine with the base compose.yml via:
+#   docker compose -f compose.yml -f compose.dev.yml up -d
+#
+# Or via the Taskfile shortcuts: `task openclaw:up:local` etc.
+#
+# What this changes vs. production:
+#
+#   1. Gateway runs in bridge mode with port 3001 published, instead of
+#      `network_mode: host`. On macOS Docker Desktop the host-network mode
+#      doesn't behave like Linux's, and bridge + `host.docker.internal`
+#      resolves the macOS host's native Ollama directly.
+#
+#   2. The image-baked /app/openclaw.json is overlaid by a generated
+#      openclaw.dev.json with all model endpoints rewritten to
+#      `host.docker.internal:11434` so the laptop's native Ollama serves
+#      every model (brain fallback, Tier-2, embeddings, deriver). The dev
+#      config file is generated from the prod config at `up:local` time —
+#      see the Taskfile target. It is git-ignored.
+#
+#   3. The git-sync sidecar is excluded via a compose profile. In dev mode
+#      we don't pull from origin/dev — we bind-mount the local working tree's
+#      workspaces/ and skills/ directories so persona and skill edits go
+#      live without a rebuild or push.
+#
+#   4. The /srv/aca host bind-mount is dropped (host-machine-specific path).
+#
+#   5. Gateway waits for git-sync are skipped (`OPENCLAW_WAIT_FOR_REPO=0`).
+#
+# What this preserves:
+#
+#   - The full Honcho substack (db, redis, migrate, api, deriver) runs as
+#     in production. Honcho services already use `host.docker.internal` to
+#     reach Ollama, so they need no change.
+#   - The Docker socket bind-mount stays so the devops agent's `docker compose`
+#     calls keep working against Docker Desktop's daemon.
+#   - The `workspace` named volume stays so agent runtime state (sessions,
+#     memory, daily notes) survives across compose restarts. Use
+#     `task openclaw:down:local:clean` to wipe it.
+
+services:
+  gateway:
+    # Drop network_mode: host (Linux-only semantics) and use bridge networking.
+    network_mode: bridge
+    # Publish the WebUI port so http://localhost:3001 reaches the gateway.
+    # The openai-codex OAuth callback at http://localhost:1455 does NOT need
+    # a published port: the wizard's URL-paste fallback works from any
+    # browser (the page failing to load is expected — the address bar still
+    # has the auth code). See `task openclaw:auth:codex:local`.
+    ports:
+      - "3001:3001"
+    # Resolve `host.docker.internal` from the bridge container. Docker Desktop
+    # provides this implicitly on macOS, but specifying it explicitly keeps
+    # the override portable to Linux dev environments too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Replace the production depends_on (which waits on git-sync) — only
+    # honcho-api is a real dependency in dev mode.
+    depends_on: !override
+      honcho-api:
+        condition: service_healthy
+    environment:
+      # Skip the wait for /workspace/repo/.git — git-sync isn't running.
+      OPENCLAW_WAIT_FOR_REPO: "0"
+      # Override the prod tailnet hostname for the Tier-2 endpoint hint.
+      # Not currently consumed at runtime (openclaw.dev.json hardcodes
+      # host.docker.internal:11434) but kept consistent for any future
+      # env-templated config.
+      OLLAMA_TIER2_BASE_URL: "http://host.docker.internal:11434"
+    # Replace the production volume list — drop /srv/aca, add dev overlays.
+    volumes: !override
+      - workspace:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Override the image-baked openclaw.json with the generated dev variant
+      # whose model endpoints all point at host.docker.internal:11434.
+      - ./openclaw.dev.json:/app/openclaw.json:ro
+      # Live persona files from the local working tree — edits take effect on
+      # the next gateway restart, no image rebuild needed.
+      - ../../../projects/openclaw/app/workspaces:/app/workspaces:ro
+      # Live skills directory from the local working tree.
+      - ../../../projects/openclaw/app/skills:/app/skills:ro
+
+  git-sync:
+    # Exclude from default `docker compose up` in dev mode. Compose only
+    # starts services with profiles when you explicitly pass `--profile <name>`,
+    # so this container is skipped unless the operator opts in.
+    profiles:
+      - prod-only
